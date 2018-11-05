@@ -132,10 +132,12 @@ IndirectPredictor::recordTarget(InstSeqNum seq_num, unsigned ghr,
     auto hist_entry = *(t_info.pathHist.rbegin());
     // Temporarily pop it off the history so we can calculate the set
     t_info.pathHist.pop_back();
+	
     Addr set_index = getSetIndex(hist_entry.pcAddr, ghr, tid);
     Addr tag = getTag(hist_entry.pcAddr);
     hist_entry.targetAddr = target.instAddr();
     t_info.pathHist.push_back(hist_entry);
+	// 更新最新记录的数据
 
     assert(set_index < numSets);
 
@@ -176,6 +178,7 @@ IndirectPredictor::getSetIndex(Addr br_addr, unsigned ghr, ThreadID tid)
         }
     }
     return hash & (numSets-1);
+	// 最后这里进行的是mask操作
 }
 
 inline Addr

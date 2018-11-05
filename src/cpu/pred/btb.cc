@@ -95,11 +95,13 @@ DefaultBTB::valid(Addr instPC, ThreadID tid)
     Addr inst_tag = getTag(instPC);
 
     assert(btb_idx < numEntries);
+	// 获取分支指令对应的btb索引和tag
 
     if (btb[btb_idx].valid
         && inst_tag == btb[btb_idx].tag
         && btb[btb_idx].tid == tid) {
         return true;
+	// 有效不仅要求对应表项valid为true，还要求tid和tag一致
     } else {
         return false;
     }
@@ -121,8 +123,10 @@ DefaultBTB::lookup(Addr instPC, ThreadID tid)
         && inst_tag == btb[btb_idx].tag
         && btb[btb_idx].tid == tid) {
         return btb[btb_idx].target;
+	// 只有有效的表项才会返回分支目标地址
     } else {
         return 0;
+	// 无效表项返回0
     }
 }
 
