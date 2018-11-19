@@ -451,7 +451,7 @@ class DefaultIEW
     /** Stat for total number of executed load instructions. */
     Stats::Vector iewExecLoadInsts;
     /** Stat for total number of executed store instructions. */
-//    Stats::Scalar iewExecStoreInsts;
+	//Stats::Scalar iewExecStoreInsts;
     /** Stat for total number of squashed instructions skipped at execute. */
     Stats::Scalar iewExecSquashedInsts;
     /** Number of executed software prefetches. */

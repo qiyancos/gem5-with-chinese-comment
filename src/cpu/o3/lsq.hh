@@ -93,6 +93,7 @@ class LSQ {
 
     /** Number of entries needed for the given amount of threads.*/
     int entryAmount(ThreadID num_threads);
+	
     void removeEntries(ThreadID tid);
     /** Reset the max entries for each thread. */
     void resetEntries();

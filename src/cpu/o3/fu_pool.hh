@@ -136,6 +136,8 @@ class FUPool : public SimObject
 
     static constexpr auto NoCapableFU = -2;
     static constexpr auto NoFreeFU = -1;
+	// 这里其实使用const和define有一样效果？？？
+	// constexpr主要是用const变量计算初始化一个const变量
     /**
      * Gets a FU providing the requested capability. Will mark the
      * unit as busy, but leaves the freeing of the unit up to the IEW

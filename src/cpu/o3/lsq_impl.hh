@@ -202,6 +202,7 @@ void
 LSQ<Impl>::resetEntries()
 {
     if (lsqPolicy != Dynamic || numThreads > 1) {
+		// 多线程或者非Dynamic策略
         int active_threads = activeThreads->size();
 
         int maxEntries;
@@ -213,14 +214,16 @@ LSQ<Impl>::resetEntries()
         } else {
             maxEntries = LQEntries;
         }
+		// 确定一个线程LQ/SQ的最大表项数目maxEntries，而且上面的if-else
+		// 是不是多余了？？？
 
         list<ThreadID>::iterator threads  = activeThreads->begin();
         list<ThreadID>::iterator end = activeThreads->end();
 
         while (threads != end) {
             ThreadID tid = *threads++;
-
             resizeEntries(maxEntries, tid);
+			// 重置队列的大小
         }
     }
 }
@@ -250,7 +253,6 @@ LSQ<Impl>::tick()
 
     while (threads != end) {
         ThreadID tid = *threads++;
-
         thread[tid].tick();
     }
 }
@@ -349,11 +351,13 @@ LSQ<Impl>::recvTimingResp(PacketPtr pkt)
 
     thread[cpu->contextToThread(pkt->req->contextId())]
         .completeDataAccess(pkt);
+	// 由发出该Packet的线程完成对应的数据接收和写回操作
 
     if (pkt->isInvalidate()) {
         // This response also contains an invalidate; e.g. this can be the case
         // if cmd is ReadRespWithInvalidate.
-        //
+        // 进入这里说明对应的Packet带有Invalidate操作指示？？？
+		
         // The calling order between completeDataAccess and checkSnoop matters.
         // By calling checkSnoop after completeDataAccess, we ensure that the
         // fault set by checkSnoop is not lost. Calling writeback (more
@@ -457,7 +461,6 @@ LSQ<Impl>::numFreeLoadEntries()
 
     while (threads != end) {
         ThreadID tid = *threads++;
-
         total += thread[tid].numFreeLoadEntries();
     }
 

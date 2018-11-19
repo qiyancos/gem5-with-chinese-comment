@@ -45,7 +45,7 @@ enableCaches="Yes"
 	L3Size=""
 	L3assoc=""
 
-debugOn="Yes"
+debugOn="No"
 	debugOutputFile=""
 	debugFlags="Fetch"
 

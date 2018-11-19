@@ -506,6 +506,7 @@ class DefaultRename
     Stats::Scalar renameSQFullEvents;
     /** Stat for total number of times that rename runs out of free registers
      * to use to rename. */
+	 
     Stats::Scalar renameFullRegistersEvents;
     /** Stat for total number of renamed destination registers. */
     Stats::Scalar renameRenamedOperands;

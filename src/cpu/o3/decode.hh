@@ -82,12 +82,12 @@ class DefaultDecode
 
     /** Individual thread status. */
     enum ThreadStatus {
-        Running,
-        Idle,
-        StartSquash,
-        Squashing,
-        Blocked,
-        Unblocking
+        Running, // 0
+        Idle, // 1
+        StartSquash, // 2
+        Squashing, // 3
+        Blocked, // 4
+        Unblocking // 5
     };
 
   private:

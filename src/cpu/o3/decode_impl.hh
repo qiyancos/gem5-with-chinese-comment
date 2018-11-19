@@ -485,7 +485,7 @@ DefaultDecode<Impl>::updateStatus()
             cpu->deactivateStage(O3CPU::DecodeIdx);
         }
     }
-	// 这里存在一个问题，Running状态将会导致decode阶段被置于inactive状态？？？
+	// 这里存在一个问题，Running状态将会导致decode阶段被置于inactive状态
 }
 
 template <class Impl>

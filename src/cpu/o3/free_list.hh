@@ -251,6 +251,7 @@ UnifiedFreeList::addRegs(InputIt first, InputIt last)
             "Attempt to add mixed type regs: %s and %s",
             first->className(),
             (last-1)->className());
+	// 检查整个范围内的索引是否属于同一个类型寄存器
     switch (first->classValue()) {
         case IntRegClass:
             intList.addRegs(first, last);

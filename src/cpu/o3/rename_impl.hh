@@ -347,16 +347,23 @@ DefaultRename<Impl>::squash(const InstSeqNum &squash_seq_num, ThreadID tid)
 
         resumeSerialize = false;
         serializeInst[tid] = NULL;
+		// 如果进行squash操作的时候，rename阶段正好处于blocked或者unblock状态
+		// 那么在squash之后便会退出阻塞状态，并清除序列化执行的标志和指令
     } else if (renameStatus[tid] == SerializeStall) {
+		// 如果当前因为需要进行序列化操作而stall
         if (serializeInst[tid]->seqNum <= squash_seq_num) {
             DPRINTF(Rename, "Rename will resume serializing after squash\n");
             resumeSerialize = true;
             assert(serializeInst[tid]);
+			// 由于squash的指令比当前需要序列化执行的指令更新，因此
+			// 在squash之后应该继续序列化执行。
         } else {
             resumeSerialize = false;
             toDecode->renameUnblock[tid] = 1;
-
             serializeInst[tid] = NULL;
+			// 由于需要序列化执行的指令也会被squash掉，因此在squash操作之后
+			// 无需继续进行序列化操作，同时序列化指令也会被清除；并通知decode
+			// 退出因为序列化执行进入的阻塞状态，
         }
     }
 
@@ -370,7 +377,8 @@ DefaultRename<Impl>::squash(const InstSeqNum &squash_seq_num, ThreadID tid)
             fromDecode->insts[i]->setSquashed();
             wroteToTimeBuffer = true;
         }
-
+	// 将需要squash的来自decode阶段指令设置为被squash的状态，由于
+	// 进行了squash操作，因此设置wroteToTimeBuffer为true表示本周期活跃
     }
 
     // Clear the instruction list and skid buffer in case they have any
@@ -394,6 +402,8 @@ DefaultRename<Impl>::tick()
     bool status_change = false;
 
     toIEWIndex = 0;
+	// 每个周期尝试向IEW阶段发送指令都需要重置，因为这是一个
+	// 临时变量，而非静态变量
 
     sortInsts();
 
@@ -425,7 +435,7 @@ DefaultRename<Impl>::tick()
     while (threads != end) {
         ThreadID tid = *threads++;
 
-        // If we committed this cycle then doneSeqNum will be > 0
+        // If we committed （this cycle？？？） then doneSeqNum will be > 0
         if (fromCommit->commitInfo[tid].doneSeqNum != 0 &&
             !fromCommit->commitInfo[tid].squash &&
             renameStatus[tid] != Squashing) {
@@ -433,6 +443,9 @@ DefaultRename<Impl>::tick()
             removeFromHistory(fromCommit->commitInfo[tid].doneSeqNum,
                                   tid);
         }
+		// 如果上一个周期提交阶段确实提交了指令，提交阶段没有触发squash操作
+		// 并且当前rename阶段没有进行suqash操纵，则根据提交指令中最新的一个对
+		// rename历史表进行更新（移除已经安全提交的指令）
     }
 
     // @todo: make into updateProgress function
@@ -444,6 +457,7 @@ DefaultRename<Impl>::tick()
         assert(storesInProgress[tid] >= 0);
         assert(instsInProgress[tid] >=0);
     }
+	// 更新in-flight指令的计数器，
 
 }
 
@@ -462,6 +476,8 @@ DefaultRename<Impl>::rename(bool &status_change, ThreadID tid)
         ++renameBlockCycles;
     } else if (renameStatus[tid] == Squashing) {
         ++renameSquashCycles;
+	// blocked和squashing状态会导致本周期无法进行重命名操作
+	// 因此只会递增相关的周期计数器
     } else if (renameStatus[tid] == SerializeStall) {
         ++renameSerializeStallCycles;
         // If we are currently in SerializeStall and resumeSerialize
@@ -472,14 +488,23 @@ DefaultRename<Impl>::rename(bool &status_change, ThreadID tid)
             block(tid);
             toDecode->renameUnblock[tid] = false;
         }
+		// 如果当前因为需要执行序列化指令而stall：
+		// 这时候如果要求下一个周期继续序列化的执行指令，那么resumeSerialize
+		// 将会被重置，并且阻塞rename阶段，并告知decode阶段不要停止阻塞。
+		// 如果下一个周期不需要继续序列化，那么将不再阻塞rename阶段
     } else if (renameStatus[tid] == Unblocking) {
         if (resumeUnblocking) {
             block(tid);
             resumeUnblocking = false;
             toDecode->renameUnblock[tid] = false;
         }
+		// 如果当前rename阶段处于Unblocking状态：
+		// 这时候如果要求下一个周期继续维持该状态，那么resumeUnblocking
+		// 将会被重置，并且继续阻塞rename阶段，并告知decode阶段不要停止阻塞。
+		// 如果下一个周期可以退出阻塞正常执行，那么将不再阻塞rename阶段
     }
-
+	
+	// 下面根据处理后的状态选择是否对指令进行重命名操作
     if (renameStatus[tid] == Running ||
         renameStatus[tid] == Idle) {
         DPRINTF(Rename, "[tid:%u]: Not blocked, so attempting to run "
@@ -488,16 +513,20 @@ DefaultRename<Impl>::rename(bool &status_change, ThreadID tid)
         renameInsts(tid);
     } else if (renameStatus[tid] == Unblocking) {
         renameInsts(tid);
+		// 如果rename阶段依然处于尝试退出阻塞的状态，那么需要
+		// 持续重命名skidBuffer中的指令，直到skidBuffer被清空
 
         if (validInsts()) {
             // Add the current inputs to the skid buffer so they can be
             // reprocessed when this stage unblocks.
             skidInsert(tid);
         }
+		// 如果decode阶段发送来的指令，则需要将这些指令插入到skidBuffer中
 
         // If we switched over to blocking, then there's a potential for
         // an overall status change.
         status_change = unblock(tid) || status_change || blockThisCycle;
+		// 尝试退出阻塞状态
     }
 }
 
@@ -509,6 +538,8 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
     // instructions coming from decode, depending on the status.
     int insts_available = renameStatus[tid] == Unblocking ?
         skidBuffer[tid].size() : insts[tid].size();
+	// 选择处理的数据，如果当前正在退出阻塞状态，那么从skidBuffer获取需要处理
+	// 指令，否则从insts队列中获取需要处理的指令
 
     // Check the decode queue to see if instructions are available.
     // If there are no available instructions to rename, then do nothing.
@@ -518,6 +549,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         // Should I change status to idle?
         ++renameIdleCycles;
         return;
+	// 当前周期需要处理的队列没有可以处理的指令，则会直接退出
     } else if (renameStatus[tid] == Unblocking) {
         ++renameUnblockCycles;
     } else if (renameStatus[tid] == Running) {
@@ -538,6 +570,10 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         min_free_entries = free_iq_entries;
         source = IQ;
     }
+	// 确定本周期重命名指令的上限约束来自于哪一个结构的空闲表项数目
+	// 这里只处理了IQ和ROB，LQ和SQ的处理在执行过程中动态判断
+	// 这样可以保证不会因为LQ和SQ的限制导致重命名指令上限无故变小
+	// （因为可能实际处理的指令中Store/load指令没有那么多）
 
     // Check if there's any space left.
     if (min_free_entries <= 0) {
@@ -548,12 +584,13 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
                 tid,
                 free_rob_entries,
                 free_iq_entries);
-
+				
         blockThisCycle = true;
-
         block(tid);
-
+		// 发现存在关键队列已满的情况，因此需要在本周期将rename阻塞	
+		
         incrFullStat(source);
+		// 更新stall原因次数计数器
 
         return;
     } else if (min_free_entries < insts_available) {
@@ -567,10 +604,14 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         blockThisCycle = true;
 
         incrFullStat(source);
+		// 发现剩余的空闲表项数目小于当前可以处理的指令数目
+		// 虽然也会进行block操作，但是依然会尽量处理和该上限一致
+		// 的指令，然后才进行阻塞操作
     }
 
     InstQueue &insts_to_rename = renameStatus[tid] == Unblocking ?
         skidBuffer[tid] : insts[tid];
+	// 选择处理指令的来源队列
 
     DPRINTF(Rename, "[tid:%u]: %i available instructions to "
             "send iew.\n", tid, insts_available);
@@ -584,13 +625,20 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         if (emptyROB[tid] && instsInProgress[tid] == 0) {
             // ROB already empty; no need to serialize.
             serializeOnNextInst[tid] = false;
+			// 由于ROB已经为空，并且当前RS中没有任何指令
+			// 因此无需序列化指令，即此处不需要等待之前的
+			// 指令提交之后才进行重命名处理
         } else if (!insts_to_rename.empty()) {
             insts_to_rename.front()->setSerializeBefore();
+			// 如果存在下一条指令，则将其设置为序列化执行
         }
     }
+	// 处理序列化执行的指令
 
     int renamed_insts = 0;
 
+	// 开始进行指令重命名，尽量多的处理指令，但是不能超过可用的指令
+	// 以及renameWidth
     while (insts_available > 0 &&  toIEWIndex < renameWidth) {
         DPRINTF(Rename, "[tid:%u]: Sending instructions to IEW.\n", tid);
 
@@ -610,6 +658,8 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
                 break;
             }
         }
+		// 如果动态处理过程中发现LQ已经没有空闲表项，而当前处理的是一个
+		// load指令，那么会立即结束处理，更新stall的事件计数器。
 
         if (inst->isStore()) {
             if (calcFreeSQEntries(tid) <= 0) {
@@ -619,8 +669,11 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
                 break;
             }
         }
-
+		// 如果动态处理过程中发现SQ已经没有空闲表项，而当前处理的是一个
+		// store指令，那么会立即结束处理，更新stall的事件计数器。
+		
         insts_to_rename.pop_front();
+		// 确定可以重命名该指令，因此将它从队列中弹出
 
         if (renameStatus[tid] == Unblocking) {
             DPRINTF(Rename,"[tid:%u]: Removing [sn:%lli] PC:%s from rename "
@@ -639,6 +692,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
             continue;
         }
+		// 跳过被标记为squashed的指令
 
         DPRINTF(Rename, "[tid:%u]: Processing instruction [sn:%lli] with "
                 "PC %s.\n", tid, inst->seqNum, inst->pcState());
@@ -654,55 +708,78 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
                     "physical registers to rename to.\n");
             blockThisCycle = true;
             insts_to_rename.push_front(inst);
+			// 由于该指令没有可用的重命名资源，因此该指令没有成功处理
+			// 需要被退回到指令源队列中
             ++renameFullRegistersEvents;
 
             break;
         }
+		// 如果发现任何一个寄存器的重命名资源不足就会阻塞rename阶段
+		// 停止继续处理指令
 
         // Handle serializeAfter/serializeBefore instructions.
         // serializeAfter marks the next instruction as serializeBefore.
         // serializeBefore makes the instruction wait in rename until the ROB
         // is empty.
+		
+		// 这里似乎提供了两种序列化执行的处理，第一种serializeAfter会将
+		// 下一条指令标记为serializeBefore，而被标记了serializeBefore的
+		// 指令会使得该指令停在rename阶段指导ROB清空位置（即该指令之前的
+		// 所有指令全部提交）。
 
         // In this model, IPR accesses are serialize before
         // instructions, and store conditionals are serialize after
         // instructions.  This is mainly due to lack of support for
         // out-of-order operations of either of those classes of
         // instructions.
+		
+		// 对于SC指令，在它后面的指令不得提前于SC指令执行，IPR是啥？？？
+		
         if ((inst->isIprAccess() || inst->isSerializeBefore()) &&
             !inst->isSerializeHandled()) {
+			// 对于serializeBefore类型指令的处理，这里要求该指令
+			// 没有按照序列化处理过？？？
             DPRINTF(Rename, "Serialize before instruction encountered.\n");
 
             if (!inst->isTempSerializeBefore()) {
                 renamedSerializing++;
                 inst->setSerializeHandled();
+				// 如果不是临时序列化执行，那么标记该指令，之后
+				// 将不会按照序列化执行该指令
             } else {
                 renamedTempSerializing++;
+				// 存在特殊情况会要求一条指令临时按照序列化指令处理
+				// 比如说错误speculative执行的load指令
             }
 
             // Change status over to SerializeStall so that other stages know
             // what this is blocked on.
             renameStatus[tid] = SerializeStall;
-
             serializeInst[tid] = inst;
-
             blockThisCycle = true;
-
+			// 如果遇到serializeBefore的指令，则会导致rename阶段阻塞
+			// 产生阻塞的指令则会被记录在serializeInst中
             break;
         } else if ((inst->isStoreConditional() || inst->isSerializeAfter()) &&
                    !inst->isSerializeHandled()) {
+			// 对于serializeAfter类型指令的处理，这里要求该指令
+			// 没有按照序列化处理过？？？
             DPRINTF(Rename, "Serialize after instruction encountered.\n");
 
             renamedSerializing++;
 
             inst->setSerializeHandled();
+			// 该指令被标记，将不会再次作为序列化指令处理
 
             serializeAfter(insts_to_rename, tid);
+			// 执行对于serializeAfter类型指令的处理
         }
 
         renameSrcRegs(inst, inst->threadNumber);
+		// 通过查找重命名映射来重命名源寄存器
 
         renameDestRegs(inst, inst->threadNumber);
+		// 重命名目的寄存器
 
         if (inst->isLoad()) {
                 loadsInProgress[tid]++;
@@ -711,13 +788,17 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
                 storesInProgress[tid]++;
         }
         ++renamed_insts;
+		// 递增相关的计数器
+		
         // Notify potential listeners that source and destination registers for
         // this instruction have been renamed.
         ppRename->notify(inst);
+		// 更新probe point变量
 
         // Put instruction in rename queue.
         toIEW->insts[toIEWIndex] = inst;
         ++(toIEW->size);
+		// 将重命名好的指令写入到IEW阶段的timeBuffer中
 
         // Increment which instruction we're on.
         ++toIEWIndex;
@@ -728,21 +809,27 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
     instsInProgress[tid] += renamed_insts;
     renameRenamedInsts += renamed_insts;
+	// 更新计数器
 
     // If we wrote to the time buffer, record this.
     if (toIEWIndex) {
         wroteToTimeBuffer = true;
+		// 如果确实向IEW的timeBuffer发送了至少1条重命名后的指令
+		// 则设置wroteToTimeBuffer表示rename阶段本周期确实进行了
+		// 一些指令的处理
     }
 
     // Check if there's any instructions left that haven't yet been renamed.
     // If so then block.
     if (insts_available) {
         blockThisCycle = true;
+		// 如果最后发现存在剩余的指令没有处理，那么一定存在原因导致了阻塞
     }
 
     if (blockThisCycle) {
         block(tid);
         toDecode->renameUnblock[tid] = false;
+		// 将本阶段block，并更新到decode的通信信号
     }
 }
 
@@ -766,6 +853,7 @@ DefaultRename<Impl>::skidInsert(ThreadID tid)
 
         skidBuffer[tid].push_back(inst);
     }
+	// 将对应线程insts队列中的指令放到skidBuffer中
 
     if (skidBuffer[tid].size() > skidBufferMax)
     {
@@ -779,6 +867,7 @@ DefaultRename<Impl>::skidInsert(ThreadID tid)
         }
         panic("Skidbuffer Exceeded Max Size");
     }
+	// 如果skidBuffer大小溢出，则会出现错误
 }
 
 template <class Impl>
@@ -792,6 +881,7 @@ DefaultRename<Impl>::sortInsts()
 #if TRACING_ON
         if (DTRACE(O3PipeView)) {
             inst->renameTick = curTick() - inst->fetchTick;
+			// 更新一个指令到达rename阶段的周期位置
         }
 #endif
     }
@@ -834,6 +924,7 @@ DefaultRename<Impl>::updateStatus()
 
     // Rename will have activity if it's unblocking.
     if (any_unblocking) {
+	// 如果存在一个线程正在从阻塞状态中退出，就会导致rename阶段进入活跃状态
         if (_status == Inactive) {
             _status = Active;
 
@@ -844,6 +935,8 @@ DefaultRename<Impl>::updateStatus()
     } else {
         // If it's not unblocking, then rename will not have any internal
         // activity.  Switch it to inactive.
+	// 依然关心这里的Running会导致rename阶段进入不活跃状态的问题
+	// 但是进入不活跃状态会有什么影响才是关键？？？
         if (_status == Active) {
             _status = Inactive;
             DPRINTF(Activity, "Deactivating stage.\n");
@@ -862,6 +955,8 @@ DefaultRename<Impl>::block(ThreadID tid)
     // Add the current inputs onto the skid buffer, so they can be
     // reprocessed when this stage unblocks.
     skidInsert(tid);
+	// 在阻塞的时候需要首先将本周期没有处理的来自decode阶段的指令
+	// 从insts队列中插入到skidBuffer中
 
     // Only signal backwards to block if the previous stages do not think
     // rename is already blocked.
@@ -872,6 +967,7 @@ DefaultRename<Impl>::block(ThreadID tid)
         if (resumeUnblocking || renameStatus[tid] != Unblocking) {
             toDecode->renameBlock[tid] = true;
             toDecode->renameUnblock[tid] = false;
+			// 设置到decode阶段的通信信号以便使decode阶段阻塞
             wroteToTimeBuffer = true;
         }
 
@@ -881,6 +977,8 @@ DefaultRename<Impl>::block(ThreadID tid)
             // Set status to Blocked.
             renameStatus[tid] = Blocked;
             return true;
+			// 如果当前rename阶段状态不是SerializeStall，就进入阻塞
+			// 因为SerializeStall虽然和Block都是阻塞效果，但是处理不同
         }
     }
 
@@ -899,10 +997,13 @@ DefaultRename<Impl>::unblock(ThreadID tid)
         DPRINTF(Rename, "[tid:%u]: Done unblocking.\n", tid);
 
         toDecode->renameUnblock[tid] = true;
+		// 告知decode阶段rename阶段已经成功退出了阻塞状态
         wroteToTimeBuffer = true;
 
         renameStatus[tid] = Running;
         return true;
+		// 当且仅当skidBuffer中的指令全部处理结束之后才可以
+		// 退出unblocking状态进入running状态
     }
 
     return false;
@@ -920,11 +1021,14 @@ DefaultRename<Impl>::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
     if (historyBuffer[tid].empty()) {
         return;
     }
+	// 如果没有可以squash的重命名历史，则直接返回
 
     // Go through the most recent instructions, undoing the mappings
     // they did and freeing up the registers.
     while (!historyBuffer[tid].empty() &&
            hb_it->instSeqNum > squashed_seq_num) {
+		// 循环遍历整个historyBuffer，将比squash指令更新的表项删除
+		// 并恢复到rename_map中
         assert(hb_it != historyBuffer[tid].end());
 
         DPRINTF(Rename, "[tid:%u]: Removing history entry with sequence "
@@ -936,7 +1040,9 @@ DefaultRename<Impl>::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
         // is the same as the old one.  While it would be merely a
         // waste of time to update the rename table, we definitely
         // don't want to put these on the free list.
+		
         if (hb_it->newPhysReg != hb_it->prevPhysReg) {
+			// 只有特殊的寄存器，映射前后目标物理寄存器是不变的
             // Tell the rename map to set the architected register to the
             // previous physical register that it was renamed to.
             renameMap[tid]->setEntry(hb_it->archReg, hb_it->prevPhysReg);
@@ -944,16 +1050,21 @@ DefaultRename<Impl>::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
             // Put the renamed physical register back on the free list.
             freeList->addReg(hb_it->newPhysReg);
         }
+		// 如果历史映射变更是一个真正的变更，则会将原始的映射关系写入到
+		// rename_map中，并将删除映射的物理寄存器从freelist中释放
 
         // Notify potential listeners that the register mapping needs to be
-        // removed because the instruction it was mapped to got squashed. Note
-        // that this is done before hb_it is incremented.
+        // removed because the instruction it was mapped to got squashed. 
+		// Note that this is done before hb_it is incremented.
         ppSquashInRename->notify(std::make_pair(hb_it->instSeqNum,
                                                 hb_it->newPhysReg));
+		// 更新probe point
 
         historyBuffer[tid].erase(hb_it++);
+		// 处理结束后将历史从historyBuffer中删除
 
         ++renameUndoneMaps;
+		// 更新计数器
     }
 }
 
@@ -973,10 +1084,13 @@ DefaultRename<Impl>::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
     if (historyBuffer[tid].empty()) {
         DPRINTF(Rename, "[tid:%u]: History buffer is empty.\n", tid);
         return;
+		// 对于空的historyBuffer无需进行处理
     } else if (hb_it->instSeqNum > inst_seq_num) {
         DPRINTF(Rename, "[tid:%u]: Old sequence number encountered.  Ensure "
                 "that a syscall happened recently.\n", tid);
         return;
+		// 尝试从historyBuffer中删除一条过老（比当前最老的指令还要老）
+		// 而已经被删除过的指令将会立即返回
     }
 
     // Commit all the renames up until (and including) the committed sequence
@@ -986,6 +1100,7 @@ DefaultRename<Impl>::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
     while (!historyBuffer[tid].empty() &&
            hb_it != historyBuffer[tid].end() &&
            hb_it->instSeqNum <= inst_seq_num) {
+		// 将historyBuffer中所有比提交指令更老的指令历史删除
 
         DPRINTF(Rename, "[tid:%u]: Freeing up older rename of reg %i (%s), "
                 "[sn:%lli].\n",
@@ -998,11 +1113,13 @@ DefaultRename<Impl>::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
         // the old one.
         if (hb_it->newPhysReg != hb_it->prevPhysReg) {
             freeList->addReg(hb_it->prevPhysReg);
+			// 释放已经不再使用的物理寄存器到freelist中
         }
 
         ++renameCommittedMaps;
 
         historyBuffer[tid].erase(hb_it--);
+		// 将该表项释放
     }
 }
 
@@ -1017,10 +1134,13 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
     // Get the architectual register numbers from the source and
     // operands, and redirect them to the right physical register.
     for (int src_idx = 0; src_idx < num_src_regs; src_idx++) {
+		// 分别对指令中不同的源寄存器进行映射关系查找
         const RegId& src_reg = inst->srcRegIdx(src_idx);
+		// 获取源寄存器的实际id，该id可以用来索引体系结构寄存器编号
         PhysRegIdPtr renamed_reg;
 
         renamed_reg = map->lookup(tc->flattenRegId(src_reg));
+		// 在rename_map中查找该体系结构寄存器映射到的物理寄存器
         switch (src_reg.classValue()) {
           case IntRegClass:
             intRenameLookups++;
@@ -1038,6 +1158,7 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
           default:
             panic("Invalid register class: %d.", src_reg.classValue());
         }
+		// 递增映射查询计数器
 
         DPRINTF(Rename, "[tid:%u]: Looking up %s arch reg %i"
                 ", got phys reg %i (%s)\n", tid,
@@ -1046,6 +1167,7 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
                 renamed_reg->className());
 
         inst->renameSrcReg(src_idx, renamed_reg);
+		// 将重命名映射关系记录到指令中
 
         // See if the register is ready or not.
         if (scoreboard->getReg(renamed_reg)) {
@@ -1055,6 +1177,8 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
                     renamed_reg->className());
 
             inst->markSrcRegReady(src_idx);
+			// 如果从记分板查到该源寄存器映射到的物理寄存器数据已经准备
+			// 好了，则将该指令的源寄存器标记为ready
         } else {
             DPRINTF(Rename, "[tid:%u]: Register %d (flat: %d) (%s)"
                     " is not ready.\n", tid, renamed_reg->index(),
@@ -1063,6 +1187,7 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
         }
 
         ++renameRenameLookups;
+		// 递增查询计数器
     }
 }
 
@@ -1076,17 +1201,22 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
 
     // Rename the destination registers.
     for (int dest_idx = 0; dest_idx < num_dest_regs; dest_idx++) {
+		// 对目的寄存器逐个进行重命名
         const RegId& dest_reg = inst->destRegIdx(dest_idx);
         typename RenameMap::RenameInfo rename_result;
-
         RegId flat_dest_regid = tc->flattenRegId(dest_reg);
+		// 获取目的寄存器对应的通用体系结构寄存器id
 
         rename_result = map->rename(flat_dest_regid);
+		// 由rename_map进行重命名，并返回映射到的物理寄存器信息
+		// 该信息包含了
 
         inst->flattenDestReg(dest_idx, flat_dest_regid);
+		// 记录目的寄存器的通用体系结构寄存器编号
 
         // Mark Scoreboard entry as not ready
         scoreboard->unsetReg(rename_result.first);
+		// 将该物理寄存器的数据标记位not ready
 
         DPRINTF(Rename, "[tid:%u]: Renaming arch reg %i (%s) to physical "
                 "reg %i (%i).\n", tid, dest_reg.index(),
@@ -1098,8 +1228,9 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
         RenameHistory hb_entry(inst->seqNum, flat_dest_regid,
                                rename_result.first,
                                rename_result.second);
-
+		
         historyBuffer[tid].push_front(hb_entry);
+		// 生成并添加一个重命名映射历史表项
 
         DPRINTF(Rename, "[tid:%u]: Adding instruction to history buffer "
                 "(size=%i), [sn:%lli].\n",tid,
@@ -1114,6 +1245,7 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
         inst->renameDestReg(dest_idx,
                             rename_result.first,
                             rename_result.second);
+		// 将映射关系记录在指令中
 
         ++renameRenamedOperands;
     }
@@ -1127,7 +1259,8 @@ DefaultRename<Impl>::calcFreeROBEntries(ThreadID tid)
                   (instsInProgress[tid] - fromIEW->iewInfo[tid].dispatched);
 
     //DPRINTF(Rename,"[tid:%i]: %i rob free\n",tid,num_free);
-
+	// 这里返回的是ROB报告的空闲表项数目减去已经离开rename阶段但是尚未登记
+	// 到ROB的指令数量，即实际有效的ROB表项数目
     return num_free;
 }
 
@@ -1139,7 +1272,8 @@ DefaultRename<Impl>::calcFreeIQEntries(ThreadID tid)
                   (instsInProgress[tid] - fromIEW->iewInfo[tid].dispatched);
 
     //DPRINTF(Rename,"[tid:%i]: %i iq free\n",tid,num_free);
-
+	// 这里返回的是IQ报告的空闲表项数目减去已经离开rename阶段但是尚未登记
+	// 到IQ的指令数量，即实际有效的IQ表项数目
     return num_free;
 }
 
@@ -1147,24 +1281,28 @@ template <class Impl>
 inline int
 DefaultRename<Impl>::calcFreeLQEntries(ThreadID tid)
 {
-        int num_free = freeEntries[tid].lqEntries -
-                                  (loadsInProgress[tid] - fromIEW->iewInfo[tid].dispatchedToLQ);
-        DPRINTF(Rename, "calcFreeLQEntries: free lqEntries: %d, loadsInProgress: %d, "
-                "loads dispatchedToLQ: %d\n", freeEntries[tid].lqEntries,
-                loadsInProgress[tid], fromIEW->iewInfo[tid].dispatchedToLQ);
-        return num_free;
+    int num_free = freeEntries[tid].lqEntries -
+                  (loadsInProgress[tid] - fromIEW->iewInfo[tid].dispatchedToLQ);
+    DPRINTF(Rename, "calcFreeLQEntries: free lqEntries: %d, loadsInProgress: %d, "
+            "loads dispatchedToLQ: %d\n", freeEntries[tid].lqEntries,
+            loadsInProgress[tid], fromIEW->iewInfo[tid].dispatchedToLQ);
+    // 这里返回的是LQ报告的空闲表项数目减去已经离开rename阶段但是尚未登记
+	// 到LQ的指令数量，即实际有效的LQ表项数目    
+	return num_free;
 }
 
 template <class Impl>
 inline int
 DefaultRename<Impl>::calcFreeSQEntries(ThreadID tid)
 {
-        int num_free = freeEntries[tid].sqEntries -
-                                  (storesInProgress[tid] - fromIEW->iewInfo[tid].dispatchedToSQ);
-        DPRINTF(Rename, "calcFreeSQEntries: free sqEntries: %d, storesInProgress: %d, "
-                "stores dispatchedToSQ: %d\n", freeEntries[tid].sqEntries,
-                storesInProgress[tid], fromIEW->iewInfo[tid].dispatchedToSQ);
-        return num_free;
+    int num_free = freeEntries[tid].sqEntries -
+                   (storesInProgress[tid] - fromIEW->iewInfo[tid].dispatchedToSQ);
+    DPRINTF(Rename, "calcFreeSQEntries: free sqEntries: %d, storesInProgress: %d, "
+            "stores dispatchedToSQ: %d\n", freeEntries[tid].sqEntries,
+            storesInProgress[tid], fromIEW->iewInfo[tid].dispatchedToSQ);
+	// 这里返回的是SQ报告的空闲表项数目减去已经离开rename阶段但是尚未登记
+	// 到SQ的指令数量，即实际有效的SQ表项数目
+    return num_free;
 }
 
 template <class Impl>
@@ -1177,6 +1315,7 @@ DefaultRename<Impl>::validInsts()
         if (!fromDecode->insts[i]->isSquashed())
             inst_count++;
     }
+	// 这里只是在统计的时候去除了被squash掉的指令
 
     return inst_count;
 }
@@ -1219,9 +1358,9 @@ DefaultRename<Impl>::checkStall(ThreadID tid)
     } else if (renameStatus[tid] == SerializeStall &&
                (!emptyROB[tid] || instsInProgress[tid])) {
         DPRINTF(Rename,"[tid:%i]: Stall: Serialize stall and ROB is not "
-                "empty.\n",
-                tid);
+                "empty.\n", tid);
         ret_val = true;
+		// 此处要求正在进行执行序列化操作，并且尚未结束
     }
 
     return ret_val;
@@ -1286,24 +1425,26 @@ DefaultRename<Impl>::checkSignalsAndUpdate(ThreadID tid)
         squash(fromCommit->commitInfo[tid].doneSeqNum, tid);
 
         return true;
+		// 如果接收到了commit阶段的squash信号，进行squash操作
     }
 
     if (checkStall(tid)) {
         return block(tid);
+		// 如果需要stall，则阻塞rename阶段
     }
 
     if (renameStatus[tid] == Blocked) {
         DPRINTF(Rename, "[tid:%u]: Done blocking, switching to unblocking.\n",
                 tid);
-
         renameStatus[tid] = Unblocking;
-
         unblock(tid);
 
         return true;
+		// 如果当前周期不需要继续阻塞，则开始尝试退出阻塞状态
     }
 
     if (renameStatus[tid] == Squashing) {
+		// 根据resume*标志来决定执行了squash操作后的状态
         // Switch status to running if rename isn't being told to block or
         // squash this cycle.
         if (resumeSerialize) {
@@ -1322,37 +1463,43 @@ DefaultRename<Impl>::checkSignalsAndUpdate(ThreadID tid)
                     tid);
 
             renameStatus[tid] = Running;
+			// 默认在squash后回到running的正常运行状态
             return false;
         }
     }
 
     if (renameStatus[tid] == SerializeStall) {
+		// 如果当前正因为处理序列化执行指令而阻塞，则退出阻塞状态
+		// 这里可以一定退出阻塞状态是因为如果不满足序列执行处理结束的情况
+		// 在上面的checkStall函数处理就不会通过，而继续阻塞rename阶段
         // Stall ends once the ROB is free.
         DPRINTF(Rename, "[tid:%u]: Done with serialize stall, switching to "
                 "unblocking.\n", tid);
 
         DynInstPtr serial_inst = serializeInst[tid];
-
         renameStatus[tid] = Unblocking;
-
         unblock(tid);
+		// 尝试退出阻塞状态
 
         DPRINTF(Rename, "[tid:%u]: Processing instruction [%lli] with "
                 "PC %s.\n", tid, serial_inst->seqNum, serial_inst->pcState());
 
         // Put instruction into queue here.
         serial_inst->clearSerializeBefore();
+		// 清除指令的序列执行标记
 
         if (!skidBuffer[tid].empty()) {
             skidBuffer[tid].push_front(serial_inst);
         } else {
             insts[tid].push_front(serial_inst);
         }
+		// 根据下一个周期的处理队列，将序列执行指令加入到对应队列的顶部
 
         DPRINTF(Rename, "[tid:%u]: Instruction must be processed by rename."
                 " Adding to front of list.\n", tid);
 
         serializeInst[tid] = NULL;
+		// 清空序列执行队列。
 
         return true;
     }

@@ -82,12 +82,15 @@ SimpleRenameMap::rename(const RegId& arch_reg)
     // register.
     if (arch_reg != zeroReg) {
         renamed_reg = freeList->getReg();
-
+		// 如果处理的目标不是0寄存器，则获得一个可用的物理寄存器作为
+		// 重命名映射的目标物理寄存器
         map[arch_reg.index()] = renamed_reg;
+		// 记录新映射的目标寄存器
     } else {
         // Otherwise return the zero register so nothing bad happens.
         assert(prev_reg->isZeroReg());
         renamed_reg = prev_reg;
+		// 对于0寄存器，映射不会发生变化
     }
 
     DPRINTF(Rename, "Renamed reg %d to physical reg %d (%d) old mapping was"
@@ -130,11 +133,15 @@ UnifiedRenameMap::switchMode(VecMode newVecMode, UnifiedFreeList* freeList)
     if (newVecMode == Enums::Elem && vecMode == Enums::Full) {
         /* Switch to vector element rename mode. */
         /* The free list should currently be tracking full registers. */
+		
+		// 这里尝试从向量寄存器整体引用变换到向量寄存器按照元素引用的模式
         panic_if(freeList->hasFreeVecElems(),
                 "The free list is already tracking Vec elems");
         panic_if(freeList->numFreeVecRegs() !=
                 regFile->numVecPhysRegs() - TheISA::NumVecRegs,
                 "The free list has lost vector registers");
+		
+		// 这里对freeList的正确性进行相应的检查
         /* Split the mapping of each arch reg. */
         int reg = 0;
         for (auto &e: vecMap) {
@@ -143,6 +150,7 @@ UnifiedRenameMap::switchMode(VecMode newVecMode, UnifiedFreeList* freeList)
             for (i = 0; range.first != range.second; i++, range.first++) {
                 vecElemMap.setEntry(RegId(VecElemClass, reg, i),
                                     &(*range.first));
+			// 将原本整个向量寄存器的映射拆分成单个向量元素的映射
             }
             panic_if(i != NVecElems,
                 "Wrong name of elems: expecting %u, got %d\n",
@@ -155,10 +163,12 @@ UnifiedRenameMap::switchMode(VecMode newVecMode, UnifiedFreeList* freeList)
             auto range = this->regFile->getRegElemIds(vr);
             freeList->addRegs(range.first, range.second);
         }
+		// 将拆分后的向量寄存器写入freeList，并将整体映射的寄存器实体删除
         vecMode = Enums::Elem;
     } else if (newVecMode == Enums::Full && vecMode == Enums::Elem) {
         /* Switch to full vector register rename mode. */
         /* The free list should currently be tracking register elems. */
+		// 由向量寄存器元素索引模式切换到捆绑索引的模式
         panic_if(freeList->hasFreeVecRegs(),
                 "The free list is already tracking full Vec");
         panic_if(freeList->numFreeVecRegs() !=
@@ -178,11 +188,13 @@ UnifiedRenameMap::switchMode(VecMode newVecMode, UnifiedFreeList* freeList)
                 dst[l] = regFile->readVecElem(s_prid);
             }
         }
+		// 将原本分散映射向量寄存器的元素中的数据提取到一个向量数组new_RF中
 
         for (uint32_t i = 0; i < TheISA::NumVecRegs; i++) {
             PhysRegId pregId(VecRegClass, i, 0);
             regFile->setVecReg(regFile->getTrueId(&pregId), new_RF[i]);
         }
+		// 将上面生成的向量数组作为新的存储实体
 
         auto range = regFile->getRegIds(VecRegClass);
         freeList->addRegs(range.first + TheISA::NumVecRegs, range.second);
@@ -190,6 +202,7 @@ UnifiedRenameMap::switchMode(VecMode newVecMode, UnifiedFreeList* freeList)
         /* We remove the elems from the free list. */
         while (freeList->hasFreeVecElems())
             freeList->getVecElem();
+		// 将按照元素引用的寄存器从freeList中删除
         vecMode = Enums::Full;
     }
 }

@@ -58,6 +58,8 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
       floatRegFile(_numPhysicalFloatRegs),
       vectorRegFile(_numPhysicalVecRegs),
       ccRegFile(_numPhysicalCCRegs),
+	  // 这里是构造函数，一定是第一次初始化因此可以用该方式设置大小
+	  // 但是如果vector已经设置过大小，需要用resize函数重新设置大小
       numPhysicalIntRegs(_numPhysicalIntRegs),
       numPhysicalFloatRegs(_numPhysicalFloatRegs),
       numPhysicalVecRegs(_numPhysicalVecRegs),
@@ -80,9 +82,15 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
         warn("Non-zero number of physical CC regs specified, even though\n"
              "    ISA does not use them.\n");
     }
+	// 此处只是警告设计者，即使ISA不使用CC寄存器，也应不应该把CC物理
+	// 寄存器数量设置为0，设置为大于0的数值并不影响ISA的工作
+	
     // The initial batch of registers are the integer ones
     for (phys_reg = 0; phys_reg < numPhysicalIntRegs; phys_reg++) {
         intRegIds.emplace_back(IntRegClass, phys_reg, flat_reg_idx++);
+		// 这里有三个参数，第一个表示了该寄存器的类型
+		// 第二个参数表示其在该类型寄存器的相对索引
+		// 第三个参数表示该寄存器在整个不同类型的寄存器堆中的全局索引
     }
 
     // The next batch of the registers are the floating-point physical
@@ -149,6 +157,8 @@ PhysRegFile::initFreeList(UnifiedFreeList *freeList)
                     elemIdx].index() == reg_idx);
             assert(vecElemIds[reg_idx * NumVecElemPerVecReg +
                     elemIdx].elemIndex() == elemIdx);
+			// 对于按照元素索引的向量寄存器，每个元素有一个所在向量
+			// 寄存器的id，和自己在该向量中的相对位置id
         }
     }
 

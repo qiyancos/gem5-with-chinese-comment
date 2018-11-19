@@ -96,11 +96,11 @@ FUPool::FUPool(const Params *p)
     //
     const vector<FUDesc *> &paramList =  p->FUList;
     for (FUDDiterator i = paramList.begin(); i != paramList.end(); ++i) {
-
-        //
         //  Don't bother with this if we're not going to create any FU's
-        //
+		// 遍历FUList中的所有设置的FU描述，生成并将他们加到FUIdxQueue中
         if ((*i)->number) {
+			// 这里的number表示该类型FU的实例化单元个数，如果为0相当于没有
+			// 支持该种类的FU
             //
             //  Create the FuncUnit object from this structure
             //   - add the capabilities listed in the FU's operation
@@ -109,26 +109,33 @@ FUPool::FUPool(const Params *p)
             //  We create the first unit, then duplicate it as needed
             //
             FuncUnit *fu = new FuncUnit;
+			// 生成一个新的FU
 
             OPDDiterator j = (*i)->opDescList.begin();
             OPDDiterator end = (*i)->opDescList.end();
             for (; j != end; ++j) {
+				// 将该FU支持的操作设置到新的FU中
                 // indicate that this pool has this capability
                 capabilityList.set((*j)->opClass);
+				// 设置对应的opclass标志位表示该类型有FU支持运算
 
                 // Add each of the FU's that will have this capability to the
                 // appropriate queue.
                 for (int k = 0; k < (*i)->number; ++k)
                     fuPerCapList[(*j)->opClass].addFU(numFU + k);
+				// 按照实例化数量要求增加索引到FUIdxQueue中，numFU+k操作在
+				// 后面完成，此处由于需要用来生成索引，因此没有递增
 
                 // indicate that this FU has the capability
                 fu->addCapability((*j)->opClass, (*j)->opLat, (*j)->pipelined);
-
+				// 设置新生成FU的操作类型、操作延迟以及是否流水线化三个参数
+				
                 if ((*j)->opLat > maxOpLatencies[(*j)->opClass])
                     maxOpLatencies[(*j)->opClass] = (*j)->opLat;
-
                 if (!(*j)->pipelined)
                     pipelined[(*j)->opClass] = false;
+				
+				// 设置该操作类型的最大延迟以及是否流水化操作
             }
 
             numFU++;
@@ -136,23 +143,28 @@ FUPool::FUPool(const Params *p)
             //  Add the appropriate number of copies of this FU to the list
             fu->name = (*i)->name() + "(0)";
             funcUnits.push_back(fu);
+			// 添加生成的FU指针到funcUnits队列中
 
             for (int c = 1; c < (*i)->number; ++c) {
                 ostringstream s;
                 numFU++;
                 FuncUnit *fu2 = new FuncUnit(*fu);
-
+				
+				// 复制之前设置好的fu为新的FU，按照数量生成足够的FU实例
+				
                 s << (*i)->name() << "(" << c << ")";
                 fu2->name = s.str();
                 funcUnits.push_back(fu2);
+				// 设置每个FU的辨识名称并添加该FU到funcUnits中
             }
         }
     }
 
     unitBusy.resize(numFU);
-
+	// 设置busy标志位大小
     for (int i = 0; i < numFU; i++) {
         unitBusy[i] = false;
+		// 初始化unitBusy
     }
 }
 
@@ -163,9 +175,11 @@ FUPool::getUnit(OpClass capability)
     //  return this information to the caller
     if (!capabilityList[capability])
         return -2;
+	// 此处表示没有配置属于该操作类型的FU资源
 
     int fu_idx = fuPerCapList[capability].getFU();
     int start_idx = fu_idx;
+	// 从对应类型的FUIdxQueue获取一个空闲的FU编号
 
     // Iterate through the circular queue if needed, stopping if we've reached
     // the first element again.
@@ -174,12 +188,16 @@ FUPool::getUnit(OpClass capability)
         if (fu_idx == start_idx) {
             // No FU available
             return -1;
+			// 这里表示遍历FUIdxQueue一整遍都没有空闲的FU资源
         }
     }
+	// 由于FUIdxQueue没有设置尾指针，因此并不知道到底顶部指针idx对应的
+	// FU是否空闲，因此此处尝试遍历整个FUIdxQueue获取一个空闲的FU
 
     assert(fu_idx < numFU);
 
     unitBusy[fu_idx] = true;
+	// 设置获取到的FU为busy状态
 
     return fu_idx;
 }
