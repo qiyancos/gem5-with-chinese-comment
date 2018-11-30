@@ -259,8 +259,8 @@ class DefaultCommit
      *
      * This differs from the other squashes as it squashes following
      * instructions instead of the current instruction and doesn't
-     * clean up various status bits about traps/tc writes
-     * pending. Since there might have been instructions committed by
+     * clean up various status bits about traps/tc writes pending. 
+     * Since there might have been instructions committed by
      * the commit stage before the squashing instruction was reached
      * and we can't commit and squash in the same cycle, we have to
      * squash in two steps:

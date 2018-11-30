@@ -139,7 +139,8 @@ class LSQUnit {
     /** Executes a load instruction. */
     Fault executeLoad(DynInstPtr &inst);
 
-    Fault executeLoad(int lq_idx) { panic("Not implemented"); return NoFault; }
+    Fault executeLoad(int lq_idx) { panic("Not implemented"); return NoFault;}
+	
     /** Executes a store instruction. */
     Fault executeStore(DynInstPtr &inst);
 
@@ -490,7 +491,7 @@ class LSQUnit {
      * ignored due to the instruction already being squashed. */
     Stats::Scalar lsqIgnoredResponses;
 
-    /** Tota number of memory ordering violations. */
+    /** Total number of memory ordering violations. */
     Stats::Scalar lsqMemOrderViolation;
 
     /** Total number of squashed stores. */
@@ -553,18 +554,20 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
                     int load_idx)
 {
     DynInstPtr load_inst = loadQueue[load_idx];
-
     assert(load_inst);
-
     assert(!load_inst->isExecuted());
+	// 获取一个有效的指令并且保证该指令没有被执行过
 
     // Make sure this isn't a strictly ordered load
     // A bit of a hackish way to get strictly ordered accesses to work
     // only if they're at the head of the LSQ and are ready to commit
     // (at the head of the ROB too).
+	
     if (req->isStrictlyOrdered() &&
         (load_idx != loadHead || !load_inst->isAtCommit())) {
+		// 这里要求对应请求是一个按序处理的请求，但是不位于LQ顶部或者？？？
         iewStage->rescheduleMemInst(load_inst);
+		// 由于违背按序规则执行，因此会被重新调度
         ++lsqRescheduledLoads;
         DPRINTF(LSQUnit, "Strictly ordered load [sn:%lli] PC %s\n",
                 load_inst->seqNum, load_inst->pcState());
@@ -577,14 +580,19 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
             delete sreqLow;
             delete sreqHigh;
         }
+		// 相应的请求将被删除，再度按序执行的时候会重新生成
         return std::make_shared<GenericISA::M5PanicFault>(
             "Strictly ordered load [sn:%llx] PC %s\n",
             load_inst->seqNum, load_inst->pcState());
+		// 返回一个尝试将严格按序执行指令乱序执行的错误
     }
+	// 上面的处理保证要求严格按序执行的指令被按序执行，否则需要重新调度该指令
 
     // Check the SQ for any previous stores that might lead to forwarding
     int store_idx = load_inst->sqIdx;
-
+	// 如果这里获取到的是-1，下面将不会进行SQ数据前递的扫描
+	// 该sqIdx表明本load指令只会和SQ中在比sqIdx更老的store指令
+	// 存在相关关系
     int store_size = 0;
 
     DPRINTF(LSQUnit, "Read called, load idx: %i, store idx: %i, "
@@ -597,58 +605,90 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
         // Disable recording the result temporarily.  Writing to misc
         // regs normally updates the result, but this is not the
         // desired behavior when handling store conditionals.
+		
         load_inst->recordResult(false);
         TheISA::handleLockedRead(load_inst.get(), req);
+		// 处理一个带锁的读操作，这里除了读取数据
+		// 还会记录一个flag和读取数据的地址
         load_inst->recordResult(true);
+		// 标记指令表示该指令已经处理过了
     }
+	// 在该load指令是LLSC中的LL部分进行的处理
 
     if (req->isMmappedIpr()) {
+		// 这里表示请求处理的地址是一个映射到寄存器的地址
+		// 一般来说这种映射的寄存器针对的是IO外设的控制寄存器
+		// 这种地址一般是non-cacheable的！
         assert(!load_inst->memData);
         load_inst->memData = new uint8_t[64];
+		// 这里生成了一个512bit/64Byte的元数据，对应了一个Cache Block
 
         ThreadContext *thread = cpu->tcBase(lsqID);
         Cycles delay(0);
         PacketPtr data_pkt = new Packet(req, MemCmd::ReadReq);
+		// 生成一个用于传递数据请求的空Packet
 
         data_pkt->dataStatic(load_inst->memData);
+		// 设置接收传输数据的容器指针
         if (!TheISA::HasUnalignedMemAcc || !sreqLow) {
+			// 如果访存操作没有被拆分或者没有进行非对齐的内存访问
             delay = TheISA::handleIprRead(thread, data_pkt);
+			// 由该函数处理Packet，返回对应操作模拟的延迟
         } else {
             assert(sreqLow->isMmappedIpr() && sreqHigh->isMmappedIpr());
+			
             PacketPtr fst_data_pkt = new Packet(sreqLow, MemCmd::ReadReq);
             PacketPtr snd_data_pkt = new Packet(sreqHigh, MemCmd::ReadReq);
+			// 进入这里只能说明非对齐的内存访问一定会被拆分成两部分
 
             fst_data_pkt->dataStatic(load_inst->memData);
             snd_data_pkt->dataStatic(load_inst->memData + sreqLow->getSize());
-
+			// 很明显第一次访问填充的是load_inst->memData低一部分数据
+			// 第二次访问load_inst->memData则填充其剩余部分的数据
+			// 需要注意的是，这里两次load获得数据可能不是对半分的
+			
             delay = TheISA::handleIprRead(thread, fst_data_pkt);
             Cycles delay2 = TheISA::handleIprRead(thread, snd_data_pkt);
+			// 分别处理两个Packet并记录他们的延迟
+			
             if (delay2 > delay)
                 delay = delay2;
+			// 两个请求我们认为是无关并行的，因此最后会取两个delay中更大
+			// 的作为最后的实际延迟，即变量delay；delay2只是一个临时变量
 
             delete sreqLow;
             delete sreqHigh;
             delete fst_data_pkt;
             delete snd_data_pkt;
+			// 在处理结束后删除Packet和Request
         }
         WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt, this);
+		// 生成一个新的WritebackEvent来记录发出的Packet，以便在对应延迟之后
+		// 完成该Packet的写回操作
         cpu->schedule(wb, cpu->clockEdge(delay));
+		// 由CPU在对应的delay周期后定时处理该Packet返回数据的写回操作
         return NoFault;
+		// 对于这一类寄存器固定映射的内存，处理已经完毕了，立即返回
     }
 
+	// 对于一般的load指令，在下面的操作中尝试进行数据前递
     while (store_idx != -1) {
         // End once we've reached the top of the LSQ
         if (store_idx == storeWBIdx) {
             break;
         }
+		// 此处的限制是因为已经完成写回的store指令不可用来进行数据前递
+		// 因此遍历的范围是SQ中尚未进行写回的指令
 
         // Move the index to one younger
         if (--store_idx < 0)
             store_idx += SQEntries;
+		// 循环队列指针到达顶部以后的处理
 
         assert(storeQueue[store_idx].inst);
 
         store_size = storeQueue[store_idx].size;
+		// 这里获得的应该是store指令需要存放的数据大小
 
         if (!store_size || storeQueue[store_idx].inst->strictlyOrdered() ||
             (storeQueue[store_idx].req &&
@@ -658,29 +698,39 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
             // considered for forwarding
             continue;
         }
+		// 对于store没有存放数据，或者该store指令要求严格按序执行，
+		// 或者该store指令是一个内存维护指令，不带有有效数据，则
+		// 不进行前递操作
 
         assert(storeQueue[store_idx].inst->effAddrValid());
+		// 检查确认store指令的目标地址有效
 
         // Check if the store data is within the lower and upper bounds of
         // addresses that the request needs.
         bool store_has_lower_limit =
             req->getVaddr() >= storeQueue[store_idx].inst->effAddr;
+		// store起始地址比load更小
         bool store_has_upper_limit =
             (req->getVaddr() + req->getSize()) <=
             (storeQueue[store_idx].inst->effAddr + store_size);
+		// store结束地址比load更大
         bool lower_load_has_store_part =
-            req->getVaddr() < (storeQueue[store_idx].inst->effAddr +
-                           store_size);
+            req->getVaddr() < (storeQueue[store_idx].inst->effAddr + store_size);
+		// load起始地址是否小于store结束地址
         bool upper_load_has_store_part =
             (req->getVaddr() + req->getSize()) >
             storeQueue[store_idx].inst->effAddr;
+		// load结束地址大于store的起始地址
+		// 检查store指令和当前load指令处理的地址范围是否存在交叠
 
         // If the store's data has all of the data needed and the load isn't
         // LLSC, we can forward.
-        if (store_has_lower_limit && store_has_upper_limit && !req->isLLSC()) {
+        if (store_has_lower_limit && store_has_upper_limit && !req->isLLSC()){
+			// 这里表示store指令存储数据包含了load需要的全部数据，且load不是LLSC
             // Get shift amount for offset into the store's data.
             int shift_amt = req->getVaddr() - storeQueue[store_idx].inst->effAddr;
-
+			// 计算两个数据起始地址的差值
+			
             // Allocate memory if this is the first time a load is issued.
             if (!load_inst->memData) {
                 load_inst->memData = new uint8_t[req->getSize()];
@@ -690,36 +740,52 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
             else
                 memcpy(load_inst->memData,
                     storeQueue[store_idx].data + shift_amt, req->getSize());
+			// 拷贝store的数据到load数据容器中
 
             DPRINTF(LSQUnit, "Forwarding from store idx %i to load to "
                     "addr %#x\n", store_idx, req->getVaddr());
 
             PacketPtr data_pkt = new Packet(req, MemCmd::ReadReq);
             data_pkt->dataStatic(load_inst->memData);
-
+			// 这里生成Packet仅仅是用于生成load指令需要的WritebackEvent
+			
             WritebackEvent *wb = new WritebackEvent(load_inst, data_pkt, this);
 
             // We'll say this has a 1 cycle load-store forwarding latency
             // for now.
             // @todo: Need to make this a parameter.
             cpu->schedule(wb, curTick());
+			// 由于load通过前递获得了数据，因此可以在本周期立即进行写回
 
             // Don't need to do anything special for split loads.
             if (TheISA::HasUnalignedMemAcc && sreqLow) {
                 delete sreqLow;
                 delete sreqHigh;
+				// 删除拆分请求对应的Request
             }
 
             ++lsqForwLoads;
             return NoFault;
+			// load的read操作通过前递处理完毕
         } else if (
                 (!req->isLLSC() &&
                  ((store_has_lower_limit && lower_load_has_store_part) ||
+				// load和store数据范围交叉，且store数据地址更低
                   (store_has_upper_limit && upper_load_has_store_part) ||
+				// load和store数据范围交叉，且store数据地址更高
                   (lower_load_has_store_part && upper_load_has_store_part))) ||
+				// load和store之间的数据范围存在交叉或者包含，其中包含
+				// 是load包含store数据范围
+				
+				// 这里存在一个问题：最后一个条件包含了前两个条件的可能性
+				// 前两个条件判断似乎是多余的？？？
                 (req->isLLSC() &&
                  ((store_has_lower_limit || upper_load_has_store_part) &&
                   (store_has_upper_limit || lower_load_has_store_part)))) {
+				// load是一个LLSC，而且store和load的数据范围存在包含或者交叉
+				// 其中包含是load包含store
+				
+				// 其实这里也可以用前面非LLSC判断中的最后一行条件代替
             // This is the partial store-load forwarding case where a store
             // has only part of the load's data and the load isn't LLSC or
             // the load is LLSC and the store has all or part of the load's
@@ -731,23 +797,31 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
                 panic("Should not check one of these");
                 continue;
             }
+			// 不应该处理到已经完成的指令
 
             // Must stall load and force it to retry, so long as it's the oldest
             // load that needs to do so.
-            if (!stalled ||
-                (stalled &&
-                 load_inst->seqNum <
+            if (!stalled || (stalled && load_inst->seqNum <
                  loadQueue[stallingLoadIdx]->seqNum)) {
+				// 当前LSQ没有stall或者
+				// LSQ发生了stall但是当前处理的load指令比stall的load指令更老
                 stalled = true;
                 stallingStoreIsn = storeQueue[store_idx].inst->seqNum;
                 stallingLoadIdx = load_idx;
             }
+			// 这里会对LSQ进行stall，同时更新stall指令索引，这两个索引
+			// 是专门针对于partial forwarding处理过程设置的
+			// 但是为什么需要stall呢？？？
 
             // Tell IQ/mem dep unit that this instruction will need to be
             // rescheduled eventually
             iewStage->rescheduleMemInst(load_inst);
             load_inst->clearIssued();
+			// 清除以发射状态以便在reschedule时进行第二次发射
             ++lsqRescheduledLoads;
+			// 本次处理到前递已经说明该load指令之前从LSQ发射了，但是对于
+			// partial forwarding来说，本次处理仅能获得部分数据其他内容需要
+			// 重新发射直接从Mem获取，而该操作是通过reschedule实现的
 
             // Do not generate a writeback event as this instruction is not
             // complete.
@@ -763,11 +837,11 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
                 delete sreqLow;
                 delete sreqHigh;
             }
-
             return NoFault;
+			// 删除拆分访存请求并返回
         }
     }
-
+	// 走到这里说明该load指令没有可以前递的数据，需要直接访问Mem获取数据
     // If there's no forwarding case, then go access memory
     DPRINTF(LSQUnit, "Doing memory access for inst [sn:%lli] PC %s\n",
             load_inst->seqNum, load_inst->pcState());
@@ -782,14 +856,17 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
     PacketPtr data_pkt = Packet::createRead(req);
     PacketPtr fst_data_pkt = NULL;
     PacketPtr snd_data_pkt = NULL;
+	// 生成数据读取需要的Packet
 
     data_pkt->dataStatic(load_inst->memData);
+	// 设置接收load获取数据的容器
 
     LSQSenderState *state = new LSQSenderState;
     state->isLoad = true;
     state->idx = load_idx;
     state->inst = load_inst;
     data_pkt->senderState = state;
+	// 设置Packet的内容
 
     if (!TheISA::HasUnalignedMemAcc || !sreqLow) {
         // Point the first packet at the main data packet.
@@ -808,19 +885,30 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
         state->isSplit = true;
         state->outstanding = 2;
         state->mainPkt = data_pkt;
+		// 访问请求拆分的信息会被记录到state中
     }
+	// 对于非对齐的内存访问，会生成两个不同的访问请求Packet
 
     // For now, load throughput is constrained by the number of
     // load FUs only, and loads do not consume a cache port (only
     // stores do).
+	// 在这里，load的唯一约束是load操作执行单元的数目，而非Cache接口
+	// 的数目，因为Cache接口数目仅用于限制store操作
+	
     // @todo We should account for cache port contention
     // and arbitrate between loads and stores.
     bool successful_load = true;
+	// sendTimingReq似乎在处理成功的时候返回一个非0值，失败则返回0
     if (!dcachePort->sendTimingReq(fst_data_pkt)) {
         successful_load = false;
+		// 从dachePort发送第一个请求，如果返回0则successful_load置为false
+		// 返回非0值才能够处理拆分时的第二部分Packet数据请求，因为这里0
+		// 返回值表示处理Packet时遇到了Cache Blocked的情况
     } else if (TheISA::HasUnalignedMemAcc && sreqLow) {
-        completedFirst = true;
-
+        // 对于对齐内存访问来说，不存在第二个访问Packet，进入这里说明
+		// 进行了非对齐的内存访问，并且第一个Packet访问成功处理
+		completedFirst = true;
+		
         // The first packet was sent without problems, so send this one
         // too. If there is a problem with this packet then the whole
         // load will be squashed, so indicate this to the state object.
@@ -829,16 +917,20 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
         // @todo We should also account for cache port contention
         // here.
         if (!dcachePort->sendTimingReq(snd_data_pkt)) {
+			// 第二次Packet处理失败则会返回0
             // The main packet will be deleted in completeDataAccess.
             state->complete();
+			// 递减state的outstanding数值，表示第一个Packet已经处理完毕了
             // Signify to 1st half that the 2nd half was blocked via state
             state->cacheBlocked = true;
             successful_load = false;
+			// 设置相关状态表明Packet处理失败
         }
     }
 
     // If the cache was blocked, or has become blocked due to the access,
     // handle it.
+	// 如果发送Packet处理失败的话，进行下面的squash处理
     if (!successful_load) {
         if (!sreqLow) {
             // Packet wasn't split, just delete main packet info
@@ -846,6 +938,7 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
             delete req;
             delete data_pkt;
         }
+		// 删除总的Request、Packet以及State
 
         if (TheISA::HasUnalignedMemAcc && sreqLow) {
             if (!completedFirst) {
@@ -869,10 +962,16 @@ LSQUnit<Impl>::read(Request *req, Request *sreqLow, Request *sreqHigh,
                 sreqHigh = NULL;
             }
         }
+		// 上面对于拆分访问情况处理比较特殊，如果仅仅第一个访问Packet
+		// 完成的话，则只会保留第一次访问生成的内容和state
 
         ++lsqCacheBlocked;
+		// 很明显如果出现了错误，原因只可能是Cache Blocked，即使
+		// 是TLB miss也可以当作Cache Blocked来看
 
         iewStage->blockMemInst(load_inst);
+		// 记录因为Cache Blocked没有全部完成的指令，在Cache unblocked的时候
+		// 这些指令会被放到replay List中准备重新执行
 
         // No fault occurred, even though the interface is blocked.
         return NoFault;
@@ -900,6 +999,8 @@ LSQUnit<Impl>::write(Request *req, Request *sreqLow, Request *sreqHigh,
     storeQueue[store_idx].size = size;
     bool store_no_data = req->getFlags() & Request::STORE_NO_DATA;
     storeQueue[store_idx].isAllZeros = store_no_data;
+	// 设置SQ中对应表项的相关信息
+	
     assert(size <= sizeof(storeQueue[store_idx].data) || store_no_data);
 
     // Split stores can only occur in ISAs with unaligned memory accesses.  If
@@ -907,10 +1008,12 @@ LSQUnit<Impl>::write(Request *req, Request *sreqLow, Request *sreqHigh,
     if (TheISA::HasUnalignedMemAcc && sreqLow) {
         storeQueue[store_idx].isSplit = true;
     }
+	// 设置是否是需要拆分的非对齐内存访问
 
     if (!(req->getFlags() & Request::CACHE_BLOCK_ZERO) && \
         !req->isCacheMaintenance())
         memcpy(storeQueue[store_idx].data, data, size);
+	// 如果该store指令确实会存放一些有效数据，这些数据将会被记录到SQ的表项中
 
     // This function only writes the data to the store queue, so no fault
     // can happen here.

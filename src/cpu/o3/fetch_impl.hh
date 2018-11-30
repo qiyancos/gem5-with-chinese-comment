@@ -740,7 +740,7 @@ DefaultFetch<Impl>::finishTranslation(const Fault &fault, RequestPtr mem_req)
 
         // Access the cache.
         if (!cpu->getInstPort().sendTimingReq(data_pkt)) {
-			// 尝试向Icache的接口发送一个Packet对应的读写请求
+			// 尝试向Icache的接口发送一个Packet对应的读写请求并且失败了
             assert(retryPkt == NULL);
             assert(retryTid == InvalidThreadID);
 			// 要求当前没有需要重试的Packet
@@ -1628,7 +1628,7 @@ DefaultFetch<Impl>::recvReqRetry()
         assert(fetchStatus[retryTid] == IcacheWaitRetry);
 
         if (cpu->getInstPort().sendTimingReq(retryPkt)) {
-			// 尝试重新将重试ICache访问请求发送给ICache处理
+			// 尝试重新将重试ICache访问请求发送给ICache处理并且成功
             fetchStatus[retryTid] = IcacheWaitResponse;
             // Notify Fetch Request probe when a retryPkt is successfully sent.
             // Note that notify must be called before retryPkt is set to NULL.
@@ -1638,6 +1638,7 @@ DefaultFetch<Impl>::recvReqRetry()
             cacheBlocked = false;
 			// 然后更新相应的状态，并重置重试信息
         }
+		// 如果不成功，那么之后会无限次重试该Packet直到该Packet得到有效的处理
     } else {
         assert(retryTid == InvalidThreadID);
         // Access has been squashed since it was sent out.  Just clear

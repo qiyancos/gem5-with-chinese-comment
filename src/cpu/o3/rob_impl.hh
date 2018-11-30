@@ -110,7 +110,7 @@ template <class Impl>
 void
 ROB<Impl>::resetState()
 {
-    for (ThreadID tid = 0; tid  < numThreads; tid++) {
+    for (ThreadID tid = 0; tid < numThreads; tid++) {
         doneSquashing[tid] = true;
         threadEntries[tid] = 0;
         squashIt[tid] = instList[tid].end();
@@ -235,6 +235,7 @@ ROB<Impl>::insertInst(DynInstPtr &inst)
     tail--;
 
     inst->setInROB();
+	// 设置该指令状态，表示该指令位于ROB中
 
     ++numInstsInROB;
     ++threadEntries[tid];
@@ -268,16 +269,20 @@ ROB<Impl>::retireHead(ThreadID tid)
 
     head_inst->clearInROB();
     head_inst->setCommitted();
+	// 设置指令状态表示该指令已经从ROB删除并正确的完成了提交
 
     instList[tid].erase(head_it);
+	// 删除该指令
 
     //Update "Global" Head of ROB
     updateHead();
+	// 更新所有线程的ROB head位置迭代器
 
     // @todo: A special case is needed if the instruction being
     // retired is the only instruction in the ROB; otherwise the tail
     // iterator will become invalidated.
     cpu->removeFrontInst(head_inst);
+	// 将已经提交的指令从CPU的instList中删除
 }
 
 template <class Impl>
@@ -340,8 +345,9 @@ ROB<Impl>::doSquash(ThreadID tid)
                 tid);
 
         squashIt[tid] = instList[tid].end();
-
         doneSquashing[tid] = true;
+		// 发现当前的squash处理已经到达整个操作的结尾，清空squashIt
+		// 并设置标志位表示已经完成了上一个squash请求
         return;
     }
 
@@ -350,9 +356,12 @@ ROB<Impl>::doSquash(ThreadID tid)
     for (int numSquashed = 0;
          numSquashed < squashWidth &&
          squashIt[tid] != instList[tid].end() &&
+		 // 遇到这种情况表示squashIt被重置，无需继续执行squash
          (*squashIt[tid])->seqNum > squashedSeqNum[tid];
          ++numSquashed)
     {
+		// 按照ROB指令的排列顺序进行squash操作，直到达到单周期squashWidth
+		// 或者已经完成当前squash请求为止
         DPRINTF(ROB, "[tid:%u]: Squashing instruction PC %s, seq num %i.\n",
                 (*squashIt[tid])->threadNumber,
                 (*squashIt[tid])->pcState(),
@@ -361,18 +370,17 @@ ROB<Impl>::doSquash(ThreadID tid)
         // Mark the instruction as squashed, and ready to commit so that
         // it can drain out of the pipeline.
         (*squashIt[tid])->setSquashed();
-
         (*squashIt[tid])->setCanCommit();
-
+		// 设置为squashed以及canCommit状态，这样之后在处理到该指令
+		// 的时候就会由retireHead函数将对应表项清除
 
         if (squashIt[tid] == instList[tid].begin()) {
             DPRINTF(ROB, "Reached head of instruction list while "
                     "squashing.\n");
 
             squashIt[tid] = instList[tid].end();
-
             doneSquashing[tid] = true;
-
+			// ROB已经没有可以squash的指令了，直接退出
             return;
         }
 
@@ -381,6 +389,9 @@ ROB<Impl>::doSquash(ThreadID tid)
 
         if ((*squashIt[tid]) == (*tail_thread))
             robTailUpdate = true;
+		// 如果当前squash操作导致所有ROB中最新有效指令位置发生了
+		// 变化，那么设置该标记位，在函数结束前调用updateTail来更新
+		// tail指针
 
         squashIt[tid]--;
     }
@@ -392,12 +403,14 @@ ROB<Impl>::doSquash(ThreadID tid)
                 tid);
 
         squashIt[tid] = instList[tid].end();
-
         doneSquashing[tid] = true;
+		// 一把来说到达这里的squash结束只可能是因为squashWidth
+		// 已满或者到达了squash操作的终点
     }
 
     if (robTailUpdate) {
         updateTail();
+		// 更新所有线程ROB的tail指针
     }
 }
 
@@ -437,11 +450,12 @@ ROB<Impl>::updateHead()
             lowest_num = head_inst->seqNum;
         }
     }
+	// 获取所有线程ROB中最老指令对应的iterator
 
     if (first_valid) {
         head = instList[0].end();
     }
-
+	// 如果ROB均为空，则设置为默认值
 }
 
 template <class Impl>
@@ -479,8 +493,8 @@ ROB<Impl>::updateTail()
             tail = tail_thread;
         }
     }
+	// 将tail设置为所有线程ROB中最新指令的迭代器
 }
-
 
 template <class Impl>
 void
@@ -497,18 +511,17 @@ ROB<Impl>::squash(InstSeqNum squash_num, ThreadID tid)
     DPRINTF(ROB, "Starting to squash within the ROB.\n");
 
     robStatus[tid] = ROBSquashing;
-
     doneSquashing[tid] = false;
-
     squashedSeqNum[tid] = squash_num;
+	// 设置squash的状态以及squash操作的标记指令全局编号
 
     if (!instList[tid].empty()) {
         InstIt tail_thread = instList[tid].end();
         tail_thread--;
 
         squashIt[tid] = tail_thread;
-
         doSquash(tid);
+		// 登记squash起点到该线程ROB尾部表项，并开始进行squash操作
     }
 }
 
