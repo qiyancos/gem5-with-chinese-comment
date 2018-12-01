@@ -89,6 +89,7 @@ OutputFile<StreamType>::OutputFile(const OutputDirectory &dir,
     _fstream(static_cast<stream_type_t *>(_stream))
 {
     _fstream->open(dir.resolve(_name).c_str(), _mode);
+	//printf(">> %s\n", dir.resolve(_name).c_str());
 
     assert(_fstream->is_open());
 }
