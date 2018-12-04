@@ -254,6 +254,7 @@ for i in xrange(np):
     system.cpu[i].createThreads()
 
 if options.ruby:
+    #print(">> Not here")
     options.use_map = True
     Ruby.create_system(options, False, system)
     assert(options.num_cpus == len(system.ruby._cpu_ports))
@@ -272,9 +273,16 @@ if options.ruby:
         system.cpu[i].icache_port = ruby_port.slave
         system.cpu[i].dcache_port = ruby_port.slave
         if buildEnv['TARGET_ISA'] == 'x86':
-            system.cpu[i].interrupts[0].pio = ruby_port.master
-            system.cpu[i].interrupts[0].int_master = ruby_port.slave
-            system.cpu[i].interrupts[0].int_slave = ruby_port.master
+            #print(">> Should be here")
+            if options.smt:
+                for j in xrange(len(multiprocesses)):
+                    system.cpu[i].interrupts[j].pio = ruby_port.master
+                    system.cpu[i].interrupts[j].int_master = ruby_port.slave
+                    system.cpu[i].interrupts[j].int_slave = ruby_port.master
+            else:
+                system.cpu[i].interrupts[0].pio = ruby_port.master
+                system.cpu[i].interrupts[0].int_master = ruby_port.slave
+                system.cpu[i].interrupts[0].int_slave = ruby_port.master
             system.cpu[i].itb.walker.port = ruby_port.slave
             system.cpu[i].dtb.walker.port = ruby_port.slave
 else:

@@ -307,12 +307,25 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
 
     // Initialize rename map to assign physical registers to the
     // architectural registers for active threads only.
+	PhysRegIdPtr phys_reg_zero = NULL;
     for (ThreadID tid = 0; tid < active_threads; tid++) {
         for (RegIndex ridx = 0; ridx < TheISA::NumIntRegs; ++ridx) {
             // Note that we can't use the rename() method because we don't
             // want special treatment for the zero register at this point
-            PhysRegIdPtr phys_reg = freeList.getIntReg();
-			// 从freelist对应的物理寄存器中获得一个整数物理寄存器
+			PhysRegIdPtr phys_reg;
+			if (ridx == 0) {
+				if (tid == 0){
+            		phys_reg = freeList.getIntReg();
+					phys_reg_zero = phys_reg;
+				// 在第一次处理零寄存器时记录对应的物理寄存器指针
+				}
+				else phys_reg = phys_reg_zero;
+				// 之后所有的零寄存器均会映射到同一个0寄存器
+			}
+			else {
+				phys_reg = freeList.getIntReg();
+				// 从freelist对应的物理寄存器中获得一个整数物理寄存器
+			}
             renameMap[tid].setEntry(RegId(IntRegClass, ridx), phys_reg);
 			// 在重命名表中的表项中，建立一个从体系结构整数寄存器到
 			// 获得的整数物理寄存器之间的映射
@@ -650,6 +663,18 @@ FullO3CPU<Impl>::tick()
 	// 通过调用notify对和周期相关的变量进行更新？？？
 
 	// activity = false;
+	
+	/*
+	int tempTid;
+	//printf(">> Tick to %lu\n", curTick());
+	if (curTick() > 1000 && curTick() < 133500 ){
+		printf(">> Check at tick: %lu\n", curTick());
+		for(tempTid = 0; tempTid < numThreads; tempTid++){
+			printf(">> Thread::%d\n", tempTid);
+			renameMap[tempTid].dumpInsts();
+		}
+	}
+	*/
 
     //Tick each of the stages
     fetch.tick();

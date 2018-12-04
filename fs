@@ -4,7 +4,7 @@ if [ ${1}x = x -o ${1}x = -hx ]
 	echo "[start] <mode> start simulation with full_system[fs] or benchmark[spec] mode "
 	echo "    fs mode: this script will also mount system image to /mnt/0 "
 	echo "        before the simulation."
-	echo "    spec mode: not supportted here, please use script \"sim_se\" in "
+	echo "    spec mode: not supportted here, please use script \"se\" in "
 	echo "        the gem5 root directory instead!"
 	echo "[link] <port> use m5term to link with the simulation system."
 	echo "[mount] <dir> mount the system image file to the given directory."
