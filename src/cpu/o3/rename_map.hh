@@ -158,6 +158,9 @@ class SimpleRenameMap
     const_iterator end() const { return map.end(); }
     const_iterator cend() const { return map.cend(); }
     /** @} */
+
+	// Used for debug
+	void dumpInsts();
 };
 
 
@@ -379,7 +382,9 @@ class UnifiedRenameMap
      * Ignore 'silent' modifications.
      */
     void switchMode(VecMode newVecMode, UnifiedFreeList* freeList);
-
+	
+	// Used for debug
+	void dumpInsts();
 };
 
 #endif //__CPU_O3_RENAME_MAP_HH__

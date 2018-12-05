@@ -1,324 +1,326 @@
 #! /bin/bash
+root=$PWD
 
-# Basic settings for this script
-specDir="/home/lishuoke/spec2006/benchspec/CPU2006"
-gem5Dir="/home/lishuoke/gem5-test"
-tempDir=$gem5Dir
-# Where the temporary files should be stored
-ISA="RISCV"
-# [ARM ALPHA RISCV X86 MIPS]
+################# settings for script ################
+setScript(){
+	specDir="/home/lee/project/spec2006/benchspec/CPU2006"
+	# root directory path for spec2006
+	gem5Dir="/home/lee/project/gem5"
+	# root directory path for gem5
+	tempDir=$root
+	# Where the temporary files should be stored
+	ISA="RISCV"
+	# [ARM ALPHA RISCV X86 MIPS]
+	buildDir="build_base_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
+	# [build_base_riscv.0001, build_base_arm.0001, build_base_alpha.0001,
+	#  build_base_mips.0001, build_base_x86.0001]
+	run_dir="run_base_ref_x86.0001"
+	# Do not change this
+	threads=4
+	# num of threads you want to use when building gem5.opt
+	bad_spec="465.tonto"
+	# Spec programs that may have problems running
+}
 
-build_dir="build_base_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
-# [build_base_riscv.0001, build_base_arm.0001, build_base_alpha.0001,
-#  build_base_mips.0001, build_base_amd64.0001]
-run_dir="run_base_ref_amd64.0001"
-# Do not change this
-threads=6
-bad_spec="465.tonto"
+################# settings for gem5 ################
+setGem5(){
+	# build options
+	cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
+	# outputDir option [default m5out]
+	outputDir=""
 
-build_dir=`echo $build_dir | sed 's/x86/amd64/g'`
-if [ ! -d $specDir ]
-then
-	echo "Directory not specified for Spec2000/2006!"
-	exit
-fi
+	enableGlobal="Yes" # [Yes]
+		cpuType="DerivO3CPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
+		# type of cpu to run with
+		cpuVoltage="" # []
+		# Top-level voltage for blocks running at system power supply
+		sysClock="" # []
+		# Top-level clock for blocks running at system speed
+		cpuClock="" # []
+		# Clock for blocks running at CPU speed
+		maxTime="" # []
+		# Run to the specified absolute simulated time in seconds
+		numCpus="" # []
 
-####################################################
-#                                                  #
-#              Gem5 System Settings                #
-#                                                  #
-####################################################
+	enableSmt="Yes" # [Yes/No]
+	enableSimpoint="No" # [Yes/No]
 
-# build options
-cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
+	enableMem="Yes"
+		memType="" # ['HBM_1000_4H_1x128', 'DRAMCtrl', 'DDR3_2133_8x8', 'HBM_1000_4H_1x64',
+		# 'GDDR5_4000_2x32', 'HMC_2500_1x32', 'LPDDR3_1600_1x32', 'WideIO_200_1x128', 
+		# 'DDR4_2400_8x8', 'DDR3_1600_8x8', 'DDR4_2400_4x16', 'DDR4_2400_16x4', 
+		# 'SimpleMemory', 'LPDDR2_S4_1066_1x32']
+		# type of memory to use
+		memChannels=""
+		# number of memory channels
+		memRanks=""
+		# number of memory ranks per channel
+		memSize="4096MB"
+		# Specify the physical memory size (single memory)
 
-# outputDir option [default m5out]
-outputDir=""
+	enableCache="Yes"
+		numDirs=""
+		cacheLineSize=""
+		L1Dsize=""
+		L1Dassoc=""
+		L1Isize=""
+		L1Iassoc=""
 
-enableGlobal="Yes" # [Yes]
-	cpuType="DerivO3CPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
-	# type of cpu to run with
-	cpuVoltage="" # []
-	# Top-level voltage for blocks running at system power supply
-	sysClock="" # []
-	# Top-level clock for blocks running at system speed
-	cpuClock="" # []
-	# Clock for blocks running at CPU speed
-	maxTime="" # []
-	# Run to the specified absolute simulated time in seconds
-	numCpus="" # []
+	enableL2Cache="Yes"
+		numL2Caches=""
+		L2size=""
+		L2assoc=""
 
-enableSmt="Yes" # [Yes/No]
-enableSimpoint="No" # [Yes/No]
+	enableL3Cache="Yes"
+		numL3Caches=""
+		L3size=""
+		L3assoc=""
 
-enableMem="Yes"
-	memType="" # ['HBM_1000_4H_1x128', 'DRAMCtrl', 'DDR3_2133_8x8', 'HBM_1000_4H_1x64',
-	# 'GDDR5_4000_2x32', 'HMC_2500_1x32', 'LPDDR3_1600_1x32', 'WideIO_200_1x128', 
-	# 'DDR4_2400_8x8', 'DDR3_1600_8x8', 'DDR4_2400_4x16', 'DDR4_2400_16x4', 
-	# 'SimpleMemory', 'LPDDR2_S4_1066_1x32']
-	# type of memory to use
-	memChannels=""
-	# number of memory channels
-	memRanks=""
-	# number of memory ranks per channel
-	memSize="4096MB"
-	# Specify the physical memory size (single memory)
+	enableDebug="Yes" # [Yes/No]
+		debugOutputFile="$gem5Dir/debug.log"
+		debugFlags="Fetch,Decode,Rename,IEW,Commit,FreeList" 
+		# [Flag1, Flag2] use "-h gem5 --debug-help" to see the debug flags 
+		debugStartTick=""
+		debugEndTick=""
+}
 
-enableCache="Yes"
-	numDirs=""
-	cacheLineSize=""
-	L1Dsize=""
-	L1Dassoc=""
-	L1Isize=""
-	L1Iassoc=""
+################# settings for spec ################
+setSpec(){
+	# 400
+	perlbench=(perlbench "-o" "-I ./lib ./checkspam.pl 2500 5 25 11 150 1 1 1 1")
+	#perlbench=(perlbench "-o" "-I ./lib ./diffmail.pl 4 800 10 17 19 300")
+	#perlbench=(perlbench "-o" "-I ./lib ./splitmail.pl 1600 12 26 16 4500")
+	# Some errors occurred while running this spec on real machine
 
-enableL2Cache="Yes"
-	numL2Caches=""
-	L2size=""
-	L2assoc=""
+	# 401
+	bzip2=(bzip2 "-o" "./chicken.jpg 30")
+	# bzip2=(bzip2 "-o ./input.source 280") 
+	# bzip2=(bzip2 "-o ./liberty.jpg 30")
+	# bzip2=(bzip2 "-o ./input.program 280")
+	# bzip2=(bzip2 "-o ./text.html 280")
+	# bzip2=(bzip2 "-o ./input.combined 200")
 
-enableL3Cache="Yes"
-	numL3Caches=""
-	L3size=""
-	L3assoc=""
+	# 403
+	gcc=(gcc "-o" "./166.i -o ./166.s")
+	# gcc=(gcc "-o" "./200.i -o ./200.s")
+	# gcc=(gcc "-o" "./c-typeck.i -o ./c-typeck.s")
+	# gcc=(gcc "-o" "./c-decl.i -o ./c-decl.s")
+	# gcc=(gcc "-o" "./expr.i -o ./expr.s")
+	# gcc=(gcc "-o" "./expr2.i -o .//expr2.s")
+	# gcc=(gcc "-o" "./g23.i -o ./g23.s")
+	# gcc=(gcc "-o" "./s04.i -o ./s04.s")
+	# gcc=(gcc "-o" "./scilab.i -o ./scilab.s")
 
-enableDebug="Yes" # [Yes/No]
-	debugOutputFile="$gem5Dir/debug.log"
-	debugFlags="Fetch,Decode,Rename,IEW,Commit,FreeList" 
-	# [Flag1, Flag2] use "-h gem5 --debug-help" to see the debug flags 
-	debugStartTick=""
-	debugEndTick=""
+	# 410
+	bwaves=(bwaves)
+	# In fact, bwaves does not take any arguments!
 
-###################################################
-#                                                 #
-# Arguments settings for different spec programs! #
-#                                                 #
-###################################################
+	# 416
+	gamess=(gamess "-i ./cytosine.2.config")
+	#gamess=(gamess "-i ./h2ocu2+.gradient.config")
+	#games=(gamess "-i ./triazolium.config")
 
-# 400
-perlbench=(perlbench "-o" "-I ./lib ./checkspam.pl 2500 5 25 11 150 1 1 1 1")
-#perlbench=(perlbench "-o" "-I ./lib ./diffmail.pl 4 800 10 17 19 300")
-#perlbench=(perlbench "-o" "-I ./lib ./splitmail.pl 1600 12 26 16 4500")
-# Some errors occurred while running this spec on real machine
+	# 429
+	mcf=(mcf "-o" "./inp.in")
 
-# 401
-bzip2=(bzip2 "-o" "./chicken.jpg 30")
-# bzip2=(bzip2 "-o ./input.source 280") 
-# bzip2=(bzip2 "-o ./liberty.jpg 30")
-# bzip2=(bzip2 "-o ./input.program 280")
-# bzip2=(bzip2 "-o ./text.html 280")
-# bzip2=(bzip2 "-o ./input.combined 200")
+	# 433
+	milc=(milc "-i ./su3imp.in")
 
-# 403
-gcc=(gcc "-o" "./166.i -o ./166.s")
-# gcc=(gcc "-o" "./200.i -o ./200.s")
-# gcc=(gcc "-o" "./c-typeck.i -o ./c-typeck.s")
-# gcc=(gcc "-o" "./c-decl.i -o ./c-decl.s")
-# gcc=(gcc "-o" "./expr.i -o ./expr.s")
-# gcc=(gcc "-o" "./expr2.i -o .//expr2.s")
-# gcc=(gcc "-o" "./g23.i -o ./g23.s")
-# gcc=(gcc "-o" "./s04.i -o ./s04.s")
-# gcc=(gcc "-o" "./scilab.i -o ./scilab.s")
+	# 434
+	zeusmp=(zeusmp)
 
-# 410
-bwaves=(bwaves)
-# In fact, bwaves does not take any arguments!
+	# 435
+	gromacs=(gromacs "-o" "-silent -deffnm gromacs -nice 0")
 
-# 416
-gamess=(gamess "-i ./cytosine.2.config")
-#gamess=(gamess "-i ./h2ocu2+.gradient.config")
-#games=(gamess "-i ./triazolium.config")
+	# 436
+	cactusADM=(cactusADM "-o" "./benchADM.par")
+	# Some errors occurred while running this spec on real machine
+	
+	# 437
+	leslie3d=(leslie3d "-i ./leslie3d.in")
 
-# 429
-mcf=(mcf "-o" "./inp.in")
+	# 444
+	namd=(namd "-o" "--input ./namd.input --iterations 38")
 
-# 433
-milc=(milc "-i ./su3imp.in")
+	# 445
+	gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./13x13.tst")
+	# gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./nngs.tst")
+	# gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./score2.tst")
+	# gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./trevorc.tst")
+	# gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./trevorf.tst")
 
-# 434
-zeusmp=(zeusmp)
+	# 454
+	calculix=(calculix "-o" "-i hyperviscoplastic")
 
-# 435
-gromacs=(gromacs "-o" "-silent -deffnm gromacs -nice 0")
+	# 456
+	hmmer=(hmmer "-o" "./nph3.hmm ./swiss41")
+	# hmmer=(hmmer "-o" "--fixed 0 --mean 500 --num 500000 --sd 350 --seed 0 ./retro.hmm")
 
-# 436
-cactusADM=(cactusADM "-o" "./benchADM.par")
-# Some errors occurred while running this spec on real machine
+	# 458
+	sjeng=(sjeng "-o" "./ref.txt")
 
-# 437
-leslie3d=(leslie3d "-i ./leslie3d.in")
+	# 459
+	GemsFDTD=(GemsFDTD)
 
-# 444
-namd=(namd "-o" "--input ./namd.input --iterations 38")
+	# 462
+	libquantum=(libquantum "-o" "1397 8")
 
-# 445
-gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./13x13.tst")
-# gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./nngs.tst")
-# gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./score2.tst")
-# gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./trevorc.tst")
-# gobmk=(gobmk "-o" "--quiet --mode gtp" "-i ./trevorf.tst")
+	# 464
+	# h264ref=(h264ref "-o" "-d ./foreman_ref_encoder_baseline.cfg") # bad now
+	# h264ref=(h264ref "-o" "-d ./foreman_ref_encoder_main.cfg")
+	h264ref=(h264ref "-o" "-d ./sss_encoder_main.cfg")
+	# Some errors occurred while running this spec with RISCV's gem5 
 
-# 454
-calculix=(calculix "-o" "-i hyperviscoplastic")
+	# 465
+	tonto=(tonto)
+	# Some errors occurred while running this spec on real machine
 
-# 456
-hmmer=(hmmer "-o" "./nph3.hmm ./swiss41")
-# hmmer=(hmmer "-o" "--fixed 0 --mean 500 --num 500000 --sd 350 --seed 0 ./retro.hmm")
+	# 470
+	lbm=(lbm "-o" "3000 ./reference.dat 0 0 ./100_100_130_ldc.of")
 
-# 458
-sjeng=(sjeng "-o" "./ref.txt")
+	# 471
+	omnetpp=(omnetpp "-o" "./omnetpp.ini")
 
-# 459
-GemsFDTD=(GemsFDTD)
+	# 473
+	astar=(astar "-o ./BigLakes2048.cfg")
+	# astar=(astar "-o ./rivers.cfg")
 
-# 462
-libquantum=(libquantum "-o" "1397 8")
+	# 481
+	wrf=(wrf) 
 
-# 464
-# h264ref=(h264ref "-o" "-d ./foreman_ref_encoder_baseline.cfg") # bad now
-# h264ref=(h264ref "-o" "-d ./foreman_ref_encoder_main.cfg")
-h264ref=(h264ref "-o" "-d ./sss_encoder_main.cfg")
-# Some errors occurred while running this spec with RISCV's gem5 
+	# 482
+	sphinx3=(sphinx_livepretend "-o" "./ctlfile . ./args.an4")
+	# Some errors occurred while running this spec on real machine
 
-# 465
-tonto=(tonto)
-# Some errors occurred while running this spec on real machine
+	# 483
+	xalancbmk=(Xalan "-o" "-v ./t5.xml ./xalanc.xsl")
 
-# 470
-lbm=(lbm "-o" "3000 ./reference.dat 0 0 ./100_100_130_ldc.of")
+	# 999
+	specrand=(specrand "-o" "1255432124 234923")
+}
 
-# 471
-omnetpp=(omnetpp "-o" "./omnetpp.ini")
+################# settings for settingParser ################
+setArgLevel(){
+	# argument level
+	argLevel=("Global" "Simpoint" "Smt" "Mem" "Cache" "L2Cache" "L3Cache")
+	formatLevel=("" "--simpoint" "--smt" "" "--caches" "--l2cache" "")
 
-# 473
-astar=(astar "-o ./BigLakes2048.cfg")
-# astar=(astar "-o ./rivers.cfg")
+	# argument list
+	argListGlobal=("cpuType" "cpuVoltage" "sysClock" "cpuClock" "maxTime" "numCpus")
+	argListMem=("memType" "memChannels" "memRanks" "memSize")
+	argListCache=("numDirs" "cacheLineSize" "L1Dsize" "L1Dassoc" "L1Isize" "L1Iassoc")
+	argListL2Cache=("numL2Caches" "L2size" "L2assoc")
+	argListL3Cache=("numL3Caches" "L3size" "L3assoc")
 
-# 481
-wrf=(wrf) 
+	# format list for arguments
+	formatListGlobal=("--cpu-type" "--sys-voltage" "--sys-clock" "--cpu-clock" "--maxtime" "--num-cpus")
+	formatListMem=("--mem-type" "--mem-channels" "--mem-ranks" "--mem-size")
+	formatListCache=("--num-dirs" "--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1i_size" "--l1i_assoc")
+	formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc")
+	formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc")
 
-# 482
-sphinx3=(sphinx_livepretend "-o" "./ctlfile . ./args.an4")
-# Some errors occurred while running this spec on real machine
+	buildOption="CPU_MODELS=$cpuModel"
+}
 
-# 483
-xalancbmk=(Xalan "-o" "-v ./t5.xml ./xalanc.xsl")
-
-# 999
-specrand=(specrand "-o" "1255432124 234923")
-
-################################################
-
-# argument level
-argLevel=("Global" "Simpoint" "Smt" "Mem" "Cache" "L2Cache" "L3Cache")
-formatLevel=("" "--simpoint" "--smt" "" "--caches" "--l2cache" "")
-
-# argument list
-argListGlobal=("cpuType" "cpuVoltage" "sysClock" "cpuClock" "maxTime" "numCpus")
-argListMem=("memType" "memChannels" "memRanks" "memSize")
-argListCache=("numDirs" "cacheLineSize" "L1Dsize" "L1Dassoc" "L1Isize" "L1Iassoc")
-argListL2Cache=("numL2Caches" "L2size" "L2assoc")
-argListL3Cache=("numL3Caches" "L3size" "L3assoc")
-
-# format list for arguments
-formatListGlobal=("--cpu-type" "--sys-voltage" "--sys-clock" "--cpu-clock" "--maxtime" "--num-cpus")
-formatListMem=("--mem-type" "--mem-channels" "--mem-ranks" "--mem-size")
-formatListCache=("--num-dirs" "--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1i_size" "--l1i_assoc")
-formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc")
-formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc")
-
-buildOption="CPU_MODELS=$cpuModel"
-
-# decode args
-if [ ${enableDebug}x = Yesx ]
-then 
-	if [ "${debugFlags}x" != x ]
-	then gem5Options="$gem5Options --debug-flags=$debugFlags"
-	fi
-	if [ ${debugOutputFile}x = x ]
-	then gem5Options="$gem5Options --debug-file=DEBUGDIR"
-	else gem5Options="$gem5Options --debug-file=$debugOutputFile"
-	fi
-	if [ ${debugStartTick}x != x ]
-	then gem5Options="$gem5Options --debug-start=$debugStartTick"
-	fi
-	if [ ${debugEndTick}x != x ]
-	then basicOptions="$basicOptions -m $debugEndTick"
-	fi
-fi
-
-# mkdir -p $outputDir
-if [ ${outputDir}x != x ]
-then gem5Options="$gem5Options --outdir=$outputDir"
-fi
-
-# decode args
-levelIdx=0
-for level in ${argLevel[*]}
-do
-	#echo $level `eval echo -e '$'"enable$level"`
-	if [ `eval echo -e '$'"enable$level"` = Yes ]
+################# print path for output files ################
+printOutputInfo(){
+	if [ ${runSpec}x != 1x ]
 	then
-		basicOptions="$basicOptions ${formatLevel[$levelIdx]}"
-		argIdx=0
-		for argName in `eval echo -e '$'"{argList$level[*]}"`
-		do
-			realArg=`eval echo -e '$'"$argName"`
-			if [ ${realArg}x != x ]
-			then basicOptions="$basicOptions `eval echo -e '$'"{formatList$level[$argIdx]}"`=$realArg"
-			fi
-			argIdx=$[argIdx + 1]
-		done
+		debugDir="$tempDir"
+		gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir\/debug\.log%"`
+	else
+		debugDir="$tempDir/spec/$fullTarget/m5out"
+		gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir\/debug\.log%"`
 	fi
-	levelIdx=$[levelIdx + 1]
-done
-
-# echo gem5.opt $gem5Options
-# echo se.py $basicOptions
-# exit
-
-if [ ! -d $tempDir ]
-then mkdir -p $tempDir
-fi
-
-if [ -f /bin/lsnc ]
-then filelist=`lsnc $specDir`
-else filelist=`ls $specDir`
-fi
-
-for file in $filelist
-do
-	#echo -n $file
-	if [ ! -d $specDir/$file/run/$build_dir ]
+	
+	if [ ${outputDir}x = x -a ${runSpec}x = 1x ]
+	then echo -e " Output files will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out\033[0m\"!"
+	elif [ ${outputDir}x = x ]
+	then echo -e " Output files will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
+	else echo -e " Output files will be saved to \"\033[1;31m$outputDir\033[0m\"!"
+	fi
+	
+	if [ ${enableDebug}x = Yesx ]
 	then
-		#echo " Fail"
-		continue
-	fi
-	errinfo=`cat $specDir/$file/run/$build_dir/make.err | grep Error`
-	if [ "${errinfo}x" = x ]
-	then 
-		#echo " Pass"
-		delFlag=0
-		for delete in $bad_spec
-		do
-			if [ $file = $delete -a $ISA = RISCV ]
-			then
-				delFlag=1
-				break
-			fi
-		done
-		if [ $delFlag != 1 ]
-		then testlist="$testlist $file"
+		if [ ${debugOutputFile}x = x -a ${runSpec}x = 1x ]
+		then echo -e " Debug data will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out/debug.log\033[0m\"!"
+		elif [ ${debugOutputFile}x = x ]
+		then echo -e " Debug data will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
+		else echo -e " Debug data will be saved to \"\033[1;31m$debugOutputFile\033[0m\"!"
 		fi
-	#else echo " Fail"
 	fi
-done
-testlist=($testlist)
+}
 
-if [ ${1}x = -hx -o ${1}x = x ]
-then 
+################# running gem5 with generated options ################
+runGem5(){
+	mkdir -p $debugDir
+	
+	if [ ${outputDir}x != x -a ! -d $outputDir/ ]
+	then mkdir -p $outputDir
+	fi
+	
+	if [ ${gem5Only}x = 1x ]
+	then bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $options`"
+	else bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
+	fi
+}
+
+################# build gem5.opt ################
+buildGem5(){
+	if [ ${needBuild}x = 1x ]
+	then 
+		cd $gem5Dir
+		scons -j$threads build/$ISA/gem5.opt $buildOption
+		if [ $? != 0 ]
+		then exit
+		fi
+		#chmod 777 -R $gem5Dir/build/ 2> /dev/null
+	fi
+}
+
+################# get available spec programs ################
+findSpec(){
+	# buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
+	if [ ! -d $specDir ]
+	then
+		echo "Directory not specified for Spec2000/2006!"
+		exit
+	fi
+
+	if [ -f /bin/lsnc ]
+	then filelist=`lsnc $specDir`
+	else filelist=`ls $specDir`
+	fi
+
+	for file in $filelist
+	do
+		if [ ! -d $specDir/$file/run/$buildDir ]
+		then continue
+		fi
+		errinfo=`cat $specDir/$file/run/$buildDir/make.err | grep Error`
+		if [ "${errinfo}x" = x ]
+		then 
+			delFlag=0
+			for delete in $bad_spec
+			do
+				if [ $file = $delete -a $ISA = RISCV ]
+				then
+					delFlag=1
+					break
+				fi
+			done
+			if [ $delFlag != 1 ]
+			then testlist="$testlist $file"
+			fi
+		fi
+	done
+	testlist=($testlist)
+}
+
+################# help infomation ################
+printHelpInfo(){
 	echo "Usage: se [OPTION]" 
-	echo "    -h, --help=[<target file> <more options>]"
+	echo "    -h [-h <target file> <more options>]"
 	echo "        Use -h to see help info or use more options for gem5.opt and config file!" 
 	echo "        If <more options> exists, it will be directly passed to the file specified" 
 	echo "        by <target file>; Otherwise, help information will be showed!"
@@ -326,170 +328,265 @@ then
 	echo "        -->Target file options:"
 	echo "           <gem5> Show help information for gem5.opt"
 	echo "           <se> Show help information for se.py"
-	echo "           <all> Show all the help information listed above; <more options> is not"
-	echo "            allowed here!"
 	echo 
-	echo "    -l, --list  Use -l to list valid spec programs!"
-	echo "    -p, --spec=<spec program name/number>  If the spec program is not given, then"
+	echo "    -l [-l] Use -l to list valid spec programs!"
+	echo "    -p [-p <spec program name/number>]  If the spec program is not given, then"
 	echo "        it will be chosen randomly!"
-	if [ ${2}x = allx -a ${3}x != x ]
+	echo "    -mp [-mp <programs list>] Running multiple programs! Program list should be"
+	echo "        like \"prog1=arguments prog2=arguments\"!"
+}
+
+################# parse settings ################
+settingParser(){
+################# decode debug args #################
+	if [ ${enableDebug}x = Yesx ]
 	then 
-		echo "Unknown argument! Use -h for more help!"
-		exit
-	fi
-	if [ ${2}x = gem5x -o ${2}x = allx ]
-	then
-		echo
-		echo -e "\033[1;31m            gem5.opt options based on given arguments         \033[0m"
-		echo "================================================================="
-		if [ ${3}x = x ]
-		then $gem5Dir/build/$ISA/gem5.opt -h
-		else 
-			shift 2
-			$gem5Dir/build/$ISA/gem5.opt $*
+		if [ "${debugFlags}x" != x ]
+		then gem5Options="$gem5Options --debug-flags=$debugFlags"
 		fi
-		echo "================================================================="
+		if [ ${debugOutputFile}x = x ]
+		then gem5Options="$gem5Options --debug-file=DEBUGDIR"
+		else gem5Options="$gem5Options --debug-file=$debugOutputFile"
+		fi
+		if [ ${debugStartTick}x != x ]
+		then gem5Options="$gem5Options --debug-start=$debugStartTick"
+		fi
+		if [ ${debugEndTick}x != x ]
+		then basicOptions="$basicOptions -m $debugEndTick"
+		fi
 	fi
-	if [ ${2}x = sex -o ${2}x = allx ]
+
+	if [ ${outputDir}x != x ]
 	then
-		echo
-		echo -e "\033[1;31m              se.py options based on given arguments         \033[0m"
-		echo "================================================================="
-		if [ ${3}x = x ]
-		then $gem5Dir/build/$ISA/gem5.opt $gem5Dir/configs/example/se.py -h
-		else 
-			shift 2
-			while [ "${1}x" != x ]
-			do 
-				if [ `echo $1 | sed 's/;/ /g' | wc -w` -gt 1 ]
-				then options="$options \"$1\""
-				else options="$options $1"
+		if [ -f $outputDir -a ! -d $outputDir ]
+		then 
+			echo "Can not redirect output to $outputDir: File exists!"
+			exit
+		else gem5Options="$gem5Options --outdir=$outputDir"
+		fi
+	fi
+
+################# decode other args #################
+	levelIdx=0
+	for level in ${argLevel[*]}
+	do
+		#echo $level `eval echo -e '$'"enable$level"`
+		if [ `eval echo -e '$'"enable$level"` = Yes ]
+		then
+			basicOptions="$basicOptions ${formatLevel[$levelIdx]}"
+			argIdx=0
+			for argName in `eval echo -e '$'"{argList$level[*]}"`
+			do
+				realArg=`eval echo -e '$'"$argName"`
+				if [ ${realArg}x != x ]
+				then basicOptions="$basicOptions `eval echo -e '$'"{formatList$level[$argIdx]}"`=$realArg"
 				fi
-				shift 1
+				argIdx=$[argIdx + 1]
 			done
-			
-			if [ "`echo $options | grep "\-c\|\-\-cmd"`"x != x ]
-			then 
-				cd $gem5Dir
-				scons -j$threads $gem5Dir/build/$ISA/gem5.opt $buildOption
-				if [ $? != 0 ]
-				then exit
-				fi
-			fi
-			cd $tempDir
-			bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
 		fi
-		echo "================================================================="
+		levelIdx=$[levelIdx + 1]
+	done
+	
+	if [ $ISA = X86 -a ${enableSmt}x = Yesx ]
+	then basicOptions="$basicOptions --ruby"
 	fi
-	exit
-else 
-	if [ ${1}x = -lx ]
-	then 
+}
+
+################# parse script args ################
+argParser(){
+	################# help infomation ################
+	if [ "${arguments[1]}x" = -hx -o "${arguments[1]}x" = x ] && [ "${arguments[2]}x" = x ]
+	then printHelpInfo;exit
+	fi
+
+	case "${arguments[1]}x" in
+	################# run multiple programs ################
+	"-mpx")
+		progIdx=0
+		while [ "${arguments[$[progIdx + 2]]}x" != x ]
+		do
+			prog=(`echo ${arguments[$[progIdx + 2]]} | sed 's/=/ /'`)
+			if [ -x ${prog[0]} -a ! -d ${prog[0]} ]
+			then 
+				progList[$progIdx]="${prog[0]}@%"
+				argList[$progIdx]="${prog[*]:1:$[${#prog[*]} - 1]}@%"
+			else 
+				echo "${prog[0]}: No such file or this file is not excutable!"
+				exit
+			fi
+			progIdx=$[progIdx + 1]
+		done
+		if [ $progIdx = 0 ]
+		then
+			echo "You must provide at least one program to run!"
+			exit
+		else 
+			progList=`echo "${progList[*]} " | sed 's/@% /;/g'`
+			argList=`echo "${argList[*]} " | sed 's/@% /;/g'`
+			progList=${progList:0:$[${#progList} - 1]}
+			argList=${argList:0:$[${#argList} - 1]}
+		fi
+		if [ "${argList}x" != x ]
+		then options="-c \'$progList\' -o \'$argList\'"
+		else options="-c \'$progList\'"
+		fi;;
+	
+	################# run with given args ################
+	"-hx")
+		case "${arguments[2]}x" in
+		gem5x)
+			gem5Only=1
+			if [ "${arguments[3]}x" = x ]
+			then options="-h"
+			else options=${arguments[*]:3:$[${#arguments[*]} - 3]}
+			fi;;
+		sex)
+			if [ "${arguments[3]}x" = x ]
+			then options="-h"
+			else
+				argIdx=3
+				while [ "${arguments[$argIdx]}x" != x ]
+				do 
+					if [ `echo ${arguments[$argIdx]} | sed 's/;/ /g' | wc -w` -gt 1 ]
+					then options="$options \'${arguments[$argIdx]}\'"
+					else options="$options ${arguments[$argIdx]}"
+					fi
+					argIdx=$[argIdx + 1]
+				done
+			
+				if [ "`echo $options | grep "\-c\|\-\-cmd"`"x != x ]
+				then needBuild=1
+				fi
+			fi;;
+		*)
+			echo "Bad argument \"${arguments[2]}\"! Use -h for help!"
+			exit;;
+		esac;;
+	
+	################# list available spec programs ################
+	"-lx")
+		if [ "${#testlist[*]}" = 0 ]
+		then echo "No available spec programs for $ISA!"
+		fi
 		for item in ${testlist[*]}
 		do echo $item
 		done
-		exit
-	else 
-		if [ ${1}x != -px ]
-		then echo "Unknown argument! Use -h for more help!" 
+		exit;;
+
+	################# select available spec programs ################
+	"-px")
+		if [ ${#testlist[*]} = 0 ]
+		then
+			echo "No available spec programs for $ISA!"
 			exit
 		fi
-	fi
-fi
-
-if [ ${1}x = -px ]
-then 
-	if [ ${2}x != x ]
-	then
-		i=0
-		while [ $i -lt ${#testlist[*]} ]
-		do
-			name=(`echo ${testlist[$i]} | sed 's/\./ /g'`)
-			#echo ${name[*]}
-			if [ $2 = ${name[0]} -o $2 = ${name[1]} -o $2 = ${testlist[$i]} ]
+		
+		if [ "${arguments[2]}x" != x ]
+		then
+			argIdx=0
+			while [ $argIdx -lt ${#testlist[*]} ]
+			do
+				name=(`echo ${testlist[$argIdx]} | sed 's/\./ /g'`)
+				#echo ${name[*]}
+				if [ "${arguments[2]}" = ${name[0]} -o "${arguments[2]}" = ${name[1]} -o "${arguments[2]}" = ${testlist[$i]} ]
+				then 
+					target=(${name[*]})
+					break
+				fi
+				argIdx=$[argIdx + 1]
+			done
+			if [ ${target}x = x ]
 			then 
-				target=(${name[*]})
-				break
+				echo "${arguments[2]}: Bad spec program number/name or the spec program is not valid!"
+				echo "Use -l to see the available spec program list!"
+				exit
 			fi
-			i=$[i + 1]
-		done
-		if [ ${target}x = x ]
-		then 
-			echo "Bad spec program number/name or the spec program is not valid!"
-			exit
+		else
+			argIdx=$[$RANDOM % ${#testlist[*]} ]
+			target=(`echo ${testlist[$argIdx]} | sed 's/\./ /g'`)	
 		fi
-	else
-		i=$[$RANDOM % ${#testlist[*]} ]
-		target=(`echo ${testlist[$i]} | sed 's/\./ /g'`)
+		fullTarget="${target[0]}.${target[1]}"
+		target=${target[1]}
+		runSpec=1;;
+	*) 
+		echo "Bad argument \"${arguments[1]}\"! Use -h for help!"
+		exit;;
+	esac
+}
+
+################# copy and link files needed for spec ################
+buildSpecTemp(){
+	if [ ${runSpec}x != 1x ]
+	then return 
 	fi
-else 
-	echo "Bad argument! Use -h for help!"
-	exit
-fi
+	
+	echo -e " Files used for spec will be saved to \"\033[1;31m$tempDir/spec\033[0m\"!"
+	
+	mkdir -p $tempDir/spec/$fullTarget
+	rm -rf $tempDir/spec/$fullTarget/*
 
-fulltarget="${target[0]}.${target[1]}"
-target=${target[1]}
-
-#mcf=(a b c)
-#echo `eval echo -e '$'"{$target[1]}"`
-#exit
-
-cd $gem5Dir
-scons -j$threads build/$ISA/gem5.opt $buildOption
-if [ $? != 0 ]
-then exit
-fi
-cd $tempDir
-#chmod 777 -R $gem5Dir/build/ 2> /dev/null
-
-set -e
-mkdir -p $tempDir/spec/$fulltarget
-rm -rf $tempDir/spec/$fulltarget/*
-
-if [ -d $specDir/$fulltarget/run/$run_dir ]
-then file_list="$specDir/$fulltarget/run/$run_dir/*"
-else 
-	echo "RUN_DIR must be defined first!"
-	exit
-fi
-
-#file_list=$specDir/$fulltarget/data/ref/input/*
-#if [ -d $specDir/$fulltarget/data/all ]
-#then file_list="$file_list $specDir/$fulltarget/data/all/input/*"
-#fi
-
-for file in $file_list
-do
-	ln -sf $file $tempDir/spec/$fulltarget/`basename $file`
-	if [ $? != 0 ]
-	then
-		echo "Error occurred while trying to build link for $file"
+	if [ -d $specDir/$fullTarget/run/$run_dir ]
+	then file_list="$specDir/$fullTarget/run/$run_dir/*"
+	else 
+		echo "RUN_DIR must be defined first!"
 		exit
 	fi
+
+	for file in $file_list
+	do
+		ln -sf $file $tempDir/spec/$fullTarget/`basename $file`
+		if [ $? != 0 ]
+		then
+			echo "Error occurred while trying to build link for $file"
+			exit
+		fi
+	done
+
+	ln -sf $specDir/$fullTarget/run/$buildDir/`eval echo -e '$'"{$target[0]}"` $tempDir/spec/$fullTarget/`eval echo -e '$'"{$target[0]}"`
+
+	# TODO We will get a warning if we are trying to use hard link
+	# TODO or symbol link for the spec program. This problem should
+	# TODO be taken into consideration if there is something wrong
+	# TODO with the output result!
+	
+	cd $tempDir/spec/$fullTarget
+}
+
+################# generate options for spec ################
+buildSpecOptions(){
+	if [ ${runSpec}x != 1x ]
+	then return
+	fi
+	
+	echo -e "\033[1;31m ==================== Running Spec $fullTarget! ====================\033[0m"
+
+	if [ "`eval echo -e '$'"{$target[1]}"`" = "-o" ]
+	then
+		options="-c ./`eval echo -e '$'"{$target[0]}"` `eval echo -e '$'"{$target[1]}"` \'`eval echo -e '$'"{$target[2]}"`\' `eval echo -e '$'"{$target[3]}"`"
+	else
+		options="-c ./`eval echo -e '$'"{$target[0]}"` `eval echo -e '$'"{$target[1]}"` `eval echo -e '$'"{$target[2]}"` `eval echo -e '$'"{$target[3]}"`"
+	fi
+}
+
+argIdx=1
+arguments[0]="$0"
+while [ "${1}x" != x ]
+do
+	arguments[$argIdx]="$1"
+	shift 1
+	argIdx=$[argIdx + 1]
 done
 
-# TODO We will get a warning if we are trying to use hard link
-# TODO or symbol link for the spec program. This problem should
-# TODO be taken into consideration if there is something wrong
-# TODO with the output result!
-
-#rm -rf $gem5Dir/spec/$fulltarget/`eval echo -e '$'"{$target[0]}"`
-
-ln -sf $specDir/$fulltarget/run/$build_dir/`eval echo -e '$'"{$target[0]}"` $tempDir/spec/$fulltarget/`eval echo -e '$'"{$target[0]}"`
-
-#cp $specDir/$fulltarget/run/$build_dir/`eval echo -e '$'"{$target[0]}"` $gem5Dir/spec/$fulltarget/`eval echo -e '$'"{$target[0]}"`
-
-echo -e "\033[1;31m ==================== Running Spec $fulltarget! ====================\033[0m"
-
-cd $tempDir/spec/$fulltarget
-
-debug_dir="$tempDir/spec/$fulltarget/m5out/debug.log"
-
-gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debug_dir\/debug\.log%"` 
-
-if [ "`eval echo -e '$'"{$target[1]}"`" = "-o" ]
-then
-	$gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions -c ./`eval echo -e '$'"{$target[0]}"` `eval echo -e '$'"{$target[1]}"` "`eval echo -e '$'"{$target[2]}"`" `eval echo -e '$'"{$target[3]}"`
-else
-	$gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions -c ./`eval echo -e '$'"{$target[0]}"` `eval echo -e '$'"{$target[1]}"` `eval echo -e '$'"{$target[2]}"` `eval echo -e '$'"{$target[3]}"`
-fi
+setScript
+setGem5
+setArgLevel
+setSpec
+findSpec
+set -e
+settingParser
+argParser
+buildSpecOptions
+buildSpecTemp
+buildGem5
+printOutputInfo
+runGem5

@@ -45,6 +45,7 @@
 
 #include <vector>
 
+#include "config/the_isa.hh"
 #include "cpu/reg_class_impl.hh"
 #include "debug/Rename.hh"
 
@@ -88,7 +89,12 @@ SimpleRenameMap::rename(const RegId& arch_reg)
 		// 记录新映射的目标寄存器
     } else {
         // Otherwise return the zero register so nothing bad happens.
-        assert(prev_reg->isZeroReg());
+        /*
+		if (curTick() > 133000 && arch_reg.classValue() == IntRegClass){
+			printf("~~ Rename for Int Reg %d from %d!\n", arch_reg.index(), map[arch_reg.index()]->index());
+		}
+		*/
+		assert(prev_reg->isZeroReg());
         renamed_reg = prev_reg;
 		// 对于0寄存器，映射不会发生变化
     }
@@ -101,6 +107,15 @@ SimpleRenameMap::rename(const RegId& arch_reg)
     return RenameInfo(renamed_reg, prev_reg);
 }
 
+void
+SimpleRenameMap::dumpInsts()
+{
+	int index, endIdx = map.size();
+	for(index = 0; index < endIdx; index++) {
+		printf("  Arch reg %d -> Physical reg %d;\n", index, map[index]->index());
+	}
+	printf("  Zero reg %d\n", zeroReg.index());
+}
 
 /**** UnifiedRenameMap methods ****/
 
@@ -111,6 +126,7 @@ UnifiedRenameMap::init(PhysRegFile *_regFile,
                        UnifiedFreeList *freeList,
                        VecMode _mode)
 {
+	//printf(">> Rename map Init: intZero %d; floatZero %d;\n", _intZeroReg, _floatZeroReg);
     regFile = _regFile;
     vecMode = _mode;
 
@@ -125,6 +141,15 @@ UnifiedRenameMap::init(PhysRegFile *_regFile,
 
     ccMap.init(TheISA::NumCCRegs, &(freeList->ccList), (RegIndex)-1);
 
+}
+
+void
+UnifiedRenameMap::dumpInsts()
+{
+	printf(">> Rename map for integer register:\n");
+	intMap.dumpInsts();
+	printf(">> Rename map for float register:\n");
+	floatMap.dumpInsts();
 }
 
 void
