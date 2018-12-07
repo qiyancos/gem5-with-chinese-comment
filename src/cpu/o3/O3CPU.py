@@ -127,8 +127,9 @@ class DerivO3CPU(BaseCPU):
     numRobs = Param.Unsigned(1, "Number of Reorder Buffers");
 
     numPhysIntRegs = Param.Unsigned(256, "Number of physical integer registers")
-    numPhysFloatRegs = Param.Unsigned(256, "Number of physical floating point "
+    numPhysFloatRegs = Param.Unsigned(512, "Number of physical floating point "
                                       "registers")
+	# This argument should be 256 by default. 512 is set for ARM. 
     # most ISAs don't use condition-code regs, so default is 0
     _defaultNumPhysCCRegs = 0
     if buildEnv['TARGET_ISA'] in ('arm','x86'):

@@ -271,7 +271,8 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
 
     //Make Sure That this a Valid Architeture
     assert(params->numPhysIntRegs   >= numThreads * TheISA::NumIntRegs);
-    assert(params->numPhysFloatRegs >= numThreads * TheISA::NumFloatRegs);
+    //printf(">> Arm need %d arch float regs!\n", TheISA::NumFloatRegs);
+	assert(params->numPhysFloatRegs >= numThreads * TheISA::NumFloatRegs);
     assert(params->numPhysVecRegs >= numThreads * TheISA::NumVecRegs);
     assert(params->numPhysCCRegs >= numThreads * TheISA::NumCCRegs);
 	// 确保参数中寄存器数目的正确性，这里要求每拥有一个thread拥有一套ISA定义的寄存器
@@ -313,7 +314,7 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
             // Note that we can't use the rename() method because we don't
             // want special treatment for the zero register at this point
 			PhysRegIdPtr phys_reg;
-			if (ridx == 0) {
+			if (ridx == TheISA::ZeroReg) {
 				if (tid == 0){
             		phys_reg = freeList.getIntReg();
 					phys_reg_zero = phys_reg;
@@ -667,7 +668,7 @@ FullO3CPU<Impl>::tick()
 	/*
 	int tempTid;
 	//printf(">> Tick to %lu\n", curTick());
-	if (curTick() > 1000 && curTick() < 133500 ){
+	if (curTick() > 257000 ){
 		printf(">> Check at tick: %lu\n", curTick());
 		for(tempTid = 0; tempTid < numThreads; tempTid++){
 			printf(">> Thread::%d\n", tempTid);

@@ -9,7 +9,7 @@ setScript(){
 	# root directory path for gem5
 	tempDir=$root
 	# Where the temporary files should be stored
-	ISA="RISCV"
+	ISA="ARM"
 	# [ARM ALPHA RISCV X86 MIPS]
 	buildDir="build_base_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
 	# [build_base_riscv.0001, build_base_arm.0001, build_base_alpha.0001,
@@ -46,7 +46,8 @@ setGem5(){
 	enableSimpoint="No" # [Yes/No]
 
 	enableMem="Yes"
-		memType="" # ['HBM_1000_4H_1x128', 'DRAMCtrl', 'DDR3_2133_8x8', 'HBM_1000_4H_1x64',
+		memType="" 
+		# ['HBM_1000_4H_1x128', 'DRAMCtrl', 'DDR3_2133_8x8', 'HBM_1000_4H_1x64',
 		# 'GDDR5_4000_2x32', 'HMC_2500_1x32', 'LPDDR3_1600_1x32', 'WideIO_200_1x128', 
 		# 'DDR4_2400_8x8', 'DDR3_1600_8x8', 'DDR4_2400_4x16', 'DDR4_2400_16x4', 
 		# 'SimpleMemory', 'LPDDR2_S4_1066_1x32']
@@ -234,19 +235,19 @@ printOutputInfo(){
 	fi
 	
 	if [ ${outputDir}x = x -a ${runSpec}x = 1x ]
-	then echo -e " Output files will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out\033[0m\"!"
+	then echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out\033[0m\"!"
 	elif [ ${outputDir}x = x ]
-	then echo -e " Output files will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
-	else echo -e " Output files will be saved to \"\033[1;31m$outputDir\033[0m\"!"
+	then echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
+	else echo -e ">> Output files will be saved to \"\033[1;31m$outputDir\033[0m\"!"
 	fi
 	
 	if [ ${enableDebug}x = Yesx ]
 	then
 		if [ ${debugOutputFile}x = x -a ${runSpec}x = 1x ]
-		then echo -e " Debug data will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out/debug.log\033[0m\"!"
+		then echo -e ">> Debug data will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out/debug.log\033[0m\"!"
 		elif [ ${debugOutputFile}x = x ]
-		then echo -e " Debug data will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
-		else echo -e " Debug data will be saved to \"\033[1;31m$debugOutputFile\033[0m\"!"
+		then echo -e ">> Debug data will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
+		else echo -e ">> Debug data will be saved to \"\033[1;31m$debugOutputFile\033[0m\"!"
 		fi
 	fi
 }
@@ -338,7 +339,7 @@ printHelpInfo(){
 
 ################# parse settings ################
 settingParser(){
-################# decode debug args #################
+	################# decode debug args #################
 	if [ ${enableDebug}x = Yesx ]
 	then 
 		if [ "${debugFlags}x" != x ]
@@ -366,7 +367,7 @@ settingParser(){
 		fi
 	fi
 
-################# decode other args #################
+	################# decode other args #################
 	levelIdx=0
 	for level in ${argLevel[*]}
 	do
@@ -427,9 +428,10 @@ argParser(){
 			argList=${argList:0:$[${#argList} - 1]}
 		fi
 		if [ "${argList}x" != x ]
-		then options="-c \'$progList\' -o \'$argList\'"
-		else options="-c \'$progList\'"
-		fi;;
+		then options="-c '$progList' -o '$argList'"
+		else options="-c '$progList'"
+		fi
+		needBuild=1;;
 	
 	################# run with given args ################
 	"-hx")
@@ -448,7 +450,7 @@ argParser(){
 				while [ "${arguments[$argIdx]}x" != x ]
 				do 
 					if [ `echo ${arguments[$argIdx]} | sed 's/;/ /g' | wc -w` -gt 1 ]
-					then options="$options \'${arguments[$argIdx]}\'"
+					then options="$options '${arguments[$argIdx]}'"
 					else options="$options ${arguments[$argIdx]}"
 					fi
 					argIdx=$[argIdx + 1]
@@ -520,7 +522,7 @@ buildSpecTemp(){
 	then return 
 	fi
 	
-	echo -e " Files used for spec will be saved to \"\033[1;31m$tempDir/spec\033[0m\"!"
+	echo -e ">> Files used for spec will be saved to \"\033[1;31m$tempDir/spec\033[0m\"!"
 	
 	mkdir -p $tempDir/spec/$fullTarget
 	rm -rf $tempDir/spec/$fullTarget/*
@@ -534,7 +536,7 @@ buildSpecTemp(){
 
 	for file in $file_list
 	do
-		ln -sf $file $tempDir/spec/$fullTarget/`basename $file`
+		cp -r $file $tempDir/spec/$fullTarget/`basename $file`
 		if [ $? != 0 ]
 		then
 			echo "Error occurred while trying to build link for $file"
@@ -542,7 +544,7 @@ buildSpecTemp(){
 		fi
 	done
 
-	ln -sf $specDir/$fullTarget/run/$buildDir/`eval echo -e '$'"{$target[0]}"` $tempDir/spec/$fullTarget/`eval echo -e '$'"{$target[0]}"`
+	cp -r  $specDir/$fullTarget/run/$buildDir/`eval echo -e '$'"{$target[0]}"` $tempDir/spec/$fullTarget/`eval echo -e '$'"{$target[0]}"`
 
 	# TODO We will get a warning if we are trying to use hard link
 	# TODO or symbol link for the spec program. This problem should
@@ -562,7 +564,7 @@ buildSpecOptions(){
 
 	if [ "`eval echo -e '$'"{$target[1]}"`" = "-o" ]
 	then
-		options="-c ./`eval echo -e '$'"{$target[0]}"` `eval echo -e '$'"{$target[1]}"` \'`eval echo -e '$'"{$target[2]}"`\' `eval echo -e '$'"{$target[3]}"`"
+		options="-c ./`eval echo -e '$'"{$target[0]}"` `eval echo -e '$'"{$target[1]}"` '`eval echo -e '$'"{$target[2]}"`' `eval echo -e '$'"{$target[3]}"`"
 	else
 		options="-c ./`eval echo -e '$'"{$target[0]}"` `eval echo -e '$'"{$target[1]}"` `eval echo -e '$'"{$target[2]}"` `eval echo -e '$'"{$target[3]}"`"
 	fi
