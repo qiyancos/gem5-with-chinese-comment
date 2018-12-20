@@ -6,6 +6,7 @@ parsetab.py
 cscope.files
 cscope.out
 debug.log
+temp.log
 *.pyc
 *~
 .*.swp

@@ -74,6 +74,7 @@ Sequencer::Sequencer(const Params *p)
     assert(m_inst_cache_hit_latency > 0);
 
     m_runningGarnetStandalone = p->garnet_standalone;
+	// printf(">> Sequencer Init...\n");
 }
 
 Sequencer::~Sequencer()

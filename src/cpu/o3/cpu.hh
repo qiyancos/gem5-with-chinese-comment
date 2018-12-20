@@ -131,7 +131,7 @@ class FullO3CPU : public BaseO3CPU
 
   private:
 
-    /**
+	/**
      * IcachePort class for instruction fetch.
      */
     class IcachePort : public MasterPort
@@ -259,7 +259,7 @@ class FullO3CPU : public BaseO3CPU
     /** Destructor. */
     ~FullO3CPU();
 
-    /** Registers statistics. */
+	/** Registers statistics. */
     void regStats() override;
 
     ProbePointArg<PacketPtr> *ppInstAccessComplete;

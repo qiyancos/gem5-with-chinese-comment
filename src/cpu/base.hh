@@ -300,6 +300,12 @@ class BaseCPU : public MemObject
     BaseCPU(Params *params, bool is_checker = false);
     virtual ~BaseCPU();
 
+	// Used for interrupts controller initialization
+	int intId;
+	int getIntId(){
+		assert(++intId < numThreads);
+		return intId;
+	}
     void init() override;
     void startup() override;
     void regStats() override;

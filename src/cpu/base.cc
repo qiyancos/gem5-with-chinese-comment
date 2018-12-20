@@ -142,7 +142,8 @@ BaseCPU::BaseCPU(Params *p, bool is_checker)
       powerGatingOnIdle(p->power_gating_on_idle),
       enterPwrGatingEvent([this]{ enterPwrGating(); }, name())
 {
-    // if Python did not provide a valid ID, do it here
+    intId = -1;
+	// if Python did not provide a valid ID, do it here
     if (_cpuId == -1 ) {
         _cpuId = cpuList.size();
     }

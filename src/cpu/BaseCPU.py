@@ -234,10 +234,10 @@ class BaseCPU(MemObject):
 
     _uncached_slave_ports = []
     _uncached_master_ports = []
-    if buildEnv['TARGET_ISA'] == 'x86':
-        _uncached_slave_ports += ["interrupts[0].pio",
-                                  "interrupts[0].int_slave"]
-        _uncached_master_ports += ["interrupts[0].int_master"]
+    #if buildEnv['TARGET_ISA'] == 'x86':
+        #_uncached_slave_ports += ["interrupts[0].pio",
+        #                          "interrupts[0].int_slave"]
+        #_uncached_master_ports += ["interrupts[0].int_master"]
 
     def createInterruptController(self):
         if buildEnv['TARGET_ISA'] == 'sparc':
@@ -271,6 +271,12 @@ class BaseCPU(MemObject):
             exec('self.%s = bus.slave' % p)
 
     def connectUncachedPorts(self, bus):
+        if buildEnv['TARGET_ISA'] == 'x86':
+            for i in xrange(self.numThreads):
+                #print(i)
+                self._uncached_slave_ports += [("interrupts[%d].pio" % i), 
+                                          ("interrupts[%d].int_slave" % i)]
+                self._uncached_master_ports += [("interrupts[%d].int_master" % i)]
         for p in self._uncached_slave_ports:
             exec('self.%s = bus.master' % p)
         for p in self._uncached_master_ports:

@@ -256,7 +256,7 @@ for i in xrange(np):
 if options.ruby:
     #print(">> Not here")
     options.use_map = True
-    Ruby.create_system(options, False, system)
+    Ruby.create_system(options, len(multiprocesses), False, system)
     assert(options.num_cpus == len(system.ruby._cpu_ports))
 
     system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock,
@@ -290,6 +290,7 @@ else:
     system.membus = SystemXBar()
     system.system_port = system.membus.slave
     CacheConfig.config_cache(options, system)
+    # Interrupt port should be connected here!
     MemConfig.config_mem(options, system)
 
 root = Root(full_system = False, system = system)

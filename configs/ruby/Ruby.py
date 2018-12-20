@@ -135,7 +135,8 @@ def create_topology(controllers, options):
     topology = eval("Topo.%s(controllers)" % options.topology)
     return topology
 
-def create_system(options, full_system, system, piobus = None, dma_ports = [],
+def create_system(options, num_threads, full_system, system, 
+                  piobus = None, dma_ports = [],
                   bootmem=None):
 
     system.ruby = RubySystem()
@@ -147,12 +148,15 @@ def create_system(options, full_system, system, piobus = None, dma_ports = [],
     ruby.network = network
 
     protocol = buildEnv['PROTOCOL']
+    # protocol = "MOESI_AMD_Base"
     exec "import %s" % protocol
+    # print("import %s" % protocol)
     try:
+        # dma_ports=["a", "b"]
         (cpu_sequencers, dir_cntrls, topology) = \
-             eval("%s.create_system(options, full_system, system, dma_ports,\
-                                    bootmem, ruby)"
-                  % protocol)
+             eval("%s.create_system(options, num_threads, full_system, system, \
+                                    dma_ports, bootmem, ruby)" % protocol)
+		# Problem about X86 ruby smt support happened here! TODO
     except:
         print("Error: could not create sytem for ruby protocol %s" % protocol)
         raise

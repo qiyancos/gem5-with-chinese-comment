@@ -280,7 +280,9 @@ X86ISA::Interrupts::setCPU(BaseCPU * newCPU)
                 " with different IDs.\n");
     }
     cpu = newCPU;
-    initialApicId = cpu->cpuId();
+    if(cpu->numThreads > 1) initialApicId = cpu->getIntId();
+	else initialApicId = cpu->cpuId();
+	//printf(">> Check Id %d\n", initialApicId);
     regs[APIC_ID] = (initialApicId << 24);
     pioAddr = x86LocalAPICAddress(initialApicId, 0);
 }
@@ -350,6 +352,7 @@ X86ISA::Interrupts::recvResponse(PacketPtr pkt)
 AddrRangeList
 X86ISA::Interrupts::getIntAddrRange() const
 {
+	//printf(">> Check %lx\n", x86InterruptAddress(initialApicId, 0));
     AddrRangeList ranges;
     ranges.push_back(RangeEx(x86InterruptAddress(initialApicId, 0),
                              x86InterruptAddress(initialApicId, 0) +

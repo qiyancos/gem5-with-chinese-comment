@@ -107,6 +107,7 @@ BasicPioDevice::getAddrRanges() const
     assert(pioSize != 0);
     AddrRangeList ranges;
     DPRINTF(AddrRanges, "registering range: %#x-%#x\n", pioAddr, pioSize);
-    ranges.push_back(RangeSize(pioAddr, pioSize));
+    //printf(">> Check Pio %lx\n", pioAddr);
+	ranges.push_back(RangeSize(pioAddr, pioSize));
     return ranges;
 }

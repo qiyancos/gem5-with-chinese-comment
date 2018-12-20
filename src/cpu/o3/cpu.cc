@@ -664,10 +664,10 @@ FullO3CPU<Impl>::tick()
 	// 通过调用notify对和周期相关的变量进行更新？？？
 
 	// activity = false;
-	
+	//fprintf(stderr, ">> Tick: %lu\n", curTick());	
 	/*
 	int tempTid;
-	//printf(">> Tick to %lu\n", curTick());
+	printf(">> Tick to %lu\n", curTick());
 	if (curTick() > 257000 ){
 		printf(">> Check at tick: %lu\n", curTick());
 		for(tempTid = 0; tempTid < numThreads; tempTid++){
@@ -1180,8 +1180,10 @@ FullO3CPU<Impl>::syscall(int64_t callnum, ThreadID tid, Fault *fault)
     DPRINTF(O3CPU, "[tid:%i] Executing syscall().\n\n", tid);
 
     DPRINTF(Activity,"Activity: syscall() called.\n");
-
-    // Temporarily increase this by one to account for the syscall
+	
+	//printf(">> Get syscall\n");
+    
+	// Temporarily increase this by one to account for the syscall
     // instruction.
     ++(this->thread[tid]->funcExeInst);
 	// 递增引发系统调用指令的计数器，表示一个新指令需要处理对应的syscall

@@ -1998,8 +1998,10 @@ class SlavePort(Port):
 class VectorPort(Port):
     def __init__(self, *args):
         self.isVec = True
+        #print(">> VectorPort Init...")
 
     def makeRef(self, simobj):
+        #print(">> VectorPort MakeRef...")
         return VectorPortRef(simobj, self.name, self.role)
 
 class VectorMasterPort(VectorPort):

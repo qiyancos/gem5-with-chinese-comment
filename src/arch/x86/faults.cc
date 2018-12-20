@@ -58,7 +58,7 @@ namespace X86ISA
             FaultBase::invoke(tc, inst);
             return;
         }
-
+		//printf(">> Invoke Syscall\n");
         PCState pcState = tc->pcState();
         Addr pc = pcState.pc();
         DPRINTF(Faults, "RIP %#x: vector %d: %s\n",

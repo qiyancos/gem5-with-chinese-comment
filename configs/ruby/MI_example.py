@@ -42,7 +42,7 @@ class L1Cache(RubyCache): pass
 def define_options(parser):
     return
 
-def create_system(options, full_system, system, dma_ports, bootmem,
+def create_system(options, num_threads, full_system, system, dma_ports, bootmem,
                   ruby_system):
 
     if buildEnv['PROTOCOL'] != 'MI_example':
@@ -96,7 +96,7 @@ def create_system(options, full_system, system, dma_ports, bootmem,
 
         cpu_seq = RubySequencer(version=i, icache=cache, dcache=cache,
                                 clk_domain=clk_domain, ruby_system=ruby_system)
-
+        print(">> Init Over")
         l1_cntrl.sequencer = cpu_seq
         exec("ruby_system.l1_cntrl%d = l1_cntrl" % i)
 
