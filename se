@@ -30,6 +30,8 @@ setGem5(){
 	# build options
 	buildModel="opt" # [fast debug opt]
 	cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
+	forceNotBuild="Yes" # [Yes/No] 
+	# Set this to Yes to force this script not to build gem5 
 	# outputDir option [default m5out]
 	outputDir=""
 
@@ -81,7 +83,7 @@ setGem5(){
 		L3size=""
 		L3assoc=""
 
-	enableDebug="Yes" # [Yes/No]
+	enableDebug="No" # [Yes/No]
 		debugOutputFile="$gem5Dir/debug.log"
 		debugFlags="O3CPU,Fetch" # ,Decode,Rename,IEW,Commit,FreeList" 
 		# [Flag1, Flag2] use "-h gem5 --debug-help" to see the debug flags 
@@ -92,22 +94,22 @@ setGem5(){
 ################# settings for spec ################
 setSpec(){
 	# 400
-	perlbench_ref=(perlbench "-o" "-I ./lib checkspam.pl 2500 5 25 11 150 1 1 1 1")
-	# perlbench_ref=(perlbench "-o" "-I ./lib diffmail.pl 4 800 10 17 19 300")
-	# perlbench_ref=(perlbench "-o" "-I ./lib splitmail.pl 1600 12 26 16 4500")
-	perlbench_train=(perlbench "-o" "-I ./lib diffmail.pl 2 550 15 24 23 100")
-	# perlbench_train=(perlbench "-o" "-I ./lib perfect.pl b 3")
-	# perlbench_train=(perlbench "-o" "-I ./lib scrabbl.pl")
-	# perlbench_train=(perlbench "-o" "-I ./lib splitmail.pl 535 13 25 24 1091")
-	# perlbench_train=(perlbench "-o" "-I ./lib suns.pl")
-	perlbench_test=(perlbench "-o" "-I ./lib attrs.pl")
-	# perlbench_test=(perlbench "-o" "-I ./lib gv.pl")
-	# perlbench_test=(perlbench "-o" "-I ./lib makerand.pl")
-	# perlbench_test=(perlbench "-o" "-I ./lib pack.pl")
-	# perlbench_test=(perlbench "-o" "-I ./lib redef.pl")
-	# perlbench_test=(perlbench "-o" "-I ./lib ref.pl")
-	# perlbench_test=(perlbench "-o" "-I ./lib regmes.pl")
-	# perlbench_test=(perlbench "-o" "-I ./lib test.pl")
+	perlbench_ref=(perlbench "-o" "-I./lib checkspam.pl 2500 5 25 11 150 1 1 1 1")
+	# perlbench_ref=(perlbench "-o" "-I./lib diffmail.pl 4 800 10 17 19 300")
+	# perlbench_ref=(perlbench "-o" "-I./lib splitmail.pl 1600 12 26 16 4500")
+	perlbench_train=(perlbench "-o" "-I./lib diffmail.pl 2 550 15 24 23 100")
+	# perlbench_train=(perlbench "-o" "-I./lib perfect.pl b 3")
+	# perlbench_train=(perlbench "-o" "-I./lib scrabbl.pl")
+	# perlbench_train=(perlbench "-o" "-I./lib splitmail.pl 535 13 25 24 1091")
+	# perlbench_train=(perlbench "-o" "-I./lib suns.pl")
+	perlbench_test=(perlbench "-o" "-I./lib attrs.pl")
+	# perlbench_test=(perlbench "-o" "-I./lib gv.pl")
+	# perlbench_test=(perlbench "-o" "-I./lib makerand.pl")
+	# perlbench_test=(perlbench "-o" "-I./lib pack.pl")
+	# perlbench_test=(perlbench "-o" "-I./lib redef.pl")
+	# perlbench_test=(perlbench "-o" "-I./lib ref.pl")
+	# perlbench_test=(perlbench "-o" "-I./lib regmes.pl")
+	# perlbench_test=(perlbench "-o" "-I./lib test.pl")
 	# Some errors occurred while running this spec on real machine
 
 	# 401
@@ -206,6 +208,23 @@ setSpec(){
 	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i connection_rot.tst")
 	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i cutstone.tst")
 	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i dniwog.tst")
+	
+	# 447
+	dealII_ref=(dealII "-o" "23")
+	dealII_train=(dealII "-o" "10")
+	dealII_test=(dealII "-o" "8")
+
+	# 450
+	soplex_ref=(soplex "-o" "-m3500 ref.mps")
+	# soplex_ref=(soplex "-o" "-s1 -e -m45000 pds-50.mps")
+	soplex_train=(soplex "-o" "-m1200 train.mps")
+	# soplex_train=(soplex "-o" "-s1 -e -m5000 pds-20.mps")
+	soplex_test=(soplex "-o" "-m10000 test.mps")
+
+	# 453
+	povray_ref=(povray "-o" "SPEC-benchmark-ref.ini")
+	povray_train=(povray "-o" "SPEC-benchmark-train.ini")
+	povray_test=(povray "-o" "SPEC-benchmark-test.ini")
 
 	# 454
 	calculix_ref=(calculix "-o" "-i hyperviscoplastic")
@@ -354,7 +373,7 @@ runGem5(){
 
 ################# build gem5.opt ################
 buildGem5(){
-	if [ ${needBuild}x = 1x ]
+	if [ ${needBuild}x = 1x -a $forceNotBuild != Yes ]
 	then 
 		cd $gem5Dir
 		scons -j$threads build/$ISA/gem5.$buildModel $buildOption
@@ -384,7 +403,7 @@ findSpec(){
 		if [ ! -d $specDir/$file/run/$buildDir ]
 		then continue
 		fi
-		errinfo=`cat $specDir/$file/run/$buildDir/make.err | grep Error`
+		errinfo=`cat $specDir/$file/run/$buildDir/make.err | grep "error:"`
 		if [ "${errinfo}x" = x ]
 		then 
 			delFlag=0
