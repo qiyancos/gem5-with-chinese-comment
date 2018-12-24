@@ -718,6 +718,9 @@ buildSpecOptions(){
 		done
 	else
 		single=`eval echo -e '$'"${target}_${testSet}_single"`
+		if [ ${single}x = x ]
+		then single=0
+		fi
 		if [ "`eval echo -e '$'"{${target}_${testSet}_${single}[1]}"`" = "-o" ]
 		then
 			options[0]="-c ./`eval echo -e '$'"{${target}_${testSet}_${single}[0]}"` `eval echo -e '$'"{${target}_${testSet}_${single}[1]}"` '`eval echo -e '$'"{${target}_${testSet}_${single}[2]}"`' `eval echo -e '$'"{${target}_${testSet}_${single}[3]}"`"
