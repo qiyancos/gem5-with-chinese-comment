@@ -394,8 +394,8 @@ runGem5(){
 		suiteID=0
 		while [ "${options[$suiteID]}x" != x ]
 		do
-			echo -e "\033[1;31m>>>>>>>>>>>>> Runing SubTest-$suiteID! <<<<<<<<<<<<<\033[0m"
-			bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.p y $basicOptions ${options[$suiteID]}`"
+			echo -e "\033[1;31m ======================= Runing SubTest-$suiteID! ====================\033[0m"
+			bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions ${options[$suiteID]}`"
 			suiteID=$[suiteID + 1]
 		done
 	fi
@@ -685,7 +685,7 @@ buildSpecTemp(){
 		fi
 	done
 
-	cp -r  $specDir/$fullTarget/run/$buildDir/`eval echo -e '$'"{${target}_${testSet}[0]}"` $tempDir/spec/$fullTarget/`eval echo -e '$'"{${target}_${testSet}[0]}"`
+	cp -r  $specDir/$fullTarget/run/$buildDir/`eval echo -e '$'"{${target}_${testSet}_0[0]}"` $tempDir/spec/$fullTarget/`eval echo -e '$'"{${target}_${testSet}_0[0]}"`
 
 	# TODO We will get a warning if we are trying to use hard link
 	# TODO or symbol link for the spec program. This problem should
@@ -745,7 +745,7 @@ settingParser
 argParser
 buildGem5
 set -e
-buildSpecTemp
 buildSpecOptions
+buildSpecTemp
 printOutputInfo
 runGem5
