@@ -34,8 +34,8 @@ setGem5(){
 	cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
 	forceNotBuild="Yes" # [Yes/No] 
 	# Set this to Yes to force this script not to build gem5 
-	# outputDir option [default m5out]
 	outputDir=""
+	# outputDir option [default m5out]
 
 	enableGlobal="Yes" # [Yes]
 		cpuType="DerivO3CPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
