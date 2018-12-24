@@ -387,14 +387,14 @@ runGem5(){
 	if [ ${runSpec}x != 1x ]
 	then
 		if [ ${gem5Only}x = 1x ]
-		then bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $options`"
-		else bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
+		then bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $options`"
+		else bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
 		fi
 	else
 		suiteID=0
 		while [ "${options[$suiteID]}x" != x ]
 		do
-			echo -e "\033[1;31m    ======================= Runing SubTest-$suiteID! ====================\033[0m"
+			echo -e "\033[1;31m    ==================== Runing SubTest-$suiteID! ====================\033[0m"
 			bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions ${options[$suiteID]}`"
 			suiteID=$[suiteID + 1]
 		done
