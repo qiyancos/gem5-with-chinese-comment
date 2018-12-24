@@ -1,7 +1,7 @@
 #! /bin/bash
 root=$PWD
 
-################# settings for script ################
+################# settings for script #################
 setScript(){
 	specDir="/home/lee/project/spec2006/benchspec/CPU2006"
 	# root directory path for spec2006
@@ -21,11 +21,13 @@ setScript(){
 	# num of threads you want to use when building gem5.opt
 	testSet="test" # [ref test train]
 	# Test_set setting
+	runSpecSuites="Yes" # [Yes/No]
+	# If you want to run all the test in the given testSet
 	bad_spec="465.tonto"
 	# Spec programs that may have problems running
 }
 
-################# settings for gem5 ################
+################# settings for gem5 #################
 setGem5(){
 	# build options
 	buildModel="opt" # [fast debug opt]
@@ -91,221 +93,238 @@ setGem5(){
 		debugEndTick=""
 }
 
-################# settings for spec ################
+################# settings for spec #################
 setSpec(){
 	# 400
-	perlbench_ref=(perlbench "-o" "-I./lib checkspam.pl 2500 5 25 11 150 1 1 1 1")
-	# perlbench_ref=(perlbench "-o" "-I./lib diffmail.pl 4 800 10 17 19 300")
-	# perlbench_ref=(perlbench "-o" "-I./lib splitmail.pl 1600 12 26 16 4500")
-	perlbench_train=(perlbench "-o" "-I./lib diffmail.pl 2 550 15 24 23 100")
-	# perlbench_train=(perlbench "-o" "-I./lib perfect.pl b 3")
-	# perlbench_train=(perlbench "-o" "-I./lib scrabbl.pl")
-	# perlbench_train=(perlbench "-o" "-I./lib splitmail.pl 535 13 25 24 1091")
-	# perlbench_train=(perlbench "-o" "-I./lib suns.pl")
-	perlbench_test=(perlbench "-o" "-I./lib attrs.pl")
-	# perlbench_test=(perlbench "-o" "-I./lib gv.pl")
-	# perlbench_test=(perlbench "-o" "-I./lib makerand.pl")
-	# perlbench_test=(perlbench "-o" "-I./lib pack.pl")
-	# perlbench_test=(perlbench "-o" "-I./lib redef.pl")
-	# perlbench_test=(perlbench "-o" "-I./lib ref.pl")
-	# perlbench_test=(perlbench "-o" "-I./lib regmes.pl")
-	# perlbench_test=(perlbench "-o" "-I./lib test.pl")
+	perlbench_ref_0=(perlbench "-o" "-I./lib checkspam.pl 2500 5 25 11 150 1 1 1 1")
+	perlbench_ref_1=(perlbench "-o" "-I./lib diffmail.pl 4 800 10 17 19 300")
+	perlbench_ref_2=(perlbench "-o" "-I./lib splitmail.pl 1600 12 26 16 4500")
+	perlbench_ref_single=0
+	perlbench_train_0=(perlbench "-o" "-I./lib diffmail.pl 2 550 15 24 23 100")
+	perlbench_train_1=(perlbench "-o" "-I./lib perfect.pl b 3")
+	perlbench_train_2=(perlbench "-o" "-I./lib scrabbl.pl")
+	perlbench_train_3=(perlbench "-o" "-I./lib splitmail.pl 535 13 25 24 1091")
+	perlbench_train_4=(perlbench "-o" "-I./lib suns.pl")
+	perlbench_train_single=0
+	perlbench_test_0=(perlbench "-o" "-I./lib attrs.pl")
+	perlbench_test_1=(perlbench "-o" "-I./lib gv.pl")
+	perlbench_test_2=(perlbench "-o" "-I./lib makerand.pl")
+	perlbench_test_3=(perlbench "-o" "-I./lib pack.pl")
+	perlbench_test_4=(perlbench "-o" "-I./lib redef.pl")
+	perlbench_test_5=(perlbench "-o" "-I./lib ref.pl")
+	perlbench_test_6=(perlbench "-o" "-I./lib regmes.pl")
+	perlbench_test_7=(perlbench "-o" "-I./lib test.pl")
+	perlbench_test_single=0
 	# Some errors occurred while running this spec on real machine
 
 	# 401
-	bzip2_ref=(bzip2 "-o" "chicken.jpg 30")
-	# bzip2_ref=(bzip2 "-o" "input.source 280") 
-	# bzip2_ref=(bzip2 "-o" "liberty.jpg 30")
-	# bzip2_ref=(bzip2 "-o" "input.program 280")
-	# bzip2_ref=(bzip2 "-o" "text.html 280")
-	# bzip2_ref=(bzip2 "-o" "input.combined 200")
-	bzip2_train=(bzip2 "-o" "input.program 10")
-	# bzip2_train=(bzip2 "-o" "byoudoin.jpg 5")
-	# bzip2_train=(bzip2 "-o" "input.combined 80")
-	bzip2_test=(bzip2 "-o" "input.program 5")
-	# bzip2_test=(bzip2 "-o" "dryer.jpg 2")
+	bzip2_ref_0=(bzip2 "-o" "chicken.jpg 30")
+	bzip2_ref_1=(bzip2 "-o" "input.source 280") 
+	bzip2_ref_2=(bzip2 "-o" "liberty.jpg 30")
+	bzip2_ref_3=(bzip2 "-o" "input.program 280")
+	bzip2_ref_4=(bzip2 "-o" "text.html 280")
+	bzip2_ref_5=(bzip2 "-o" "input.combined 200")
+	bzip2_ref_single=0
+	bzip2_train_0=(bzip2 "-o" "input.program 10")
+	bzip2_train_1=(bzip2 "-o" "byoudoin.jpg 5")
+	bzip2_train_2=(bzip2 "-o" "input.combined 80")
+	bzip2_train_single=0
+	bzip2_test_0=(bzip2 "-o" "input.program 5")
+	bzip2_test_1=(bzip2 "-o" "dryer.jpg 2")
+	bzip2_test_single=0
 
 	# 403
-	gcc_ref=(gcc "-o" "166.i -o 166.s")
-	# gcc_ref=(gcc "-o" "200.i -o 200.s")
-	# gcc_ref=(gcc "-o" "c-typeck.i -o c-typeck.s")
-	# gcc_ref=(gcc "-o" "c-decl.i -o c-decl.s")
-	# gcc_ref=(gcc "-o" "expr.i -o expr.s")
-	# gcc_ref=(gcc "-o" "expr2.i -o expr2.s")
-	# gcc_ref=(gcc "-o" "g23.i -o g23.s")
-	# gcc_ref=(gcc "-o" "s04.i -o s04.s")
-	# gcc_ref=(gcc "-o" "scilab.i -o scilab.s")
-	gcc_train=(gcc "-o" "integrate.i -o integrate.s")
-	gcc_test=(gcc "-o" "cccp.i -o cccp.s")
+	gcc_ref_0=(gcc "-o" "166.i -o 166.s")
+	gcc_ref_1=(gcc "-o" "200.i -o 200.s")
+	gcc_ref_2=(gcc "-o" "c-typeck.i -o c-typeck.s")
+	gcc_ref_3=(gcc "-o" "c-decl.i -o c-decl.s")
+	gcc_ref_4=(gcc "-o" "expr.i -o expr.s")
+	gcc_ref_5=(gcc "-o" "expr2.i -o expr2.s")
+	gcc_ref_6=(gcc "-o" "g23.i -o g23.s")
+	gcc_ref_7=(gcc "-o" "s04.i -o s04.s")
+	gcc_ref_8=(gcc "-o" "scilab.i -o scilab.s")
+	gcc_ref_single=0
+	gcc_train_0=(gcc "-o" "integrate.i -o integrate.s")
+	gcc_test_0=(gcc "-o" "cccp.i -o cccp.s")
 
 	# 410
-	bwaves_ref=(bwaves)
-	bwaves_train=(bwaves)
-	bwaves_test=(bwaves)
+	bwaves_ref_0=(bwaves)
+	bwaves_train_0=(bwaves)
+	bwaves_test_0=(bwaves)
 	# In fact, bwaves does not take any arguments!
 
 	# 416
-	gamess_ref=(gamess "-i cytosine.2.config")
-	# gamess_ref=(gamess "-i h2ocu2+.gradient.config")
-	# games_ref=(gamess "-i triazolium.config")
-	gamess_train=(gamess "-i h2ocu2+.energy.config")
-	gamess_test=(gamess "-i exam29.config")
+	gamess_ref_0=(gamess "-i cytosine.2.config")
+	gamess_ref_1=(gamess "-i h2ocu2+.gradient.config")
+	gamess_ref_2=(gamess "-i triazolium.config")
+	gamess_ref_single=0
+	gamess_train_0=(gamess "-i h2ocu2+.energy.config")
+	gamess_test_0=(gamess "-i exam29.config")
 
 	# 429
-	mcf_ref=(mcf "-o" "inp.in")
-	mcf_train=(mcf "-o" "inp.in")
-	mcf_test=(mcf "-o" "inp.in")
+	mcf_ref_0=(mcf "-o" "inp.in")
+	mcf_train_0=(mcf "-o" "inp.in")
+	mcf_test_0=(mcf "-o" "inp.in")
 
 	# 433
-	milc_ref=(milc "-i su3imp.in")
-	milc_train=(milc "-i su3imp.in")
-	milc_test=(milc "-i su3imp.in")
+	milc_ref_0=(milc "-i su3imp.in")
+	milc_train_0=(milc "-i su3imp.in")
+	milc_test_0=(milc "-i su3imp.in")
 
 	# 434
-	zeusmp_ref=(zeusmp)
-	zeusmp_train=(zeusmp)
-	zeusmp_test=(zeusmp)
+	zeusmp_ref_0=(zeusmp)
+	zeusmp_train_0=(zeusmp)
+	zeusmp_test_0=(zeusmp)
 
 	# 435
-	gromacs_ref=(gromacs "-o" "-silent -deffnm gromacs -nice 0")
-	gromacs_train=(gromacs "-o" "-silent -deffnm gromacs -nice 0")
-	gromacs_test=(gromacs "-o" "-silent -deffnm gromacs -nice 0")
+	gromacs_ref_0=(gromacs "-o" "-silent -deffnm gromacs -nice 0")
+	gromacs_train_0=(gromacs "-o" "-silent -deffnm gromacs -nice 0")
+	gromacs_test_0=(gromacs "-o" "-silent -deffnm gromacs -nice 0")
 
 	# 436
-	cactusADM_ref=(cactusADM "-o" "benchADM.par")
-	cactusADM_train=(cactusADM "-o" "benchADM.par")
-	cactusADM_test=(cactusADM "-o" "benchADM.par")
+	cactusADM_ref_0=(cactusADM "-o" "benchADM.par")
+	cactusADM_train_0=(cactusADM "-o" "benchADM.par")
+	cactusADM_test_0=(cactusADM "-o" "benchADM.par")
 	# Some errors occurred while running this spec on real machine
 	
 	# 437
-	leslie3d_ref=(leslie3d "-i leslie3d.in")
-	leslie3d_train=(leslie3d "-i leslie3d.in")
-	leslie3d_test=(leslie3d "-i leslie3d.in")
+	leslie3d_ref_0=(leslie3d "-i leslie3d.in")
+	leslie3d_train_0=(leslie3d "-i leslie3d.in")
+	leslie3d_test_0=(leslie3d "-i leslie3d.in")
 
 	# 444
-	namd_ref=(namd "-o" "--input namd.input --iterations 38 --output namd.out")
-	namd_train=(namd "-o" "--input namd.input --iterations 1 --output named.out")
-	namd_test=(namd "-o" "--input namd.input --iterations 1 --output named.out")
+	namd_ref_0=(namd "-o" "--input namd.input --iterations 38 --output namd.out")
+	namd_train_0=(namd "-o" "--input namd.input --iterations 1 --output named.out")
+	namd_test_0=(namd "-o" "--input namd.input --iterations 1 --output named.out")
 
 	# 445
-	gobmk_ref=(gobmk "-o" "--quiet --mode gtp" "-i 13x13.tst")
-	# gobmk_ref=(gobmk "-o" "--quiet --mode gtp" "-i nngs.tst")
-	# gobmk_ref=(gobmk "-o" "--quiet --mode gtp" "-i score2.tst")
-	# gobmk_ref=(gobmk "-o" "--quiet --mode gtp" "-i trevorc.tst")
-	# gobmk_ref=(gobmk "-o" "--quiet --mode gtp" "-i trevorf.tst")
-	gobmk_train=(gobmk "-o" "--quiet --mode gtp" "-i arb.tst")
-	# gobmk_train=(gobmk "-o" "--quiet --mode gtp" "-i arend.tst")
-	# gobmk_train=(gobmk "-o" "--quiet --mode gtp" "-i arion.tst")
-	# gobmk_train=(gobmk "-o" "--quiet --mode gtp" "-i atari_atari.tst")
-	# gobmk_train=(gobmk "-o" "--quiet --mode gtp" "-i blunder.tst")
-	# gobmk_train=(gobmk "-o" "--quiet --mode gtp" "-i buzco.tst")
-	# gobmk_train=(gobmk "-o" "--quiet --mode gtp" "-i nicklas2.tst")
-	# gobmk_train=(gobmk "-o" "--quiet --mode gtp" "-i nicklas4.tst")
-	gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i capture.tst")
-	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i connect.tst")
-	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i connect_rot.tst")
-	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i connection.tst")
-	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i connection_rot.tst")
-	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i cutstone.tst")
-	# gobmk_test=(gobmk "-o" "--quiet --mode gtp" "-i dniwog.tst")
-	
+	gobmk_ref_0=(gobmk "-o" "--quiet --mode gtp" "-i 13x13.tst")
+	gobmk_ref_1=(gobmk "-o" "--quiet --mode gtp" "-i nngs.tst")
+	gobmk_ref_2=(gobmk "-o" "--quiet --mode gtp" "-i score2.tst")
+	gobmk_ref_3=(gobmk "-o" "--quiet --mode gtp" "-i trevorc.tst")
+	gobmk_ref_4=(gobmk "-o" "--quiet --mode gtp" "-i trevorf.tst")
+	gobmk_ref_single=0
+	gobmk_train_0=(gobmk "-o" "--quiet --mode gtp" "-i arb.tst")
+	gobmk_train_1=(gobmk "-o" "--quiet --mode gtp" "-i arend.tst")
+	gobmk_train_2=(gobmk "-o" "--quiet --mode gtp" "-i arion.tst")
+	gobmk_train_3=(gobmk "-o" "--quiet --mode gtp" "-i atari_atari.tst")
+	gobmk_train_4=(gobmk "-o" "--quiet --mode gtp" "-i blunder.tst")
+	gobmk_train_5=(gobmk "-o" "--quiet --mode gtp" "-i buzco.tst")
+	gobmk_train_6=(gobmk "-o" "--quiet --mode gtp" "-i nicklas2.tst")
+	gobmk_train_7=(gobmk "-o" "--quiet --mode gtp" "-i nicklas4.tst")
+	gobmk_train_single=0
+	gobmk_test_0=(gobmk "-o" "--quiet --mode gtp" "-i capture.tst")
+	gobmk_test_1=(gobmk "-o" "--quiet --mode gtp" "-i connect.tst")
+	gobmk_test_2=(gobmk "-o" "--quiet --mode gtp" "-i connect_rot.tst")
+	gobmk_test_3=(gobmk "-o" "--quiet --mode gtp" "-i connection.tst")
+	gobmk_test_4=(gobmk "-o" "--quiet --mode gtp" "-i connection_rot.tst")
+	gobmk_test_5=(gobmk "-o" "--quiet --mode gtp" "-i cutstone.tst")
+	gobmk_test_7=(gobmk "-o" "--quiet --mode gtp" "-i dniwog.tst")
+	gobmk_test_single=0
+
 	# 447
-	dealII_ref=(dealII "-o" "23")
-	dealII_train=(dealII "-o" "10")
-	dealII_test=(dealII "-o" "8")
+	dealII_ref_0=(dealII "-o" "23")
+	dealII_train_0=(dealII "-o" "10")
+	dealII_test_0=(dealII "-o" "8")
 
 	# 450
-	soplex_ref=(soplex "-o" "-m3500 ref.mps")
-	# soplex_ref=(soplex "-o" "-s1 -e -m45000 pds-50.mps")
-	soplex_train=(soplex "-o" "-m1200 train.mps")
-	# soplex_train=(soplex "-o" "-s1 -e -m5000 pds-20.mps")
-	soplex_test=(soplex "-o" "-m10000 test.mps")
+	soplex_ref_0=(soplex "-o" "-m3500 ref.mps")
+	soplex_ref_1=(soplex "-o" "-s1 -e -m45000 pds-50.mps")
+	soplex_ref_single=0
+	soplex_train_0=(soplex "-o" "-m1200 train.mps")
+	soplex_train_1=(soplex "-o" "-s1 -e -m5000 pds-20.mps")
+	soplex_train_single=0
+	soplex_test_0=(soplex "-o" "-m10000 test.mps")
 
 	# 453
-	povray_ref=(povray "-o" "SPEC-benchmark-ref.ini")
-	povray_train=(povray "-o" "SPEC-benchmark-train.ini")
-	povray_test=(povray "-o" "SPEC-benchmark-test.ini")
+	povray_ref_0=(povray "-o" "SPEC-benchmark-ref.ini")
+	povray_train_0=(povray "-o" "SPEC-benchmark-train.ini")
+	povray_test_0=(povray "-o" "SPEC-benchmark-test.ini")
 
 	# 454
-	calculix_ref=(calculix "-o" "-i hyperviscoplastic")
-	calculix_train=(calculix "-o" "-i stairs")
-	calculix_test=(calculix "-o" "-i beampic")
+	calculix_ref_0=(calculix "-o" "-i hyperviscoplastic")
+	calculix_train_0=(calculix "-o" "-i stairs")
+	calculix_test_0=(calculix "-o" "-i beampic")
 
 	# 456
-	hmmer_ref=(hmmer "-o" "nph3.hmm swss4")
-	# hmmer_ref=(hmmer "-o" "--fxe 0 --mean 500 --num 500000 --sd 350 --seed 0 retro.hmm")
-	hmmer_train=(hmmer "-o" "--fixed 0 --mean 425 --num 85000 --sd 300 --seed 0 leng100.hmm")
-	hmmer_test=(hmmer "-o" "--fixed 0 --mean 325 --num 45000 --sd 200 --seed 0 bombesin.hmm")
+	hmmer_ref_0=(hmmer "-o" "nph3.hmm swss4")
+	hmmer_ref_1=(hmmer "-o" "--fxe 0 --mean 500 --num 500000 --sd 350 --seed 0 retro.hmm")
+	hmmer_ref_single=0
+	hmmer_train_0=(hmmer "-o" "--fixed 0 --mean 425 --num 85000 --sd 300 --seed 0 leng100.hmm")
+	hmmer_test_0=(hmmer "-o" "--fixed 0 --mean 325 --num 45000 --sd 200 --seed 0 bombesin.hmm")
 
 	# 458
-	sjeng_ref=(sjeng "-o" "ref.txt")
-	sjeng_train=(sjeng "-o" "train.txt")
-	sjeng_test=(sjeng "-o" "test.txt")
+	sjeng_ref_0=(sjeng "-o" "ref.txt")
+	sjeng_train_0=(sjeng "-o" "train.txt")
+	sjeng_test_0=(sjeng "-o" "test.txt")
 
 	# 459
-	GemsFDTD_ref=(GemsFDTD)
-	GemsFDTD_train=(GemsFDTD)
-	GemsFDTD_test=(GemsFDTD)
+	GemsFDTD_ref_0=(GemsFDTD)
+	GemsFDTD_train_0=(GemsFDTD)
+	GemsFDTD_test_0=(GemsFDTD)
 
 	# 462
-	libquantum_ref=(libquantum "-o" "1397 8")
-	libquantum_train=(libquantum "-o" "143 25")
-	libquantum_test=(libquantum "-o" "33 5")
+	libquantum_ref_0=(libquantum "-o" "1397 8")
+	libquantum_train_0=(libquantum "-o" "143 25")
+	libquantum_test_0=(libquantum "-o" "33 5")
 
 	# 464
-	# h264ref_ref=(h264ref "-o" "-d foreman_ref_encoder_baseline.cfg") # broken now
-	# h264ref_ref=(h264ref "-o" "-d foreman_ref_encoder_main.cfg")
-	h264ref_ref=(h264ref "-o" "-d sss_encoder_main.cfg")
-	h264ref_train=(h264ref "-o" "-d foreman_train_encoder_baseline.cfg")
-	h264ref_test=(h264ref "-o" "-d foreman_test_encoder_baseline.cfg")
+	h264ref_ref_0=(h264ref "-o" "-d foreman_ref_encoder_baseline.cfg") # broken now
+	h264ref_ref_1=(h264ref "-o" "-d foreman_ref_encoder_main.cfg")
+	h264ref_ref_2=(h264ref "-o" "-d sss_encoder_main.cfg")
+	h264ref_ref_single=2
+	h264ref_train_0=(h264ref "-o" "-d foreman_train_encoder_baseline.cfg")
+	h264ref_test_0=(h264ref "-o" "-d foreman_test_encoder_baseline.cfg")
 	# Some errors occurred while running this spec with RISCV's gem5 
 
 	# 465
-	tonto_ref=(tonto)
-	tonto_train=(tonto)
-	tonto_test=(tonto)
+	tonto_ref_0=(tonto)
+	tonto_train_0=(tonto)
+	tonto_test_0=(tonto)
 	# Some errors occurred while running this spec on real machine
 
 	# 470
-	lbm_ref=(lbm "-o" "3000 reference.dat 0 0 100_100_130_ldc.of")
-	lbm_train=(lbm "-o" "300 reference.dat 0 0 100_100_130_cf_b.of")
-	lbm_test=(lbm "-o" "3000 reference.dat 0 1 100_100_130_cf_a.of")
+	lbm_ref_0=(lbm "-o" "3000 reference.dat 0 0 100_100_130_ldc.of")
+	lbm_train_0=(lbm "-o" "300 reference.dat 0 0 100_100_130_cf_b.of")
+	lbm_test_0=(lbm "-o" "3000 reference.dat 0 1 100_100_130_cf_a.of")
 
 	# 471
-	omnetpp_ref=(omnetpp "-o" "omnetpp.ini")
-	omnetpp_train=(omnetpp "-o" "omnetpp.ini")
-	omnetpp_test=(omnetpp "-o" "omnetpp.ini")
+	omnetpp_ref_0=(omnetpp "-o" "omnetpp.ini")
+	omnetpp_train_0=(omnetpp "-o" "omnetpp.ini")
+	omnetpp_test_0=(omnetpp "-o" "omnetpp.ini")
 
 	# 473
-	astar_ref=(astar "-o" "BigLakes2048.cfg")
-	# astar_ref=(astar "-o" "rivers.cfg")
-	astar_train=(astar "-o" "BigLakes1024.cfg")
-	# astar_train=(astar "-o" "rivers1.cfg")
-	astar_test=(astar "-o" "lake.cfg")
+	astar_ref_0=(astar "-o" "BigLakes2048.cfg")
+	astar_ref_1=(astar "-o" "rivers.cfg")
+	astar_ref_single=0
+	astar_train_0=(astar "-o" "BigLakes1024.cfg")
+	astar_train_1=(astar "-o" "rivers1.cfg")
+	astar_train_single=0
+	astar_test_0=(astar "-o" "lake.cfg")
 
 	# 481
-	wrf_ref=(wrf)
-	wrf_train=(wrf)
-	wrf_test=(wrf)
+	wrf_ref_0=(wrf)
+	wrf_train_0=(wrf)
+	wrf_test_0=(wrf)
 
 	# 482
-	sphinx3_ref=(sphinx_livepretend "-o" "ctlfile . args.an4")
-	sphinx3_train=(sphinx_livepretend "-o" "ctlfile . args.an4")
-	sphinx3_test=(sphinx_livepretend "-o" "ctlfile . args.an4")
+	sphinx3_ref_0=(sphinx_livepretend "-o" "ctlfile . args.an4")
+	sphinx3_train_0=(sphinx_livepretend "-o" "ctlfile . args.an4")
+	sphinx3_test_0=(sphinx_livepretend "-o" "ctlfile . args.an4")
 	# Some errors occurred while running this spec on real machine
 
 	# 483
-	xalancbmk_ref=(Xalan "-o" "-v t5.xml xalanc.xsl")
-	xalancbmk_train=(Xalan "-o" "-v allbooks.xml xalanc.xsl")
-	xalancbmk_test=(Xalan "-o" "-v test.xml xalanc.xsl")
+	xalancbmk_ref_0=(Xalan "-o" "-v t5.xml xalanc.xsl")
+	xalancbmk_train_0=(Xalan "-o" "-v allbooks.xml xalanc.xsl")
+	xalancbmk_test_0=(Xalan "-o" "-v test.xml xalanc.xsl")
 
 	# 999
-	specrand_ref=(specrand "-o" "1255432124 234923")
-	specrand_train=(specrand "-o" "1 3")
-	specrand_test=(specrand "-o" "324342 24239")
+	specrand_ref_0=(specrand "-o" "1255432124 234923")
+	specrand_train_0=(specrand "-o" "1 3")
+	specrand_test_0=(specrand "-o" "324342 24239")
 }
 
-################# settings for settingParser ################
+################# settings for settingParser #################
 setArgLevel(){
 	# argument level
 	argLevel=("Global" "Simpoint" "Smt" "Mem" "Cache" "L2Cache" "L3Cache")
@@ -328,7 +347,7 @@ setArgLevel(){
 	buildOption="CPU_MODELS=$cpuModel"
 }
 
-################# print path for output files ################
+################# print path for output files #################
 printOutputInfo(){
 	if [ ${runSpec}x != 1x ]
 	then
@@ -357,7 +376,7 @@ printOutputInfo(){
 	fi
 }
 
-################# running gem5 with generated options ################
+################# running gem5 with generated options #################
 runGem5(){
 	mkdir -p $debugDir
 	
@@ -365,13 +384,24 @@ runGem5(){
 	then mkdir -p $outputDir
 	fi
 	
-	if [ ${gem5Only}x = 1x ]
-	then bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $options`"
-	else bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
+	if [ ${runSpec}x != 1x ]
+	then
+		if [ ${gem5Only}x = 1x ]
+		then bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $options`"
+		else bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
+		fi
+	else
+		suiteID=0
+		while [ "${options[$suiteID]}x" != x ]
+		do
+			echo -e "\033[1;31m>>>>>>>>>>>>> Runing SubTest-$suiteID! <<<<<<<<<<<<<\033[0m"
+			bash -c "`echo $gem5Dir/build/$ISA/gem5.opt $gem5Options $gem5Dir/configs/example/se.p y $basicOptions ${options[$suiteID]}`"
+			suiteID=$[suiteID + 1]
+		done
 	fi
 }
 
-################# build gem5.opt ################
+################# build gem5.opt #################
 buildGem5(){
 	if [ ${needBuild}x = 1x -a $forceNotBuild != Yes ]
 	then 
@@ -380,11 +410,14 @@ buildGem5(){
 		if [ $? != 0 ]
 		then exit
 		fi
-		#chmod 777 -R $gem5Dir/build/ 2> /dev/null
+		if [ $USER != lee ]
+		then chmod 777 -R $gem5Dir/build/ 2> /dev/null
+		fi
+		# This chmod should be enbaled on server!
 	fi
 }
 
-################# get available spec programs ################
+################# get available spec programs #################
 findSpec(){
 	# buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
 	if [ ! -d $specDir ]
@@ -423,7 +456,7 @@ findSpec(){
 	testlist=($testlist)
 }
 
-################# help infomation ################
+################# help infomation #################
 printHelpInfo(){
 	echo "Usage: se [OPTION]" 
 	echo "    -h [-h <target file> <more options>]"
@@ -442,9 +475,9 @@ printHelpInfo(){
 	echo "        like \"prog1=arguments prog2=arguments\"!"
 }
 
-################# parse settings ################
+################# parse settings #################
 settingParser(){
-	################# decode debug args #################
+	################# decode debug args ##################
 	if [ ${enableDebug}x = Yesx ]
 	then 
 		if [ "${debugFlags}x" != x ]
@@ -472,7 +505,7 @@ settingParser(){
 		fi
 	fi
 
-	################# decode other args #################
+	################# decode other args ##################
 	levelIdx=0
 	for level in ${argLevel[*]}
 	do
@@ -498,15 +531,15 @@ settingParser(){
 	#fi
 }
 
-################# parse script args ################
+################# parse script args #################
 argParser(){
-	################# help infomation ################
+	################# help infomation #################
 	if [ "${arguments[1]}x" = -hx -o "${arguments[1]}x" = x ] && [ "${arguments[2]}x" = x ]
 	then printHelpInfo;exit
 	fi
 
 	case "${arguments[1]}x" in
-	################# run multiple programs ################
+	################# run multiple programs #################
 	"-mpx")
 		progIdx=0
 		while [ "${arguments[$[progIdx + 2]]}x" != x ]
@@ -538,7 +571,7 @@ argParser(){
 		fi
 		needBuild=1;;
 	
-	################# run with given args ################
+	################# run with given args #################
 	"-hx")
 		case "${arguments[2]}x" in
 		gem5x)
@@ -570,7 +603,7 @@ argParser(){
 			exit;;
 		esac;;
 	
-	################# list available spec programs ################
+	################# list available spec programs #################
 	"-lx")
 		if [ "${#testlist[*]}" = 0 ]
 		then echo "No available spec programs for $ISA!"
@@ -580,7 +613,7 @@ argParser(){
 		done
 		exit;;
 
-	################# select available spec programs ################
+	################# select available spec programs #################
 	"-px")
 		if [ ${#testlist[*]} = 0 ]
 		then
@@ -622,7 +655,7 @@ argParser(){
 	esac
 }
 
-################# copy and link files needed for spec ################
+################# copy and link files needed for spec #################
 buildSpecTemp(){
 	if [ ${runSpec}x != 1x ]
 	then return 
@@ -662,7 +695,7 @@ buildSpecTemp(){
 	cd $tempDir/spec/$fullTarget
 }
 
-################# generate options for spec ################
+################# generate options for spec #################
 buildSpecOptions(){
 	if [ ${runSpec}x != 1x ]
 	then return
@@ -670,11 +703,27 @@ buildSpecOptions(){
 	
 	echo -e "\033[1;31m ==================== Running Spec $fullTarget! ====================\033[0m"
 
-	if [ "`eval echo -e '$'"{${target}_${testSet}[1]}"`" = "-o" ]
+	if [ $runSpecSuites = Yes ]
 	then
-		options="-c ./`eval echo -e '$'"{${target}_${testSet}[0]}"` `eval echo -e '$'"{${target}_${testSet}[1]}"` '`eval echo -e '$'"{${target}_${testSet}[2]}"`' `eval echo -e '$'"{${target}_${testSet}[3]}"`"
+		suiteID=0
+		while [ "`eval echo -e '$'"{${target}_${testSet}_${suiteID}[0]}"`x" != x ]
+		do
+			if [ "`eval echo -e '$'"{${target}_${testSet}_${suiteID}[1]}"`" = "-o" ]
+			then
+				options[$suiteID]="-c ./`eval echo -e '$'"{${target}_${testSet}_${suiteID}[0]}"` `eval echo -e '$'"{${target}_${testSet}_${suiteID}[1]}"` '`eval echo -e '$'"{${target}_${testSet}_${suiteID}[2]}"`' `eval echo -e '$'"{${target}_${testSet}_${suiteID}[3]}"`"
+			else
+				options[$suiteID]="-c ./`eval echo -e '$'"{${target}_${testSet}_${suiteID}[0]}"` `eval echo -e '$'"{${target}_${testSet}_${suiteID}[1]}"` `eval echo -e '$'"{${target}_${testSet}_${suiteID}[2]}"` `eval echo -e '$'"{${target}_${testSet}_${suiteID}[3]}"`"
+			fi
+			suiteID=$[suiteID + 1]
+		done
 	else
-		options="-c ./`eval echo -e '$'"{${target}_${testSet}[0]}"` `eval echo -e '$'"{${target}_${testSet}[1]}"` `eval echo -e '$'"{${target}_${testSet}[2]}"` `eval echo -e '$'"{${target}_${testSet}[3]}"`"
+		single=`eval echo -e '$'"${target}_${testSet}_single"`
+		if [ "`eval echo -e '$'"{${target}_${testSet}_${single}[1]}"`" = "-o" ]
+		then
+			options[0]="-c ./`eval echo -e '$'"{${target}_${testSet}_${single}[0]}"` `eval echo -e '$'"{${target}_${testSet}_${single}[1]}"` '`eval echo -e '$'"{${target}_${testSet}_${single}[2]}"`' `eval echo -e '$'"{${target}_${testSet}_${single}[3]}"`"
+		else
+			options[0]="-c ./`eval echo -e '$'"{${target}_${testSet}_${single}[0]}"` `eval echo -e '$'"{${target}_${testSet}_${single}[1]}"` `eval echo -e '$'"{${target}_${testSet}_${single}[2]}"` `eval echo -e '$'"{${target}_${testSet}_${single}[3]}"`"
+		fi
 	fi
 }
 
@@ -692,11 +741,11 @@ setGem5
 setArgLevel
 setSpec
 findSpec
-set -e
 settingParser
 argParser
 buildGem5
-buildSpecOptions
+set -e
 buildSpecTemp
+buildSpecOptions
 printOutputInfo
 runGem5
