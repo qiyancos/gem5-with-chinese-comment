@@ -359,10 +359,16 @@ printOutputInfo(){
 	fi
 	
 	if [ ${outputDir}x = x -a ${runSpec}x = 1x ]
-	then echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out\033[0m\"!"
+	then 
+		echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out\033[0m\"!"
+		m5outDir="$tempDir/spec/$fullTarget/m5out"
 	elif [ ${outputDir}x = x ]
-	then echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
-	else echo -e ">> Output files will be saved to \"\033[1;31m$outputDir\033[0m\"!"
+	then 
+		echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
+		m5outDir=$tempDir/m5out
+	else 
+		echo -e ">> Output files will be saved to \"\033[1;31m$outputDir\033[0m\"!"
+		m5outDir=$outputDir
 	fi
 	
 	if [ ${enableDebug}x = Yesx ]
@@ -396,6 +402,7 @@ runGem5(){
 		do
 			echo -e "\033[1;31m    ==================== Runing SubTest-$suiteID! ====================\033[0m"
 			bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions ${options[$suiteID]}`"
+			mv $m5outDir/stats.txt $m5outDir/stats_subset_$suiteID.txt
 			suiteID=$[suiteID + 1]
 		done
 	fi
