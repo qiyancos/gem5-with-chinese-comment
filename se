@@ -22,9 +22,9 @@ setScript(){
 	testSet="test" # [ref test train]
 	# Test_set setting
 	runSpecSuites="Yes" # [Yes/No]
-	# If you want to run all the test in the given testSet
+	# If you want to run all the tests in the given testSet
 	bad_spec="465.tonto"
-	# Spec programs that may have problems running
+	# Spec programs that may have problems
 }
 
 ################# settings for gem5 #################
