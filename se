@@ -112,7 +112,7 @@ setSpec(){
 	perlbench_test_3=(perlbench "-o" "-I./lib pack.pl")
 	perlbench_test_4=(perlbench "-o" "-I./lib redef.pl")
 	perlbench_test_5=(perlbench "-o" "-I./lib ref.pl")
-	perlbench_test_6=(perlbench "-o" "-I./lib regmes.pl")
+	perlbench_test_6=(perlbench "-o" "-I./lib regmesg.pl")
 	perlbench_test_7=(perlbench "-o" "-I./lib test.pl")
 	perlbench_test_single=0
 	# Some errors occurred while running this spec on real machine
