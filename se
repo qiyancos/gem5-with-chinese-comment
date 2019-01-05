@@ -23,7 +23,7 @@ setScript(){
 	# Test_set setting
 	runSpecSuites="Yes" # [Yes/No]
 	# If you want to run all the tests in the given testSet
-	bad_spec="465.tonto"
+	bad_spec=""
 	# Spec programs that may have problems
 }
 

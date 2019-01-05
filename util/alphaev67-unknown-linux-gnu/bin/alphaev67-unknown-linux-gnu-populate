@@ -1,0 +1,200 @@
+#!/bin/bash
+
+# This script will populate the root directory with libs from the sysroot.
+# (C) 2007 Yann E. MORIN
+# Licensed under the GPL v2
+
+# Detect where the toolchain is:
+BIN_DIR="$(cd "$(dirname "$0")"; pwd)"
+CT_READELF="${BIN_DIR}/alphaev67-unknown-linux-gnu-readelf"
+CT_SYSROOT_DIR="${BIN_DIR}/../alphaev67-unknown-linux-gnu/sys-root"
+
+myname=$(basename "$0")
+
+doHelp() {
+    cat <<_EOF_
+NAME
+    $myname - populate the target root file system
+
+SYNOPSIS
+    $myname OPTIONS -s source_root -d destination_root
+
+DESCRIPTION
+    $myname will 'populate' your target root file system ('src_dir') with
+    libraries from the toolchain (eg. libc.so...), storing the result into
+    'dst_dir'.
+
+OPTIONS
+    -s src_dir
+        use 'src_dir' as the un-populated (source) root directory
+
+    -d dst_dir
+        use 'dst_dir' as the place to put the populated root directory
+
+    -l name1[:name2[...]]
+        Always add the specified shared library/ies name1, name2... from the
+        toolchain (in the sys-root). Actual library names are searched as
+        follows (where 'name' is replaced with the given name) in the
+        sys-root directory:
+          - libname.so
+          - name.so
+          - name
+        If the file is found, then the SONAME of the library is used, and the
+        library is copied with that name. If the library was not found, this
+        yields an error (unless -f was given).
+
+    -L file
+        Read 'file' for a list of shared libraries to always add from the
+        toolchain. The file should contain one library name per line; text
+        after a # is ignored until the end of the line; spaces are ignored;
+        empty lines are ignored. Libraries are searched for as with -l.
+
+    -f  force execution: if destination directory already exists, it will be
+        removed first; if a specified library (above) was not found, continue.
+
+    -v  Be verbose
+
+_EOF_
+}
+
+CT_ROOT_SRC_DIR=
+CT_ROOT_DST_DIR=
+CT_LIB_LIST=
+CT_LIB_FILE=
+CT_FORCE=no
+CT_ECHO=true
+while getopts ":s:d:l:L:fvh" CT_OPT; do
+    case "${CT_OPT}" in
+        s)  CT_ROOT_SRC_DIR="${OPTARG}";;
+        d)  CT_ROOT_DST_DIR="${OPTARG}";;
+        l)  CT_LIB_LIST="${CT_LIB_LIST}:${OPTARG}";;
+        L)  CT_LIB_FILE="${OPTARG}";;
+        f)  CT_FORCE=y;;
+        v)  CT_ECHO=echo;;
+        h)  doHelp
+            exit 0
+            ;;
+        :)  echo "$myname: '-${OPTARG}' takes exactly one argument."
+            exit 1
+            ;;
+        ?)  echo "$myname: unknown option '-${OPTARG}'."
+            exit 1
+            ;;
+    esac
+done
+
+# Sanity checks
+if [ -z "${CT_ROOT_SRC_DIR}" -o -z "${CT_ROOT_DST_DIR}" ]; then
+    doHelp
+    exit 1
+fi
+if [ ! -d "${CT_ROOT_SRC_DIR}" ]; then
+    echo "$myname: '${CT_ROOT_SRC_DIR}': no such file or directory"
+    exit 1
+fi
+if [ -d "${CT_ROOT_DST_DIR}" -a "${CT_FORCE}" != "y" ]; then
+    echo "$myname: '${CT_ROOT_DST_DIR}': already exists"
+    exit 1
+fi
+src_inode=$(ls -di "${CT_ROOT_SRC_DIR}")
+dst_inode=$(ls -di "${CT_ROOT_DST_DIR}" 2>/dev/null)
+if [ "${src_inode}" = "${dst_inode}" ]; then
+    echo "$myname: source and destination are the same!"
+    exit 1
+fi
+
+# Check existence of the forced libraries file
+if [ -n "${CT_LIB_FILE}" -a ! \( -f "${CT_LIB_FILE}" -a -r "${CT_LIB_FILE}" \) ]; then
+    echo "$myname: forced libraries file '${CT_LIB_FILE}' not found!"
+    exit 1
+fi
+
+# Get rid of potentially older destination directory
+if [ -d "${CT_ROOT_DST_DIR}" ]; then
+    mv "${CT_ROOT_DST_DIR}" "${CT_ROOT_DST_DIR}.$$"
+    setsid nohup rm -rf "${CT_ROOT_DST_DIR}.$$" >/dev/null 2>&1 &
+fi
+
+# Create the working copy
+mkdir -p "${CT_ROOT_DST_DIR}"
+
+# Make all path absolute
+CT_ROOT_SRC_DIR=$(cd "${CT_ROOT_SRC_DIR}"; pwd)
+CT_ROOT_DST_DIR=$(cd "${CT_ROOT_DST_DIR}"; pwd)
+
+pushd "${CT_ROOT_SRC_DIR}" >/dev/null
+tar cf - . |(cd "${CT_ROOT_DST_DIR}"; tar xf -)
+popd >/dev/null
+
+# A function do search for a library
+# Usage: do_add_lib libname
+# returns: 0 if library was found and added, !0 otherwise
+do_add_lib() {
+    local libname="$1"
+    local ret=1
+    local true_libname
+    for dir in . usr; do
+        ${CT_ECHO} -n "    trying in '${dir}'"
+        libfile="${CT_SYSROOT_DIR}/${dir}/lib/${libname}"
+        ${CT_ECHO} ": '${libfile}'"
+        if [ -e "${libfile}" ]; then
+            mkdir -p "${dir}/lib"
+            true_libname=$("${CT_READELF}" -d "${libfile}" |egrep "SONAME" |sed -r -e 's,.+\[(.+)\] *$,\1,;')
+            ${CT_ECHO} "      installing as '${dir}/lib/${true_libname}'"
+            cat "${libfile}" >"${dir}/lib/${true_libname}"
+            ret=0
+            break
+        fi
+    done
+    return ${ret}
+}
+
+# First of, copy the forced libraries into the working copy
+if [ -n "${CT_LIB_FILE}" ]; then
+    lib_list=$(sed -r -e ':loop; s/#.*//; s/[[:space:]]+//g; s/([^:])$/\1:/; /$/N; s/\n//; tloop;' "${CT_LIB_FILE}")
+    CT_LIB_LIST=$(echo "${CT_LIB_LIST}:${lib_list}" |sed -r -e 's/:+/:/g; s/^:+//; s/:+$//;')
+fi
+CT_LIB_LIST="${CT_LIB_LIST//:/ }"
+${CT_ECHO} "Installing forced libraries..."
+pushd "${CT_ROOT_DST_DIR}" >/dev/null
+for name in ${CT_LIB_LIST}; do
+    [ -z "${name}" ] && continue
+    found=0
+    for libname in "lib${name}.so" "${name}.so" "${name}"; do
+        ${CT_ECHO} "  searching for '${libname}'"
+        if do_add_lib "${libname}"; then
+            found=1
+            break
+        fi
+    done
+    if [ ${found} -eq 0 ]; then
+        echo "$myname: library '${libname}' not found!"
+        [ "${CT_FORCE}" = y ] || exit 1
+    fi
+done
+popd >/dev/null
+
+# Parse the working copy for executables and libraries
+pushd "${CT_ROOT_DST_DIR}" >/dev/null
+still_needed=1
+while [ ${still_needed} -eq 1 ]; do
+    ${CT_ECHO} "Looping..."
+    still_needed=0
+    for f in $(find . -type f -exec file {} \; |egrep ': ELF [[:digit:]]+-bit .SB (executable|shared object),' |cut -d ":" -f 1); do
+        ${CT_ECHO} "Scanning '${f}'"
+        for libname in $("${CT_READELF}" -d "${f}" |egrep '(NEEDED)' |sed -r -e 's,.+\[(.+)\] *$,\1,;'); do
+            ${CT_ECHO} "  searching for '${libname}'"
+            if [    -e "lib/${libname}"     \
+                 -o -e "usr/lib/${libname}" ]; then
+                ${CT_ECHO} "    already present"
+                continue
+            fi
+            if do_add_lib "${libname}"; then
+                still_needed=1
+            else
+                echo "$myname: library '${libname}' not found!"
+            fi
+        done
+    done
+done
+popd >/dev/null
