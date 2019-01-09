@@ -1,0 +1,193 @@
+--- ptxdist-testing/rules/Rules.make.parallel	Thu Oct 23 11:30:15 2003
++++ ptxdist-testing/rules/Rules.make	Thu Oct 23 11:32:55 2003
+@@ -352,18 +352,18 @@
+ CROSS_LIB_DIR		= $(PTXCONF_PREFIX)/$(PTXCONF_GNU_TARGET)
+ 
+ #
+-# distcc, perhaps we will use this feature in far future :)
+-# for more info see:
+-# http://distcc.samba.org
++# Use the masquerading method of invoking distcc if enabled
+ #
+-DISTCC_ENV		= CC='distcc $(PTXCONF_GNU_TARGET)-gcc'
+-DISTCC_MAKE		= CC='distcc $(PTXCONF_GNU_TARGET)-gcc' -j16
+ 
++ifdef PTXCONF_XCHAIN-DISTCC
++DISTCC_PATH_COLON	= $(PTXCONF_PREFIX)/lib/distcc/bin:
++# FIXME: should also allow use of DISTCC for native stuff
++endif
+ 
+ #
+-# prepare the search path
++# prepare the search path.  Search distcc's masquerade bin directory first, if present.
+ #
+-CROSS_PATH		= $(PTXCONF_PREFIX)/bin:$$PATH
++CROSS_PATH		= $(DISTCC_PATH_COLON)$(PTXCONF_PREFIX)/bin:$$PATH
+ 
+ #
+ # prepare the search path
+--- /dev/null	Sat Dec 14 13:56:51 2002
++++ ptxdist-testing/rules/xchain-distcc.make	Wed Oct 22 16:24:39 2003
+@@ -0,0 +1,144 @@
++# -*-makefile-*-
++# $Id: template,v 1.1.1.2 2003/10/09 17:02:19 bet-frogger Exp $
++#
++# Copyright (C) 2003 Ixia Communications, by Dan Kegel
++#          
++# See CREDITS for details about who has contributed to this project.
++#
++# For further information about the PTXdist project and license conditions
++# see the README file.
++#
++
++#
++# We provide this package
++#
++ifdef PTXCONF_XCHAIN-DISTCC
++PACKAGES += xchain-distcc
++endif
++
++#
++# Paths and names
++#
++XCHAIN-DISTCC_VERSION	= 2.11.1
++XCHAIN-DISTCC		= distcc-$(XCHAIN-DISTCC_VERSION)
++XCHAIN-DISTCC_SUFFIX	= tar.bz2
++XCHAIN-DISTCC_URL	= http://distcc.samba.org/ftp/distcc/$(XCHAIN-DISTCC).$(XCHAIN-DISTCC_SUFFIX)
++XCHAIN-DISTCC_SOURCE	= $(SRCDIR)/$(XCHAIN-DISTCC).$(XCHAIN-DISTCC_SUFFIX)
++XCHAIN-DISTCC_DIR	= $(BUILDDIR)/$(XCHAIN-DISTCC)
++
++# ----------------------------------------------------------------------------
++# Get
++# ----------------------------------------------------------------------------
++
++xchain-distcc_get: $(STATEDIR)/xchain-distcc.get
++
++xchain-distcc_get_deps	=  $(XCHAIN-DISTCC_SOURCE)
++
++$(STATEDIR)/xchain-distcc.get: $(xchain-distcc_get_deps)
++	@$(call targetinfo, $@)
++	touch $@
++
++$(XCHAIN-DISTCC_SOURCE):
++	@$(call targetinfo, $@)
++	@$(call get, $(XCHAIN-DISTCC_URL))
++
++# ----------------------------------------------------------------------------
++# Extract
++# ----------------------------------------------------------------------------
++
++xchain-distcc_extract: $(STATEDIR)/xchain-distcc.extract
++
++xchain-distcc_extract_deps	=  $(STATEDIR)/xchain-distcc.get
++
++$(STATEDIR)/xchain-distcc.extract: $(xchain-distcc_extract_deps)
++	@$(call targetinfo, $@)
++	@$(call clean, $(XCHAIN-DISTCC_DIR))
++	@$(call extract, $(XCHAIN-DISTCC_SOURCE))
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Prepare
++# ----------------------------------------------------------------------------
++
++xchain-distcc_prepare: $(STATEDIR)/xchain-distcc.prepare
++
++#
++# dependencies
++#
++xchain-distcc_prepare_deps =  \
++	$(STATEDIR)/xchain-distcc.extract \
++	$(STATEDIR)/virtual-xchain.install
++
++#XCHAIN-DISTCC_PATH	=  PATH=$(CROSS_PATH)
++#XCHAIN-DISTCC_ENV 	=  $(CROSS_ENV)
++#XCHAIN-DISTCC_ENV	+=
++
++
++#
++# autoconf
++#
++XCHAIN-DISTCC_AUTOCONF	=  --prefix=$(PTXCONF_PREFIX)
++#XCHAIN-DISTCC_AUTOCONF	+= --build=$(GNU_HOST)
++#XCHAIN-DISTCC_AUTOCONF	+= --host=$(PTXCONF_GNU_TARGET)
++
++#XCHAIN-DISTCC_AUTOCONF	+= 
++
++$(STATEDIR)/xchain-distcc.prepare: $(xchain-distcc_prepare_deps)
++	@$(call targetinfo, $@)
++	@$(call clean, $(XCHAIN-DISTCC_DIR)/config.cache)
++	cd $(XCHAIN-DISTCC_DIR) && \
++		./configure $(XCHAIN-DISTCC_AUTOCONF)
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Compile
++# ----------------------------------------------------------------------------
++
++xchain-distcc_compile: $(STATEDIR)/xchain-distcc.compile
++
++xchain-distcc_compile_deps =  $(STATEDIR)/xchain-distcc.prepare
++
++$(STATEDIR)/xchain-distcc.compile: $(xchain-distcc_compile_deps)
++	@$(call targetinfo, $@)
++	$(XCHAIN-DISTCC_PATH) make $(NATIVE_MAKE_JOBS) -C $(XCHAIN-DISTCC_DIR)
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Install
++# ----------------------------------------------------------------------------
++
++xchain-distcc_install: $(STATEDIR)/xchain-distcc.install
++
++$(STATEDIR)/xchain-distcc.install: $(STATEDIR)/xchain-distcc.compile
++	@$(call targetinfo, $@)
++	$(XCHAIN-DISTCC_PATH) make -C $(XCHAIN-DISTCC_DIR) install
++	rm -rf $(PTXCONF_PREFIX)/lib/distcc/bin
++	mkdir -p $(PTXCONF_PREFIX)/lib/distcc/bin
++	cd $(PTXCONF_PREFIX)/lib/distcc/bin \
++	   && ln -s ../../../bin/$(PTXCONF_GNU_TARGET)-* . \
++	   && for a in $(PTXCONF_GNU_TARGET)-[cg][+c][+c] $(PTXCONF_GNU_TARGET)-cc; do \
++	       rm -f $$a; ln -s ../../../bin/distcc $$a; \
++	   done
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Target-Install
++# ----------------------------------------------------------------------------
++
++xchain-distcc_targetinstall: $(STATEDIR)/xchain-distcc.targetinstall
++
++xchain-distcc_targetinstall_deps	=  $(STATEDIR)/xchain-distcc.compile
++
++$(STATEDIR)/xchain-distcc.targetinstall: $(xchain-distcc_targetinstall_deps)
++	@$(call targetinfo, $@)
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Clean
++# ----------------------------------------------------------------------------
++
++xchain-distcc_clean:
++	rm -rf $(STATEDIR)/xchain-distcc.*
++	rm -rf $(XCHAIN-DISTCC_DIR)
++
++# vim: syntax=make
+Index: ptxdist-testing/config/Config.in
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/Config.in,v
+retrieving revision 1.1.1.6
+diff -u -u -r1.1.1.6 Config.in
+--- ptxdist-testing/config/Config.in	14 Oct 2003 02:32:15 -0000	1.1.1.6
++++ ptxdist-testing/config/Config.in	23 Oct 2003 18:55:46 -0000
+@@ -342,6 +342,10 @@
+ 	prompt "x86 NASM"
+ 	depends on ARCH_X86
+ 
++config XCHAIN-DISTCC
++	bool
++	prompt "Build distcc"
++	default n
+ endmenu
+ 
+ # ----------------------------------------------------------------------------

@@ -1,0 +1,290 @@
+diff -ruN crosstool-0.31-orig/patches/gcc-2.95.3/gcc-2.95.3-trap-posix.patch crosstool-0.31/patches/gcc-2.95.3/gcc-2.95.3-trap-posix.patch
+--- crosstool-0.31-orig/patches/gcc-2.95.3/gcc-2.95.3-trap-posix.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.31/patches/gcc-2.95.3/gcc-2.95.3-trap-posix.patch	2005-04-20 21:27:58.000000000 +0200
+@@ -0,0 +1,44 @@
++# 
++# Submitted-By: Marc Kleine-Budde <mkl@pengutronix.de>, 2005-04-20
++#
++# Error:
++#
++# creating libintl.h
++# Configuring etc...
++# loading cache ../config.cache
++# checking for a BSD compatible install... (cached) /usr/bin/install -c
++# creating ./config.status
++# creating Makefile
++# trap: usage: trap [-lp] [[arg] signal_spec ...]
++#
++# Description:
++#
++# non-posix conform usage of trap causes bash >= 3.0 to fail
++# e.g.: http://sourceware.org/ml/crossgcc/2004-12/msg00132.html
++#
++# Status:
++#
++# fixed in gcc >= 3.3.5
++# backport of gcc-3.3.5 fix
++#
++diff -ruN gcc-2.95.3-orig/configure gcc-2.95.3/configure
++--- gcc-2.95.3-orig/configure	1999-04-02 16:17:40.000000000 +0200
+++++ gcc-2.95.3/configure	2005-04-20 18:25:45.030488235 +0200
++@@ -687,7 +687,7 @@
++ if test -f skip-this-dir; then
++ 	# Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ 	# and reset the trap handler.
++-	trap 0
+++	trap '' 0
++ 	rm -f Makefile* ${tmpfile}.com ${tmpfile}.tgt ${tmpfile}.hst ${tmpfile}.pos
++ 	# Execute the final clean-up actions
++ 	${config_shell} skip-this-dir
++@@ -1599,7 +1599,7 @@
++ # Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ # and reset the trap handler.
++ rm -f ${tmpfile}.com ${tmpfile}.tgt ${tmpfile}.hst ${tmpfile}.pos
++-trap 0
+++trap '' 0
++ 
++ exit 0
++ 
+diff -ruN crosstool-0.31-orig/patches/gcc-3.2.3/gcc-3.2.3-trap-posix.patch crosstool-0.31/patches/gcc-3.2.3/gcc-3.2.3-trap-posix.patch
+--- crosstool-0.31-orig/patches/gcc-3.2.3/gcc-3.2.3-trap-posix.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.31/patches/gcc-3.2.3/gcc-3.2.3-trap-posix.patch	2005-04-20 21:27:18.000000000 +0200
+@@ -0,0 +1,45 @@
++# 
++# Submitted-By: Marc Kleine-Budde <mkl@pengutronix.de>, 2005-04-20
++#
++# Error:
++#
++# creating libintl.h
++# Configuring etc...
++# loading cache ../config.cache
++# checking for a BSD compatible install... (cached) /usr/bin/install -c
++# creating ./config.status
++# creating Makefile
++# trap: usage: trap [-lp] [[arg] signal_spec ...]
++#
++# Description:
++#
++# non-posix conform usage of trap causes bash >= 3.0 to fail
++#
++# e.g.: http://sourceware.org/ml/crossgcc/2004-12/msg00132.html
++#
++# Status:
++#
++# fixed in gcc >= 3.3.5
++# backport of gcc-3.3.5 fix
++#
++diff -ruN gcc-3.2.3-orig/configure gcc-3.2.3/configure
++--- gcc-3.2.3-orig/configure	2002-06-24 18:14:28.000000000 +0200
+++++ gcc-3.2.3/configure	2005-04-20 18:42:49.000000000 +0200
++@@ -697,7 +697,7 @@
++ if test -f skip-this-dir; then
++ 	# Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ 	# and reset the trap handler.
++-	trap 0
+++	trap '' 0
++ 	rm -rf Makefile* ${tmpdir}
++ 	# Execute the final clean-up actions
++ 	${config_shell} skip-this-dir
++@@ -1615,7 +1615,7 @@
++ # Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ # and reset the trap handler.
++ rm -rf ${tmpdir}
++-trap 0
+++trap '' 0
++ 
++ exit 0
++ 
+diff -ruN crosstool-0.31-orig/patches/gcc-3.3.1/gcc-3.3.1-trap-posix.patch crosstool-0.31/patches/gcc-3.3.1/gcc-3.3.1-trap-posix.patch
+--- crosstool-0.31-orig/patches/gcc-3.3.1/gcc-3.3.1-trap-posix.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.31/patches/gcc-3.3.1/gcc-3.3.1-trap-posix.patch	2005-04-20 21:26:16.000000000 +0200
+@@ -0,0 +1,44 @@
++# 
++# Submitted-By: Marc Kleine-Budde <mkl@pengutronix.de>, 2005-04-20
++#
++# Error:
++#
++# creating libintl.h
++# Configuring etc...
++# loading cache ../config.cache
++# checking for a BSD compatible install... (cached) /usr/bin/install -c
++# creating ./config.status
++# creating Makefile
++# trap: usage: trap [-lp] [[arg] signal_spec ...]
++#
++# Description:
++#
++# non-posix conform usage of trap causes bash >= 3.0 to fail
++# e.g.: http://sourceware.org/ml/crossgcc/2004-12/msg00132.html
++#
++# Status:
++#
++# fixed in gcc >= 3.3.5
++# backport of gcc-3.3.5 fix
++#
++diff -ruN gcc-3.3.1-orig/configure gcc-3.3.1/configure
++--- gcc-3.3.1-orig/configure	2002-09-29 18:11:24.000000000 +0200
+++++ gcc-3.3.1/configure	2005-04-20 18:49:20.223220401 +0200
++@@ -697,7 +697,7 @@
++ if test -f skip-this-dir; then
++ 	# Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ 	# and reset the trap handler.
++-	trap 0
+++	trap '' 0
++ 	rm -rf Makefile* ${tmpdir}
++ 	# Execute the final clean-up actions
++ 	${config_shell} skip-this-dir
++@@ -1596,7 +1596,7 @@
++ # Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ # and reset the trap handler.
++ rm -rf ${tmpdir}
++-trap 0
+++trap '' 0
++ 
++ exit 0
++ 
+diff -ruN crosstool-0.31-orig/patches/gcc-3.3.2/gcc-3.3.2-trap-posix.patch crosstool-0.31/patches/gcc-3.3.2/gcc-3.3.2-trap-posix.patch
+--- crosstool-0.31-orig/patches/gcc-3.3.2/gcc-3.3.2-trap-posix.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.31/patches/gcc-3.3.2/gcc-3.3.2-trap-posix.patch	2005-04-20 21:26:26.000000000 +0200
+@@ -0,0 +1,44 @@
++# 
++# Submitted-By: Marc Kleine-Budde <mkl@pengutronix.de>, 2005-04-20
++#
++# Error:
++#
++# creating libintl.h
++# Configuring etc...
++# loading cache ../config.cache
++# checking for a BSD compatible install... (cached) /usr/bin/install -c
++# creating ./config.status
++# creating Makefile
++# trap: usage: trap [-lp] [[arg] signal_spec ...]
++#
++# Description:
++#
++# non-posix conform usage of trap causes bash >= 3.0 to fail
++# e.g.: http://sourceware.org/ml/crossgcc/2004-12/msg00132.html
++#
++# Status:
++#
++# fixed in gcc >= 3.3.5
++# backport of gcc-3.3.5 fix
++#
++diff -ruN gcc-3.3.2-orig/configure gcc-3.3.2/configure
++--- gcc-3.3.2-orig/configure	2002-09-29 18:11:24.000000000 +0200
+++++ gcc-3.3.2/configure	2005-04-20 20:55:51.000000000 +0200
++@@ -697,7 +697,7 @@
++ if test -f skip-this-dir; then
++ 	# Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ 	# and reset the trap handler.
++-	trap 0
+++	trap '' 0
++ 	rm -rf Makefile* ${tmpdir}
++ 	# Execute the final clean-up actions
++ 	${config_shell} skip-this-dir
++@@ -1596,7 +1596,7 @@
++ # Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ # and reset the trap handler.
++ rm -rf ${tmpdir}
++-trap 0
+++trap '' 0
++ 
++ exit 0
++ 
+diff -ruN crosstool-0.31-orig/patches/gcc-3.3.3/gcc-3.3.3-trap-posix.patch crosstool-0.31/patches/gcc-3.3.3/gcc-3.3.3-trap-posix.patch
+--- crosstool-0.31-orig/patches/gcc-3.3.3/gcc-3.3.3-trap-posix.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.31/patches/gcc-3.3.3/gcc-3.3.3-trap-posix.patch	2005-04-20 21:26:32.000000000 +0200
+@@ -0,0 +1,44 @@
++# 
++# Submitted-By: Marc Kleine-Budde <mkl@pengutronix.de>, 2005-04-20
++#
++# Error:
++#
++# creating libintl.h
++# Configuring etc...
++# loading cache ../config.cache
++# checking for a BSD compatible install... (cached) /usr/bin/install -c
++# creating ./config.status
++# creating Makefile
++# trap: usage: trap [-lp] [[arg] signal_spec ...]
++#
++# Description:
++#
++# non-posix conform usage of trap causes bash >= 3.0 to fail
++# e.g.: http://sourceware.org/ml/crossgcc/2004-12/msg00132.html
++#
++# Status:
++#
++# fixed in gcc >= 3.3.5
++# backport of gcc-3.3.5 fix
++#
++diff -ruN gcc-3.3.3-orig/configure gcc-3.3.3/configure
++--- gcc-3.3.3-orig/configure	2002-09-29 18:11:24.000000000 +0200
+++++ gcc-3.3.3/configure	2005-04-20 21:03:51.000000000 +0200
++@@ -697,7 +697,7 @@
++ if test -f skip-this-dir; then
++ 	# Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ 	# and reset the trap handler.
++-	trap 0
+++	trap '' 0
++ 	rm -rf Makefile* ${tmpdir}
++ 	# Execute the final clean-up actions
++ 	${config_shell} skip-this-dir
++@@ -1596,7 +1596,7 @@
++ # Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ # and reset the trap handler.
++ rm -rf ${tmpdir}
++-trap 0
+++trap '' 0
++ 
++ exit 0
++ 
+diff -ruN crosstool-0.31-orig/patches/gcc-3.3.4/gcc-3.3.4-trap-posix.patch crosstool-0.31/patches/gcc-3.3.4/gcc-3.3.4-trap-posix.patch
+--- crosstool-0.31-orig/patches/gcc-3.3.4/gcc-3.3.4-trap-posix.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.31/patches/gcc-3.3.4/gcc-3.3.4-trap-posix.patch	2005-04-20 21:22:05.000000000 +0200
+@@ -0,0 +1,44 @@
++# 
++# Submitted-By: Marc Kleine-Budde <mkl@pengutronix.de>, 2005-04-20
++#
++# Error:
++#
++# creating libintl.h
++# Configuring etc...
++# loading cache ../config.cache
++# checking for a BSD compatible install... (cached) /usr/bin/install -c
++# creating ./config.status
++# creating Makefile
++# trap: usage: trap [-lp] [[arg] signal_spec ...]
++#
++# Description:
++#
++# non-posix conform usage of trap causes bash >= 3.0 to fail
++# e.g.: http://sourceware.org/ml/crossgcc/2004-12/msg00132.html
++#
++# Status:
++#
++# fixed in gcc >= 3.3.5
++# backport of gcc-3.3.5 fix
++#
++diff -ruN gcc-3.3.4-orig/configure gcc-3.3.4/configure
++--- gcc-3.3.4-orig/configure	2002-09-29 18:11:24.000000000 +0200
+++++ gcc-3.3.4/configure	2005-04-20 21:11:30.000000000 +0200
++@@ -697,7 +697,7 @@
++ if test -f skip-this-dir; then
++ 	# Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ 	# and reset the trap handler.
++-	trap 0
+++	trap '' 0
++ 	rm -rf Makefile* ${tmpdir}
++ 	# Execute the final clean-up actions
++ 	${config_shell} skip-this-dir
++@@ -1596,7 +1596,7 @@
++ # Perform the same cleanup as the trap handler, minus the "exit 1" of course,
++ # and reset the trap handler.
++ rm -rf ${tmpdir}
++-trap 0
+++trap '' 0
++ 
++ exit 0
++ 
+

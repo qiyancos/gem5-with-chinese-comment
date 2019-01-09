@@ -1,0 +1,53 @@
+For crosstool-0.26:
+
+Submit bug report for problem fixed by sh-libgcc-hidden.patch
+(the fix may have been committed to 3.4 already...)
+
+Test fix for sh4 bug in http://gcc.gnu.org/PR11608, update bugzilla
+
+Verify test for sh4 bug in http://gcc.gnu.org/PR13260
+
+Submit minimal test case for http://gcc.gnu.org/PR10392
+
+----------------
+
+Later:
+
+Verify http://gcc.gnu.org/PR11587 fixed in 3.4, submit pr11587-1-test.patch
+
+Verify http://gcc.gnu.org/PR12009 fixed in 3.4 so we can drop pr12009.patch
+
+Verify http://gcc.gnu.org/PR13260 fixed in 3.4
+
+rpjday@mindspring.com 9/25: env var error messages in crosstool.sh misleading,
+should only say var is a directory name, as getandpatch has already run by then
+
+See if we need to patch kernel's asm-ppc/unistd.h 
+http://lists.linuxppc.org/linuxppc-embedded/200312/msg00010.html
+and
+http://www.geocrawler.com/archives/3/3/2002/10/0/9962740/
+to fix "error: asm-specifier for variable `__sc_4' conflicts with asm clobber list"
+
+http://sources.redhat.com/ml/crossgcc/2003-12/msg00157.html notes that
+-finline-limit option not supported by gcc-2.95, so
+cris.dat and mips.dat are broken there.  Need to move
+this somewhere else.
+
+add newlib support (see contrib)
+Add Carl Miller's uclibc suport patches
+add native compiler
+add gdb
+
+write patch for 20020720-1.x per http://gcc.gnu.org/PR10348
+
+grab #pragma pack(push...) support patch from
+http://www.sh-linux.org/rpm-2003/SRPMS/gcc-3.2.3-3.src.rpm
+to fix pack-test-1 etc. if it's not in gcc-3.4 cvs already
+
+dig into
+FAIL: gcc.dg/20021014-1.c execution test
+FAIL: gcc.dg/nest.c execution test
+might be I compiled glibc wrong?
+
+let user specify which mirrors to download from
+

@@ -1,0 +1,12 @@
+This is an update of Bill Gatliff's crossgcc build script, refocused
+on just *-unknown-linux-gnu targets, with a fair amount of polishing
+and debugging, with support for remote regression testing.
+
+Up-to-date versions are kept at http://kegel.com/crosstool
+
+To get started, please read doc/crosstool-howto.html
+
+Dan Kegel
+http://kegel.com
+dank at kegel.com
+July 2003 - August 2004

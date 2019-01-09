@@ -1,0 +1,5 @@
+KERNELCONFIG=`pwd`/arm.config
+TARGET=arm-softfloat-linux-gnu
+TARGET_CFLAGS="-O"
+GCC_EXTRA_CONFIG="--with-float=soft"
+GLIBC_EXTRA_CONFIG="--without-fp"

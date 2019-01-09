@@ -1,0 +1,21 @@
+--- ptxdist-20030909/rules/libpcap.make	Mon Sep  8 17:12:42 2003
++++ ptxdist-new/rules/libpcap.make	Tue Sep  9 16:52:46 2003
+@@ -120,7 +120,7 @@
+ 
+ libpcap_targetinstall: $(STATEDIR)/libpcap.targetinstall
+ 
+-libpcap_targetinstall_deps	=
++libpcap_targetinstall_deps	=  $(STATEDIR)/libpcap.install
+ 
+ $(STATEDIR)/libpcap.targetinstall: $(libpcap_targetinstall_deps)
+ 	@$(call targetinfo, libpcap.targetinstall)
+--- ptxdist-20030909/rules/libpcap.in	2003-09-08 17:12:15.000000000 -0700
++++ ptxdist_new/rules/libpcap.in	2003-09-09 14:07:22.000000000 -0700
+@@ -1,6 +1,6 @@
+ menu    "libpcap             "
+ 
+-config LIBNET
++config LIBPCAP
+         bool
+         prompt "Compile libpcap-0.7.2"
+ 

@@ -1,0 +1,62 @@
+This patch tries to correct 2 problems:
+
+1) the pthreadtypes.h header file location cannot be based on ${ARCH} for 
+   ppc architecture.
+2) This patch try to guaranty which assembler/linker is used by the generated 
+   cross-compiler. Without this some bad defaults might be selected (at least 
+   on Solaris).
+
+This patch as to be applied on to of crosstool-0.30-nptl-fixes.patch, itself
+applied on top of crosstool-0.30
+
+--- crosstool-0.30-nptl-fixes/crosstool.sh	2005-04-05 12:43:06.574577000 -0400
++++ crosstool-0.30-nptl-solaris-fixes/crosstool.sh	2005-04-05 05:34:06.480468000 -0400
+@@ -331,7 +331,13 @@
+         # will have to manually be copied from under the tree of the desired
+         # target pthread implementation.
+         cp ${GLIBC_DIR}/nptl/sysdeps/pthread/pthread.h $HEADERDIR/pthread.h
+-        cp ${GLIBC_DIR}/nptl/sysdeps/unix/sysv/linux/${ARCH}/bits/pthreadtypes.h $HEADERDIR/bits/pthreadtypes.h
++
++        case $TARGET in
++             powerpc* ) pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/powerpc/bits/pthreadtypes.h ;;
++             * )        pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/${ARCH}/bits/pthreadtypes.h ;;
++        esac
++
++        cp ${GLIBC_DIR}/${pthreadtypes_h} $HEADERDIR/bits/pthreadtypes.h
+ 
+         # On s390, powerpc and sparc we also require bits/wordsize.h.
+         case $TARGET in
+@@ -371,6 +377,10 @@
+         --enable-symvers=gnu \
+         --enable-__cxa_atexit \
+         --enable-languages=c \
++        --with-gnu-as \
++	--with-as=${PREFIX}/bin/${TARGET}-as \
++        --with-gnu-ld \
++	--with-ld=${PREFIX}/bin/${TARGET}-ld \
+         --disable-shared
+ fi
+ 
+@@ -452,6 +462,10 @@
+ 	    --enable-symvers=gnu \
+ 	    --enable-__cxa_atexit \
+             --enable-languages=c \
++            --with-gnu-as \
++	    --with-as=${PREFIX}/bin/${TARGET}-as \
++            --with-gnu-ld \
++	    --with-ld=${PREFIX}/bin/${TARGET}-ld \
+             --enable-shared
+     fi
+ 
+@@ -608,6 +622,10 @@
+         --enable-languages="$GCC_LANGUAGES" \
+          $SHARED_MODE \
+         --enable-c99 \
++        --with-gnu-as \
++	--with-as=${PREFIX}/bin/${TARGET}-as \
++        --with-gnu-ld \
++	--with-ld=${PREFIX}/bin/${TARGET}-ld \
+         --enable-long-long
+ fi
+ 
+

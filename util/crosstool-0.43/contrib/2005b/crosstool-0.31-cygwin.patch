@@ -1,0 +1,21 @@
+diff -uNr crosstool-0.31.orig/demo-cygwin.sh crosstool-0.31/demo-cygwin.sh
+--- crosstool-0.31.orig/demo-cygwin.sh	2005-03-08 00:34:35.000000000 +0000
++++ crosstool-0.31/demo-cygwin.sh	2005-04-22 15:13:05.000000000 +0100
+@@ -11,6 +11,7 @@
+ mkdir -p $RESULT_TOP
+ 
+ # Build the toolchain.
+-eval `cat i686-cygwin.dat gcc-3.3.2-cygwin-1.5.10-3.dat`  sh all.sh --notest
++# eval `cat i686-cygwin.dat gcc-3.3.2-cygwin-1.5.10-3.dat`  sh all.sh --notest
++eval `cat i686-cygwin.dat gcc-3.3.2-cygwin-1.5.15-1.dat`  sh all.sh --notest
+ 
+ echo Done.
+diff -uNr crosstool-0.31.orig/gcc-3.3.2-cygwin-1.5.15-1.dat crosstool-0.31/gcc-3.3.2-cygwin-1.5.15-1.dat
+--- crosstool-0.31.orig/gcc-3.3.2-cygwin-1.5.15-1.dat	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.31/gcc-3.3.2-cygwin-1.5.15-1.dat	2005-04-22 15:14:08.000000000 +0100
+@@ -0,0 +1,4 @@
++BINUTILS_DIR=binutils-2.15
++GCC_DIR=gcc-3.3.2
++CYGWIN_DIR=cygwin-1.5.15-1
++CYGWIN_URL=ftp://mirrors.rcn.net/pub/sourceware/cygwin/release/cygwin
+

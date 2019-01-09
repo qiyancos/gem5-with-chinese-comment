@@ -1,0 +1,289 @@
+# Needed to let distcc distinguish commands by partial paths
+# instead of just by full paths or without paths
+# Lets multiple independent toolchains coexist better
+# Dan Kegel
+
+diff -ur /home/matthewbg/distcc-2.16/Makefile.in distcc-2.16/Makefile.in
+--- /home/matthewbg/distcc-2.16/Makefile.in	2004-07-06 01:08:50.000000000 -0700
++++ distcc-2.16/Makefile.in	2004-07-29 16:06:13.000000000 -0700
+@@ -192,6 +192,7 @@
+ 	src/daemon.o  src/dopt.o src/dparent.o src/dsignal.o		\
+ 	src/ncpus.o							\
+ 	src/prefork.o							\
++	src/stringmap.o							\
+ 	src/serve.o src/setuid.o src/srvnet.o src/srvrpc.o		\
+ 	$(common_obj) @BUILD_POPT@
+ 
+@@ -243,6 +244,7 @@
+ 	src/safeguard.c src/sendfile.c src/setuid.c src/serve.c		\
+ 	src/snprintf.c src/state.c					\
+ 	src/srvnet.c src/srvrpc.c src/ssh.c src/strip.c			\
++	src/stringmap.c							\
+ 	src/tempfile.c src/timefile.c src/timeval.c src/traceenv.c	\
+ 	src/trace.c src/util.c src/where.c				
+ 
+@@ -258,6 +260,7 @@
+ 	src/netutil.h							\
+ 	src/renderer.h src/rpc.h					\
+ 	src/setuid.h src/snprintf.h src/state.h src/strip.h		\
++	src/stringmap.h							\
+ 	src/timefile.h src/timeval.h src/trace.h			\
+ 	src/types.h							\
+ 	src/util.h							\
+diff -ur /home/matthewbg/distcc-2.16/src/serve.c distcc-2.16/src/serve.c
+--- /home/matthewbg/distcc-2.16/src/serve.c	2004-07-06 01:08:14.000000000 -0700
++++ distcc-2.16/src/serve.c	2004-07-29 16:06:45.000000000 -0700
+@@ -85,7 +85,7 @@
+ #include "filename.h"
+ #include "hosts.h"
+ #include "daemon.h"
+-
++#include "stringmap.h"
+ 
+ /**
+  * We copy all serious distccd messages to this file, as well as sending the
+@@ -177,6 +177,83 @@
+ 
+ 
+ /**
++ * Check argv0 against a list of allowed commands, and possibly map it to a new value.
++ * If *compiler_name is changed, the original value is free'd, and a new value is malloc'd.
++ *
++ * If the environment variable DISTCC_CMDLIST is set,
++ * load a list of supported commands from the file named by DISTCC_CMDLIST, and
++ * refuse to serve any command whose last DISTCC_CMDLIST_MATCHWORDS last words
++ * don't match those of a command in that list.
++ * Each line of the file is simply a filename.
++ * This is chiefly useful for those few installations which have so many 
++ * compilers available such that the compiler must be specified with an absolute pathname.
++ *
++ * Example: if the compilers are installed in a different location on 
++ * this server, e.g. if they've been copied from a shared NFS directory onto a 
++ * local hard drive, you might have lines like
++ *   /local/tools/blort/sh4-linux/gcc-3.3.3-glibc-2.2.5/bin/sh4-linux-gcc
++ *   /local/tools/blort/sh4-linux/gcc-2.95.3-glibc-2.2.5/bin/sh4-linux-gcc
++ * and set DISTCC_CMDLIST_MATCHWORDS=3; that way e.g. any of the commands
++ *   /local/tools/gcc-3.3.3-glibc-2.2.5/bin/sh4-linux-gcc
++ *   /shared/tools/gcc-3.3.3-glibc-2.2.5/bin/sh4-linux-gcc
++ *   /zounds/gcc-3.3.3-glibc-2.2.5/bin/sh4-linux-gcc
++ * will invoke 
++ *   /local/tools/blort/sh4-linux/gcc-3.3.3-glibc-2.2.5/bin/sh4-linux-gcc
++ *
++ * Returns 0 (which will abort the compile) if compiler not in list. 
++ * (This is because the list is intended to be complete,
++ * and any attempt to use a command not in the list indicates a confused user.
++ * FIXME: should probably give user the option of changing this
++ * behavior at runtime, so normal command lookup can continue even if command
++ * not found in table.)
++ **/
++static int dcc_remap_compiler(char **compiler_name)
++{
++	static int cmdlist_checked=0;
++	static stringmap_t *map=0;
++	const char *newname;
++
++	/* load file if not already */
++	if (!cmdlist_checked) {
++		char *filename;
++		cmdlist_checked = 1;
++		filename = getenv("DISTCC_CMDLIST");
++		if (filename) {
++			const char *nw = getenv("DISTCC_CMDLIST_NUMWORDS");
++			int numFinalWordsToMatch=1;
++			if (nw)
++				numFinalWordsToMatch = atoi(nw);
++			map = stringmap_load(filename, numFinalWordsToMatch);
++			if (map) {
++				rs_trace("stringmap_load(%s, %d) found %d commands", filename, numFinalWordsToMatch, map->n);
++			} else {
++				rs_log_error("stringmap_load(%s, %d) failed: %s", filename, numFinalWordsToMatch, strerror(errno));
++				return EXIT_IO_ERROR;
++			}
++		}
++	}
++
++	if (!map)
++		return 1;	/* no list of allowed names, so ok */
++
++	/* Find what this compiler maps to */
++	newname = stringmap_lookup(map, *compiler_name);
++	if (!newname) {
++		rs_log_warning("lookup of %s in DISTCC_CMDLIST failed", *compiler_name);
++		return 0;	/* not in list, so forbidden.  FIXME: make failure an option */
++	}
++
++	/* If mapping is not the identity mapping, replace the original name */
++	if (strcmp(newname, *compiler_name)) {
++		rs_trace("changed compiler from %s to %s", *compiler_name, newname);
++		free(*compiler_name);
++		*compiler_name = strdup(newname);
++	}
++	return 1;
++}
++
++
++/**
+  * Find the absolute path for the first occurrence of @p compiler_name on the
+  * PATH.  Print a warning if it looks like a symlink to distcc.
+  *
+@@ -298,6 +375,9 @@
+         || (ret = dcc_set_output(argv, temp_o)))
+         goto out_cleanup;
+ 
++    if (!dcc_remap_compiler(&argv[0]))
++	goto out_cleanup;
++
+     if ((ret = dcc_check_compiler_masq(argv[0])))
+         goto out_cleanup;
+     
+diff -Naur distcc-2.13/src/stringmap.c distcc-2.13-dank/src/stringmap.c
+--- distcc-2.13/src/stringmap.c	1969-12-31 16:00:00.000000000 -0800
++++ distcc-2.13-dank/src/stringmap.c	2004-03-29 13:51:20.000000000 -0800
+@@ -0,0 +1,116 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <limits.h>
++#include <assert.h>
++#include "stringmap.h"
++
++#ifndef NULL
++#define NULL 0
++#endif
++
++/* Load the given list of strings into the key/value map.
++ * The key for each string is the numFinalWordsToMatch of the string;
++ * the value for each string is the entire string.
++ * FIXME: doesn't work for utf-8 strings, since it scans raw chars for /
++ */
++stringmap_t *stringmap_load(const char *filename, int numFinalWordsToMatch)
++{
++	stringmap_t *result = calloc(1, sizeof(*result));
++	FILE *fp = fopen(filename, "r");
++	char buf[2*PATH_MAX];
++	int n;
++
++	result->numFinalWordsToMatch = numFinalWordsToMatch;
++	if (!fp)
++		return NULL;
++	n=0;
++	while (fgets(buf, sizeof(buf), fp))
++		n++;
++	result->n = n;
++	result->map = malloc(n * sizeof(result->map[0]));
++
++	rewind(fp);
++	n=0;
++	while (fgets(buf, sizeof(buf), fp)) {
++		int pos, w;
++
++		int len = strlen(buf);
++		/* strip trailing \n */
++		if (len > 0 && buf[len-1] == '\n') {
++			buf[len-1] = 0;
++			len--;
++		}
++		/* set pos to the start of the significant part of the string */
++		for (pos=len-1, w=0; pos>0; pos--) {
++			if (buf[pos] == '/') {
++				w++;
++				if (w >= numFinalWordsToMatch)
++					break;
++			}
++		}
++
++		result->map[n].value = strdup(buf);
++		result->map[n].key = strdup(buf+pos);
++		n++;
++	}
++	return result;
++}
++
++const char *stringmap_lookup(const stringmap_t *map, const char *string)
++{
++	int i, w;
++	int len = strlen(string);
++	int pos;
++	for (pos=len-1, w=0; pos>0; pos--) {
++		if (string[pos] == '/') {
++			w++;
++			if (w >= map->numFinalWordsToMatch)
++				break;
++		}
++	}
++	for (i=0; i<map->n; i++) {
++		/*printf("Comparing %s and %s\n", map->map[i].key, string+pos);*/
++		if (!strcmp(map->map[i].key, string+pos))
++			return map->map[i].value;
++	}
++	return NULL;
++}
++
++#if 0
++
++void dumpMap(stringmap_t *sm)
++{
++	int i;
++	printf("map has %d elements, and numFinalWordsToMatch is %d\n", sm->n, sm->numFinalWordsToMatch);
++	for (i=0; i < sm->n; i++) {
++		printf("row %d: key %s, value %s\n", i, sm->map[i].key, sm->map[i].value);
++	}
++}
++
++#define verifyMap(sm, a, b) { \
++	const char *c = stringmap_lookup(sm, a); \
++	if (!b) \
++		assert(!c); \
++	else { \
++		assert(c); \
++		assert(!strcmp(b, c)); } }
++	
++main(int argc, char **argv)
++{
++	FILE *fp;
++	stringmap_t *sm;
++
++	fp = fopen("stringmap_test.dat", "w");
++	fprintf(fp, "/foo/bar/bletch\n");
++	fclose(fp);
++
++
++	sm = stringmap_load("stringmap_test.dat", 1);
++	dumpMap(sm);
++	verifyMap(sm, "/bar/bletch", "/foo/bar/bletch");
++	verifyMap(sm, "bletch", NULL);
++	verifyMap(sm, "/foo/bar/bletch", "/foo/bar/bletch");
++}
++
++#endif
+diff -Naur distcc-2.13/src/stringmap.h distcc-2.13-dank/src/stringmap.h
+--- distcc-2.13/src/stringmap.h	1969-12-31 16:00:00.000000000 -0800
++++ distcc-2.13-dank/src/stringmap.h	2004-03-29 13:51:20.000000000 -0800
+@@ -0,0 +1,27 @@
++#ifndef STRINGMAP_H
++#define STRINGMAP_H
++
++typedef struct {
++	/* the strings, and what they map to */
++	struct {
++		char *key;
++		char *value;
++	} *map;
++
++	/* number of elements in map */
++	int n;
++
++	/* if nonzero, ignore all but this many trailing words,
++         * where words are separated by the '/' char
++	 * Example:
++	 * 	comparison	num=1	num=2	num=3	
++	 *	a/b/z =? 1/y/z	match	no	no
++	 *	a/b/z =? 1/b/z	match	match	no
++	 */
++	int numFinalWordsToMatch;
++} stringmap_t;
++
++stringmap_t *stringmap_load(const char *filename, int numFinalWordsToMatch);
++const char *stringmap_lookup(const stringmap_t *map, const char *string);
++
++#endif

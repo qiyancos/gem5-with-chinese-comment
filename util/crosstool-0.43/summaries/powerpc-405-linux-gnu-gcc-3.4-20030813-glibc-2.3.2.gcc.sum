@@ -1,0 +1,163 @@
+LAST_UPDATED: gcc-3.4-20030813
+
+Target is powerpc-405-linux-gnu
+Host   is i686-host_pc-linux-gnu
+
+		=== g++ tests ===
+
+
+Running target powerpc-405-linux-gnu
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -g  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -g  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -g  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O0  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O1  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O2  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O2  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O2  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O3  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O3  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O3  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O3 -g  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O3 -g  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O3 -g  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -Os  -fbranch-probabilities
+FAIL: g++.dg/ext/pretty1.C scan-assembler top level
+FAIL: g++.dg/ext/pretty2.C (test for excess errors)
+WARNING: g++.dg/ext/pretty2.C compilation failed to produce executable
+FAIL: g++.dg/init/array10.C (test for excess errors)
+XPASS: g++.dg/other/packed1.C execution test
+WARNING: g++.old-deja/g++.mike/p10769a.C compilation failed to produce executable
+WARNING: g++.old-deja/g++.other/enum5.C compilation failed to produce executable
+XPASS: g++.old-deja/g++.other/init5.C execution test
+WARNING: g++.old-deja/g++.pt/friend44.C compilation failed to produce executable
+
+		=== g++ Summary ===
+
+# of expected passes		8808
+# of unexpected failures	10
+# of unexpected successes	2
+# of expected failures		64
+# of unresolved testcases	14
+# of unsupported tests		66
+/home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.19/build/powerpc-405-linux-gnu/gcc-3.4-20030813-glibc-2.3.2/build-gcc/gcc/testsuite/../g++ version 3.4 20030813 (experimental)
+
+Host   is i686-host_pc-linux-gnu
+
+		=== gcc tests ===
+
+
+Running target powerpc-405-linux-gnu
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O1 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O1 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O2 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O2 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O3 -fomit-frame-pointer 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O3 -fomit-frame-pointer 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O3 -g 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O3 -g 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -Os 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -Os 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -O1 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -O2 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -O3 -fomit-frame-pointer 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -O3 -g 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -Os 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O1 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O2 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O3 -fomit-frame-pointer 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O3 -fomit-frame-pointer -funroll-loops 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O3 -fomit-frame-pointer -funroll-all-loops -finline-functions 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O3 -g 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O0 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O1 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O2 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O3 -fomit-frame-pointer 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O3 -g 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -Os 
+FAIL: gcc.dg/compat/scalar-by-value-3 c_compat_x_tst.o-c_compat_y_tst.o execute 
+FAIL: gcc.dg/compat/scalar-return-3 c_compat_x_tst.o-c_compat_y_tst.o execute 
+FAIL: gcc.dg/20020103-1.c scan-assembler-not LC
+FAIL: gcc.dg/20020118-1.c execution test
+FAIL: gcc.dg/980827-1.c (test for excess errors)
+WARNING: gcc.dg/980827-1.c compilation failed to produce executable
+FAIL: gcc.dg/altivec-5.c (test for excess errors)
+FAIL: gcc.dg/builtins-18.c (test for excess errors)
+FAIL: gcc.dg/builtins-20.c (test for excess errors)
+FAIL: gcc.dg/ppc-sdata-1.c scan-assembler sdat@sdarel\\(13\\)
+FAIL: gcc.dg/ppc-sdata-1.c scan-assembler sdat2@sda21\\(2\\)
+XPASS: gcc.dg/setjmp-1.c spurious clobbered warning (test for bogus messages, line 16)
+FAIL: gcc.dg/format/gcc_diag-1.c bad argument types (test for warnings, line 184)
+FAIL: gcc.dg/format/gcc_diag-1.c (test for excess errors)
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -g  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -g  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -g  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O0  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O1  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O2 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O2 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O2 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O3 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O3 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O3 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O3 -g -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O3 -g -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O3 -g -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -Os  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -g  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -g  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -g  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O0  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O1  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O2 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O2 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O2 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O3 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O3 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O3 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O3 -g -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O3 -g -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O3 -g -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -Os  -fbranch-probabilities
+
+		=== gcc Summary ===
+
+# of expected passes		23718
+# of unexpected failures	42
+# of unexpected successes	1
+# of expected failures		79
+# of unresolved testcases	39
+# of unsupported tests		251
+/home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.19/build/powerpc-405-linux-gnu/gcc-3.4-20030813-glibc-2.3.2/build-gcc/gcc/xgcc version 3.4 20030813 (experimental)
+
+Host   is powerpc-405-linux-gnu
+
+		=== libstdc++-v3 tests ===
+
+
+Running target powerpc-405-linux-gnu
+
+		=== libstdc++-v3 Summary ===
+
+
+Compiler version: 3.4 20030813 (experimental) 
+Platform: powerpc-405-linux-gnu
+configure flags: --target=powerpc-405-linux-gnu --host=i686-host_pc-linux-gnu --prefix=/opt/cegl-2.0/powerpc-405-linux-gnu/gcc-3.4-20030813-glibc-2.3.2 --with-cpu=405 --enable-cxx-flags=-mcpu=405 --with-headers=/opt/cegl-2.0/powerpc-405-linux-gnu/gcc-3.4-20030813-glibc-2.3.2/powerpc-405-linux-gnu/include --disable-nls --enable-threads=posix --enable-symvers=gnu --enable-__cxa_atexit --enable-languages=c,c++ --enable-shared --enable-c99 --enable-long-long

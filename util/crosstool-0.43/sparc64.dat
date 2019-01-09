@@ -1,0 +1,4 @@
+TARGET=sparc64-unknown-linux-gnu
+TARGET_CFLAGS="-O"
+GCC_EXTRA_CONFIG="--disable-multilib --with-cpu=ultrasparc3 --enable-cxx-flags=-mcpu=ultrasparc3"
+KERNELCONFIG=`pwd`/sparc64.config

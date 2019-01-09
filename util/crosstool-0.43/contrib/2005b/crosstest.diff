@@ -1,0 +1,58 @@
+Message-ID: <42810B65.6070403@mvista.com>
+Date: Tue, 10 May 2005 12:28:37 -0700
+From: Khem Raj <kraj@mvista.com>
+Organization: MontaVista Software Inc.
+To: Khem Raj <kraj@mvista.com>
+CC: Daniel Kegel <dank@kegel.com>, crossgcc list <crossgcc@sources.redhat.com>
+Subject: Re: Dejagnu error while remote testing cross gcc.
+References: <Pine.LNX.4.61.0505021640120.6550@localhost.localdomain> <4280FA15.40908@mvista.com> <4280FDB2.7000806@kegel.com> <428106DE.5020903@mvista.com> <428109DA.3090505@mvista.com>
+In-Reply-To: <428109DA.3090505@mvista.com>
+
+
+>>> I stumbled over this issue while doing remote testing for cross-gcc 3.4.3. 
+>>> The tests run fine on native system. Has someone seen this problem before.
+>>> runtest -version
+>>>
+>>> WARNING: Couldn't find the global config file.
+>>> Expect version is 5.42.1
+>>> Tcl version is 8.4
+>>> Framework version is 1.4.4
+>>>
+>>> ERROR: (DejaGnu) proc "gcc_load /local/BUILD/gcc-3.4.3/objdir/gcc/testsuite/abs-1.x0 {} {}" does not exist.
+>>> The error code is NONE
+>>> The info on the error is:
+>>> close: spawn id exp6 not open
+>>> while executing
+>>> "close -i exp6"
+>>> invoked from within
+>>> "catch "close -i $spawn_id""
+>>
+>> There is an old message I found in dejagnu archives from you :-)
+>> http://lists.gnu.org/archive/html/dejagnu/2003-06/msg00077.html
+>
+> btw. I copied standard.exp from /usr/share/dejagnu to ~/kraj/boards and added
+>
+> ~/kraj/bin to
+> lappend boards_dir "~/board"
+>
+> in my master.exp and I am able to proceed.
+
+The following patch to crosstest.sh will fix this problem.
+
+
+-- 
+Khem Raj
+MontaVista Software Inc.
+1237 E. Arques Ave.Sunnyvale CA 94085
+web http://www.mvista.com 
+
+--- crosstest.sh.orig	2005-05-10 12:25:45.000000000 -0700
++++ crosstest.sh	2005-05-10 12:26:26.000000000 -0700
+@@ -59,6 +59,7 @@
+ mkdir -p $TOP_DIR/boards
+ cat > $TOP_DIR/boards/master.exp <<_EOF_
+ lappend boards_dir $TOP_DIR/boards
++lappend boards_dir /usr/share/dejagnu
+ set myboard \$target_triplet
+ set target_list [list \$target_triplet]
+ _EOF_

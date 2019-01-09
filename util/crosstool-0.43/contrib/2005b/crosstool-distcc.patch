@@ -1,0 +1,251 @@
+diff -rNu crosstool-0.28-rc36.dist/buildcommonrpm.sh crosstool-0.28-rc36.joshh/buildcommonrpm.sh
+--- crosstool-0.28-rc36.dist/buildcommonrpm.sh	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.28-rc36.joshh/buildcommonrpm.sh	2004-09-22 10:36:08.000000000 -0700
+@@ -0,0 +1,62 @@
++#!/bin/sh
++# Build a noarch rpm containing files common to all crosstool builds
++
++test -z "${BUILD_DIR}"    && abort "Please set BUILD_DIR to an absolute path where the RPM is to be built"
++
++set -ex
++
++# build crosstool-common noarch rpm
++VERSION=0.28_rc36
++PKG=crosstool-common-$VERSION
++NOARCH_TOP=${NOARCH_TOP-/opt/crosstool}
++TARBALLS_DIR=${TARBALLS_DIR-$BUILD_DIR}
++
++# Create rpmrc and rpmmacros for our rpmbuild
++# Usage: mkrpmstuff RESULTDIR TARBALLSDIR
++mkrpmstuff() {
++  cat >$1/rpmrc <<_EOF_
++include: /usr/lib/rpm/rpmrc
++macrofiles: /usr/lib/rpm/macros:/usr/lib/rpm/%{_target}/macros:/etc/rpm/macros.specspo:/etc/rpm/macros:/etc/rpm/%{_target}/macros:$1/rpmmacros
++_EOF_
++  cat >$1/rpmmacros <<_EOF_
++%_topdir        $1
++%_sourcedir     $2
++%_specdir       %{_topdir}
++%_tmppath       %{_topdir}/tmp
++%_builddir      %{_topdir}/BUILD
++%_buildroot     %{_tmppath}/%{name}-root
++%_rpmdir        %{_topdir}/RPMS
++%_srcrpmdir     %{_topdir}/SRPMS
++%_rpmfilename   %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm
++%packager       `whoami`@`hostname`
++_EOF_
++  test -d $1/BUILD || mkdir $1/BUILD
++  test -d $1/RPMS || mkdir $1/RPMS
++  test -d $1/SRPMS || mkdir $1/SRPMS
++}
++
++mkrpmstuff $BUILD_DIR $TARBALLS_DIR
++
++# find the root of $NOARCH_TOP
++dir=$NOARCH_TOP
++tmp=$NOARCH_TOP
++while [ "$tmp" != "/" ]; do
++  dir=$tmp
++  tmp=`dirname $dir`
++  CROSSTOOL_BASEDIRS="%dir $dir\n"$CROSSTOOL_BASEDIRS
++done
++
++# create a tarball with the source
++rm -rf $BUILD_DIR/$PKG
++mkdir -p $BUILD_DIR/$PKG
++cp config.guess $BUILD_DIR/$PKG
++sed -e "s,__CROSSTOOL_DIR__,$NOARCH_TOP," \
++    -e "s,__CROSSTOOL_BASEDIRS__,$CROSSTOOL_BASEDIRS," \
++    -e "s,__VERSION__,$VERSION," \
++    < crosstool-common.spec.in \
++    > $BUILD_DIR/$PKG/crosstool-common.spec
++tar -C $BUILD_DIR -czf $TARBALLS_DIR/$PKG.tar.gz $PKG
++
++# build the rpm
++cd $BUILD_DIR
++rpmbuild --rcfile=$BUILD_DIR/rpmrc -tb $TARBALLS_DIR/$PKG.tar.gz
+diff -rNu crosstool-0.28-rc36.dist/buildrpm.sh crosstool-0.28-rc36.joshh/buildrpm.sh
+--- crosstool-0.28-rc36.dist/buildrpm.sh	2004-08-22 18:17:03.000000000 -0700
++++ crosstool-0.28-rc36.joshh/buildrpm.sh	2004-09-22 10:35:56.000000000 -0700
+@@ -56,6 +56,17 @@
+ 
+ test -d $BUILD_DIR || mkdir -p $BUILD_DIR
+ 
++# Obtain a list of all directories from $PREFIX to / allowing RPM to
++# set the correct permissions on these dirs if they don't exist
++dir=$PREFIX
++tmp=$PREFIX
++while [ "$tmp" != "/" ]; do
++  dir=$tmp
++  tmp=`dirname $dir`
++  PREFIX_BASEDIRS="%dir $dir\n"$PREFIX_BASEDIRS
++done
++
++
+ # FIXME: need better way to extract version numbers?
+ GCCVERSION=`echo $GCC_DIR | sed -e 's/.*gcc-//'`
+ GLIBCVERSION=`echo $GLIBC_DIR | sed -e 's/.*glibc-//'`
+@@ -72,6 +83,7 @@
+     -e "s,__PREFIX__,$PREFIX,g" \
+     -e "s,__VERSION__,$VERSION,g" \
+     -e "s,__MUNGEDVERSION__,$MUNGEDVERSION,g" \
++    -e "s,__PREFIX_BASEDIRS__,$PREFIX_BASEDIRS,g" \
+     -e "$NOLIBPKGS" \
+     < crosstool-generic.spec.in \
+     > ${BUILD_DIR}/crosstool-$TARGET-$TOOLCOMBO.spec
+diff -rNu crosstool-0.28-rc36.dist/crosstool-common.spec.in crosstool-0.28-rc36.joshh/crosstool-common.spec.in
+--- crosstool-0.28-rc36.dist/crosstool-common.spec.in	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.28-rc36.joshh/crosstool-common.spec.in	2004-09-22 15:10:10.000000000 -0700
+@@ -0,0 +1,30 @@
++%define crosstool_dir      __CROSSTOOL_DIR__
++%define _target_cpu        noarch
++Name: crosstool-common
++Version: __VERSION__
++Release: 2
++Source: %{name}-%{version}.tar.gz
++License: GPL
++Group: Development/Tools
++Summary: A placeholder package for files common to the crosstool toolchains
++BuildRoot: %{_buildroot}
++%description
++A placeholder package for files common to the crosstool toolchains
++
++%prep
++%setup -q
++
++%build
++
++%install
++if [ "$RPM_BUILD_ROOT" != "/" ]; then
++  rm -rf $RPM_BUILD_ROOT
++fi
++mkdir -p $RPM_BUILD_ROOT/%{crosstool_dir}/common/bin
++cp config.guess $RPM_BUILD_ROOT/%{crosstool_dir}/common/bin
++chmod -R 755 $RPM_BUILD_ROOT
++
++%files
++%defattr(755,root,root,755)
++__CROSSTOOL_BASEDIRS__
++%{crosstool_dir}/common
+diff -rNu crosstool-0.28-rc36.dist/crosstool-distcc.spec.in crosstool-0.28-rc36.joshh/crosstool-distcc.spec.in
+--- crosstool-0.28-rc36.dist/crosstool-distcc.spec.in	2004-08-16 23:10:32.000000000 -0700
++++ crosstool-0.28-rc36.joshh/crosstool-distcc.spec.in	2004-09-23 15:00:19.000000000 -0700
+@@ -2,7 +2,7 @@
+ %undefine __check_files
+ Name: crosstool-distcc
+ Version: 2.16
+-Release: 1
++Release: 2
+ 
+ Summary: distcc is a program to distribute builds C/C++/ Objective C/C++
+ License: GNU GPL
+@@ -36,7 +36,11 @@
+ # Ditto
+ 
+ %files
+-%defattr(-,root,root)
++%defattr(-,root,root,755)
++%dir __PREFIX_BASEDIRS__
++%dir __PREFIX__/bin
++%dir __PREFIX__/man
++%dir __PREFIX__/man/man1
+ __PREFIX__/bin/distcc
+ __PREFIX__/bin/distccmon-text
+ __PREFIX__/bin/mkdistcclinks.sh
+@@ -68,7 +72,8 @@
+ /sbin/chkconfig --add crosstool-distccd
+ # Enable and start the service (FIXME: is this a good idea?)
+ /sbin/chkconfig crosstool-distccd on
+-/sbin/service crosstool-distccd start > /dev/null 2>&1
++# NOTE(joshh): Don't start the service. Require it be started manually
++#/sbin/service crosstool-distccd start > /dev/null 2>&1
+ 
+ %preun server
+ /sbin/service crosstool-distccd stop > /dev/null 2>&1 || true 
+@@ -76,7 +81,12 @@
+ rm /etc/init.d/crosstool-distccd
+ 
+ %files server
+-%defattr(-,root,root)
++%defattr(-,root,root,755)
++%dir __PREFIX_BASEDIRS__
++%dir __PREFIX__/bin
++%dir __PREFIX__/man
++%dir __PREFIX__/man/man1
++%dir __PREFIX__/etc
+ __PREFIX__/bin/distccd
+ __PREFIX__/bin/crosstool-distccd
+ __PREFIX__/man/man1/distccd.1
+diff -rNu crosstool-0.28-rc36.dist/crosstool-generic.spec.in crosstool-0.28-rc36.joshh/crosstool-generic.spec.in
+--- crosstool-0.28-rc36.dist/crosstool-generic.spec.in	2004-08-16 23:10:32.000000000 -0700
++++ crosstool-0.28-rc36.joshh/crosstool-generic.spec.in	2004-09-22 15:09:53.000000000 -0700
+@@ -16,7 +16,7 @@
+ Summary: GNU Compiler + GNU C Library cross-toolchain
+ Name: crosstool-%{toolcombo}
+ Version: %{version}
+-Release: 1
++Release: 2
+ License: GPL
+ Group: Development/Languages
+ %define base_url http://www.kegel.com/crosstool/
+@@ -85,7 +85,8 @@
+ if test -x $PREFIX_GRANDPARENT/common/bin/mkdistcclinks.sh; then cd $PREFIX_GRANDPARENT; sh common/bin/mkdistcclinks.sh > /dev/null; fi
+ 
+ %files %{gnutarget}
+-%defattr(-,root,root)
++%defattr(-,root,root,755)
++__PREFIX_BASEDIRS__
+ __PREFIX__/
+ 
+ %package %{gnutarget}-libgcc
+diff -rNu crosstool-0.28-rc36.dist/demo-rpm.sh crosstool-0.28-rc36.joshh/demo-rpm.sh
+--- crosstool-0.28-rc36.dist/demo-rpm.sh	2004-08-08 21:06:27.000000000 -0700
++++ crosstool-0.28-rc36.joshh/demo-rpm.sh	2004-09-21 15:09:36.000000000 -0700
+@@ -28,5 +28,11 @@
+ #eval `cat i686.dat gcc-3.4.1-glibc-2.1.3.dat`    sh all.sh --notest --buildrpm
+ #eval `cat x86_64.dat gcc-3.4.1-glibc-2.3.2.dat`  sh all.sh --notest --buildrpm
+ 
++ mkdir -p build/crosstool-common
++ NOARCH_TOP=$TIPPY_TOP \
++ BUILD_DIR=`pwd`/build/crosstool-common \
++ sh buildcommonrpm.sh
++
+ echo Done.  Result:
+-ls -l build/distcc*/RPMS/*.rpm build/*/*/RPMS/*.rpm
++ls -l build/distcc*/RPMS/*.rpm build/*/*/RPMS/*.rpm \
++      build/crosstool-common/RPMS/*.rpm
+diff -rNu crosstool-0.28-rc36.dist/gcc-3.4.2-glibc-2.1.3.dat crosstool-0.28-rc36.joshh/gcc-3.4.2-glibc-2.1.3.dat
+--- crosstool-0.28-rc36.dist/gcc-3.4.2-glibc-2.1.3.dat	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.28-rc36.joshh/gcc-3.4.2-glibc-2.1.3.dat	2004-09-22 10:40:12.000000000 -0700
+@@ -0,0 +1,6 @@
++BINUTILS_DIR=binutils-2.15
++GCC_DIR=gcc-3.4.2
++GLIBC_DIR=glibc-2.1.3
++LINUX_DIR=linux-2.4.26
++GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.1.3
++GLIBCCRYPT_FILENAME=glibc-crypt-2.1
+diff -rNu crosstool-0.28-rc36.dist/mkdistcc.sh crosstool-0.28-rc36.joshh/mkdistcc.sh
+--- crosstool-0.28-rc36.dist/mkdistcc.sh	2004-08-16 23:10:32.000000000 -0700
++++ crosstool-0.28-rc36.joshh/mkdistcc.sh	2004-09-23 14:56:09.000000000 -0700
+@@ -94,7 +94,20 @@
+ 
+ # Build an RPM if desired
+ if test "$opt_buildrpm" = "1"; then
+-    sed -e "s,__PREFIX__,$RESULT_TOP/common,g" < crosstool-distcc.spec.in > $BUILD_DIR/$DISTCC/crosstool-distcc.spec
++    # Obtain a list of all directories from $PREFIX to / allowing RPM to
++    # set the correct permissions on these dirs if they don't exist
++    dir=$PREFIX
++    tmp=$PREFIX
++    while [ "$tmp" != "/" ]; do
++      dir=$tmp
++      tmp=`dirname $dir`
++      PREFIX_BASEDIRS="%dir $dir\n"$PREFIX_BASEDIRS
++    done
++    
++    sed -e "s,__PREFIX__,$PREFIX,g" \
++        -e "s,__PREFIX_BASEDIRS__,$PREFIX_BASEDIRS,g" \
++        < crosstool-distcc.spec.in \
++        > $BUILD_DIR/$DISTCC/crosstool-distcc.spec
+     mkrpmstuff $BUILD_DIR/$DISTCC $TARBALLS_DIR
+ 
+     test -d $BUILD_DIR/$DISTCC/BUILD || mkdir $BUILD_DIR/$DISTCC/BUILD

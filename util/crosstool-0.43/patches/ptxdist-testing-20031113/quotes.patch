@@ -1,0 +1,195 @@
+Index: ptxdist-testing/config/arch/alpha.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/alpha.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 alpha.dat
+--- ptxdist-testing/config/arch/alpha.dat	29 Sep 2003 16:05:08 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/alpha.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/alpha.config
+ TARGET=alpha-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/arm.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/arm.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 arm.dat
+--- ptxdist-testing/config/arch/arm.dat	29 Sep 2003 16:05:08 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/arm.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/arm.config
+ TARGET=arm-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/arm9tdmi.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/arm9tdmi.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 arm9tdmi.dat
+--- ptxdist-testing/config/arch/arm9tdmi.dat	29 Sep 2003 16:05:08 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/arm9tdmi.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,4 +1,4 @@
+ KERNELCONFIG=$PWD/arm.config
+ TARGET=arm-9dtmi-linux-gnu
+ GCC_EXTRA_CONFIG="--with-cpu=arm9tdmi --enable-cxx-flags=-mcpu=arm9tdmi"
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/cris.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/cris.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 cris.dat
+--- ptxdist-testing/config/arch/cris.dat	29 Sep 2003 16:05:08 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/cris.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/cris.config
+ TARGET=cris-unknown-linux-gnu
+-TARGET_CFLAGS="-O2 -finline-limit=10000"
++TARGET_CFLAGS=-O2 -finline-limit=10000
+Index: ptxdist-testing/config/arch/hppa.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/hppa.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 hppa.dat
+--- ptxdist-testing/config/arch/hppa.dat	29 Sep 2003 16:05:08 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/hppa.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/hppa.config
+ TARGET=hppa-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/i686.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/i686.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 i686.dat
+--- ptxdist-testing/config/arch/i686.dat	29 Sep 2003 16:05:08 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/i686.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,2 +1,2 @@
+ TARGET=i686-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/ia64.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/ia64.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 ia64.dat
+--- ptxdist-testing/config/arch/ia64.dat	29 Sep 2003 16:05:08 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/ia64.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/ia64.config
+ TARGET=ia64-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/m68k.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/m68k.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 m68k.dat
+--- ptxdist-testing/config/arch/m68k.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/m68k.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/m68k.config
+ TARGET=m68k-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/mipsel.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/mipsel.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 mipsel.dat
+--- ptxdist-testing/config/arch/mipsel.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/mipsel.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/mipsel.config
+ TARGET=mipsel-unknown-linux-gnu
+-TARGET_CFLAGS="-O2 -finline-limit=10000"
++TARGET_CFLAGS=-O2 -finline-limit=10000
+Index: ptxdist-testing/config/arch/powerpc-405.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/powerpc-405.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 powerpc-405.dat
+--- ptxdist-testing/config/arch/powerpc-405.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/powerpc-405.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,5 +1,5 @@
+ TARGET=powerpc-405-linux-gnu
+-TARGET_CFLAGS="-O -mcpu=405"
+-TARGET_CXXFLAGS="-O -mcpu=405"
++TARGET_CFLAGS=-O -mcpu=405
++TARGET_CXXFLAGS=-O -mcpu=405
+ GCC_EXTRA_CONFIG="--with-cpu=405 --enable-cxx-flags=-mcpu=405"
+ GLIBC_EXTRA_CONFIG="--without-fp"
+Index: ptxdist-testing/config/arch/powerpc-7450.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/powerpc-7450.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 powerpc-7450.dat
+--- ptxdist-testing/config/arch/powerpc-7450.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/powerpc-7450.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ TARGET=powerpc-7450-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+ GCC_EXTRA_CONFIG="--with-cpu=7450 --enable-altivec"
+Index: ptxdist-testing/config/arch/powerpc-750.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/powerpc-750.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 powerpc-750.dat
+--- ptxdist-testing/config/arch/powerpc-750.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/powerpc-750.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ TARGET=powerpc-750-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+ GCC_EXTRA_CONFIG="--with-cpu=750"
+Index: ptxdist-testing/config/arch/s390.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/s390.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 s390.dat
+--- ptxdist-testing/config/arch/s390.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/s390.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/s390.config
+ TARGET=s390-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/sh4.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/sh4.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 sh4.dat
+--- ptxdist-testing/config/arch/sh4.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/sh4.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,4 +1,4 @@
+ KERNELCONFIG=$PWD/sh4.config
+ TARGET=sh4-unknown-linux-gnu
+-TARGET_CFLAGS="-O -ml -m4"
++TARGET_CFLAGS=-O -ml -m4
+ GLIBC_CONFIGPARMS="no-z-defs=yes"
+Index: ptxdist-testing/config/arch/sparc.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/sparc.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 sparc.dat
+--- ptxdist-testing/config/arch/sparc.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/sparc.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,3 +1,3 @@
+ KERNELCONFIG=$PWD/sparc.config
+ TARGET=sparc-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O
+Index: ptxdist-testing/config/arch/x86_64.dat
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/config/arch/x86_64.dat,v
+retrieving revision 1.1.1.1
+diff -u -r1.1.1.1 x86_64.dat
+--- ptxdist-testing/config/arch/x86_64.dat	29 Sep 2003 16:05:10 -0000	1.1.1.1
++++ ptxdist-testing/config/arch/x86_64.dat	12 Nov 2003 17:14:55 -0000
+@@ -1,2 +1,2 @@
+ TARGET=x86_64-unknown-linux-gnu
+-TARGET_CFLAGS="-O"
++TARGET_CFLAGS=-O

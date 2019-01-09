@@ -1,0 +1,5 @@
+KERNELCONFIG=`pwd`/pentium3.config
+TARGET=i686-piii-linux-gnu
+TARGET_CFLAGS="-O2"
+GCC_EXTRA_CONFIG="--with-cpu=pentium3 --with-arch=pentium3"
+

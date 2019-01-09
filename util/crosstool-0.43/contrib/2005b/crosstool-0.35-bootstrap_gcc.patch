@@ -1,0 +1,20 @@
+--- crosstool-0.35/crosstool.sh	2005-05-20 08:43:47.000000000 +0200
++++ crosstool-0.35-matej/crosstool.sh	2005-07-01 12:15:23.000000000 +0200
+@@ -330,7 +330,7 @@
+         # Another workaround might be to tell configure to not use any cross options to $(CC).
+         # The real fix would be to get install-headers to not generate errlist-compat.c.
+         libc_cv_ppc_machine=yes \
+-                make sysdeps/gnu/errlist.c
++                make CFLAGS=-DBOOTSTRAP_GCC sysdeps/gnu/errlist.c
+         mkdir -p stdio-common
+         # sleep for 2 seconds for benefit of filesystems with lousy time resolution, like FAT,
+         # so make knows for sure errlist-compat.c doesn't need generating
+@@ -338,7 +338,7 @@
+         touch stdio-common/errlist-compat.c
+     fi
+     libc_cv_ppc_machine=yes \
+-    make cross-compiling=yes install_root=${SYSROOT} $GLIBC_SYSROOT_ARG install-headers
++    make cross-compiling=yes install_root=${SYSROOT} CFLAGS=-DBOOTSTRAP_GCC $GLIBC_SYSROOT_ARG install-headers
+ 
+     # Two headers -- stubs.h and features.h -- aren't installed by install-headers,
+     # so do them by hand.  We can tolerate an empty stubs.h for the moment.

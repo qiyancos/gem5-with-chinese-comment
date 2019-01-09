@@ -1,0 +1,66 @@
+--- glibc-2.2.5/sysdeps/arm/dl-machine.h.old	2005-03-31 18:44:49.000000000 +0200
++++ glibc-2.2.5/sysdeps/arm/dl-machine.h	2005-03-31 18:50:23.000000000 +0200
+@@ -374,7 +374,14 @@
+ extern char **_dl_argv;
+ 
+ /* Deal with an out-of-range PC24 reloc.  */
+-static Elf32_Addr
++#if __GNUC__ >= 4
++  auto inline Elf32_Addr
++#else
++  static inline Elf32_Addr
++#endif
++#if __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
++  __attribute ((always_inline))
++#endif
+ fix_bad_pc24 (Elf32_Addr *const reloc_addr, Elf32_Addr value)
+ {
+   static void *fix_page;
+@@ -406,8 +413,14 @@
+ 
+ /* Perform the relocation specified by RELOC and SYM (which is fully resolved).
+    MAP is the object containing the reloc.  */
+-
+-static inline void
++#if __GNUC__ >= 4
++  auto inline void
++#else
++  static inline void
++#endif
++#if __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
++  __attribute ((always_inline))
++#endif
+ elf_machine_rel (struct link_map *map, const Elf32_Rel *reloc,
+ 		 const Elf32_Sym *sym, const struct r_found_version *version,
+ 		 Elf32_Addr *const reloc_addr)
+@@ -517,14 +530,28 @@
+     }
+ }
+ 
+-static inline void
++#if __GNUC__ >= 4
++  auto inline void
++#else
++  static inline void
++#endif
++#if __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
++  __attribute ((always_inline))
++#endif
+ elf_machine_rel_relative (Elf32_Addr l_addr, const Elf32_Rel *reloc,
+ 			  Elf32_Addr *const reloc_addr)
+ {
+   *reloc_addr += l_addr;
+ }
+ 
+-static inline void
++#if __GNUC__ >= 4
++  auto inline void
++#else
++  static inline void
++#endif
++#if __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
++ __attribute ((always_inline))
++#endif
+ elf_machine_lazy_rel (struct link_map *map,
+ 		      Elf32_Addr l_addr, const Elf32_Rel *reloc)
+ {

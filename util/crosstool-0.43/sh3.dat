@@ -1,0 +1,4 @@
+KERNELCONFIG=`pwd`/sh3.config
+TARGET=sh3-unknown-linux-gnu
+TARGET_CFLAGS="-O -ml -m3"
+GLIBC_CONFIGPARMS="no-z-defs=yes"

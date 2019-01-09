@@ -1,0 +1,5 @@
+BINUTILS_DIR=binutils-2.14
+GCC_DIR=gcc-3.3.1
+GLIBC_DIR=glibc-2.3.2
+LINUX_DIR=linux-2.4.26
+GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.3.2

@@ -1,0 +1,22 @@
+gcc-2.95.3's ostringstream is O(N^2).
+
+See also http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=92524
+for how Debian fixed it (essentially the same way).
+
+See also http://gcc.gnu.org/bugzilla/show_bug.cgi?id=16401
+for a similar problem in gcc-3.4.1.
+
+Here's a trivial fix:
+
+diff -u -r gcc-2.95.3/libstdc++/sstream gcc-2.95.3-mec-1/libstdc++/sstream
+--- gcc-2.95.3/libstdc++/sstream	2000-12-04 12:03:42.000000000 -0500
++++ gcc-2.95.3-mec-1/libstdc++/sstream	2006-03-03 18:39:59.000000000 -0500
+@@ -106,7 +106,7 @@
+ 	  if (c != EOF)
+ 	    {
+ 	      streamsize old_stream_len = stream_len;
+-	      stream_len += 1;
++	      stream_len = 2*(stream_len+1);
+ 	      char_type* new_stream = new char_type[stream_len];
+ 	      memcpy(new_stream, stream, old_stream_len);
+ 	      delete[] stream;

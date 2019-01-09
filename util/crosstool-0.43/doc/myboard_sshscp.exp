@@ -1,0 +1,17 @@
+# Board definition file for board "myboard_sshscp"
+
+# How to compile C programs for this board
+set_board_info compiler /usr/bin/gcc
+
+# Network address of board
+set_board_info hostname dank2
+
+# How to log into this board via ssh and copy files via scp.
+# Ideally, you'll set it up to not need a password to log in via ssh
+# (see e.g. http://www-csli.stanford.edu/semlab/muri/system/howto/ssh.html).
+set_board_info username dank
+
+set_board_info shell_prompt    "dank2>" 
+# For DejaGnu 1.4.3 and above; DejaGnu 1.4.2.x (Debian 3.0) ignores these settings!
+set_board_info rsh_prog /usr/bin/ssh
+set_board_info rcp_prog /usr/bin/scp

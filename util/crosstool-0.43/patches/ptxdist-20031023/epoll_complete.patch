@@ -1,0 +1,328 @@
+--- /dev/null	2002-09-13 15:08:32.000000000 -0700
++++ ptxdist-testing/rules/epoll-lib.make	2003-10-16 09:23:37.000000000 -0700
+@@ -0,0 +1,134 @@
++# -*-makefile-*-
++# $Id: template,v 1.6.2.2 2003/09/28 17:46:00 mkl Exp $
++#
++# Copyright (C) 2003 by Ixia Corporation, by Milan Bobde
++#          
++# See CREDITS for details about who has contributed to this project.
++#
++# For further information about the PTXdist project and license conditions
++# see the README file.
++#
++
++#
++# We provide this package
++#
++ifdef PTXCONF_EPOLL-LIB
++PACKAGES += epoll-lib
++endif
++
++#
++# Paths and names
++#
++EPOLL-LIB_VERSION	= 0.10
++EPOLL-LIB		= epoll-lib-$(EPOLL-LIB_VERSION)
++EPOLL-LIB_SUFFIX	= tar.gz
++EPOLL-LIB_URL		= http://www.xmailserver.org/linux-patches/$(EPOLL-LIB).$(EPOLL-LIB_SUFFIX)
++EPOLL-LIB_SOURCE	= $(SRCDIR)/$(EPOLL-LIB).$(EPOLL-LIB_SUFFIX)
++EPOLL-LIB_DIR		= $(BUILDDIR)/$(EPOLL-LIB)
++
++# ----------------------------------------------------------------------------
++# Get
++# ----------------------------------------------------------------------------
++
++epoll-lib_get: $(STATEDIR)/epoll-lib.get
++
++epoll-lib_get_deps	=  $(EPOLL-LIB_SOURCE)
++
++$(STATEDIR)/epoll-lib.get: $(epoll-lib_get_deps)
++	@$(call targetinfo, $@)
++	@$(call get_patches, $(EPOLL-LIB))
++	touch $@
++
++$(EPOLL-LIB_SOURCE):
++	@$(call targetinfo, $@)
++	@$(call get, $(EPOLL-LIB_URL))
++
++# ----------------------------------------------------------------------------
++# Extract
++# ----------------------------------------------------------------------------
++
++epoll-lib_extract: $(STATEDIR)/epoll-lib.extract
++
++epoll-lib_extract_deps	=  $(STATEDIR)/epoll-lib.get
++
++$(STATEDIR)/epoll-lib.extract: $(epoll-lib_extract_deps)
++	@$(call targetinfo, $@)
++	@$(call clean, $(EPOLL-LIB_DIR))
++	echo "Extracting .."$(EPOLL-LIB_SOURCE)
++	@$(call extract, $(EPOLL-LIB_SOURCE))
++	@$(call patchin, $(EPOLL-LIB))
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Prepare
++# ----------------------------------------------------------------------------
++
++epoll-lib_prepare: $(STATEDIR)/epoll-lib.prepare
++
++#
++# dependencies
++#
++epoll-lib_prepare_deps =  \
++	$(STATEDIR)/epoll-lib.extract \
++	$(STATEDIR)/virtual-xchain.install \
++	$(STATEDIR)/xchain-kernel.install
++
++EPOLL-LIB_PATH	=  PATH=$(CROSS_PATH)
++EPOLL-LIB_MAKEARGS	= AR=$(PTXCONF_GNU_TARGET)-ar
++EPOLL-LIB_MAKEARGS	+= LD=$(PTXCONF_GNU_TARGET)-ld
++EPOLL-LIB_MAKEARGS	+= CC=$(PTXCONF_GNU_TARGET)-gcc
++EPOLL-LIB_MAKEARGS	+= KERNELDIR=$(PTXCONF_PREFIX)/$(PTXCONF_GNU_TARGET)
++EPOLL-LIB_MAKEARGS	+= PREFIX=$(PTXCONF_PREFIX)/$(PTXCONF_GNU_TARGET)
++EPOLL-LIB_MAKEARGS	+= XCFLAGS=$(subst ",,$(TARGET_CFLAGS))
++
++
++$(STATEDIR)/epoll-lib.prepare: $(epoll-lib_prepare_deps)
++	@$(call targetinfo, $@)
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Compile
++# ----------------------------------------------------------------------------
++
++epoll-lib_compile: $(STATEDIR)/epoll-lib.compile
++
++epoll-lib_compile_deps =  $(STATEDIR)/epoll-lib.prepare
++
++$(STATEDIR)/epoll-lib.compile: $(epoll-lib_compile_deps)
++	@$(call targetinfo, $@)
++	install -d $(PTXCONF_PREFIX)/$(PTXCONF_GNU_TARGET)/man/man2
++	install -d $(PTXCONF_PREFIX)/$(PTXCONF_GNU_TARGET)/man/man4
++	$(EPOLL-LIB_PATH) make $(EPOLL-LIB_MAKEARGS) -C $(EPOLL-LIB_DIR) install
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Install
++# ----------------------------------------------------------------------------
++
++epoll-lib_install: $(STATEDIR)/epoll-lib.install
++
++$(STATEDIR)/epoll-lib.install: $(STATEDIR)/epoll-lib.compile
++	@$(call targetinfo, $@)
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Target-Install
++# ----------------------------------------------------------------------------
++
++epoll-lib_targetinstall: $(STATEDIR)/epoll-lib.targetinstall
++
++epoll-lib_targetinstall_deps	=  $(STATEDIR)/epoll-lib.compile
++
++$(STATEDIR)/epoll-lib.targetinstall: $(epoll-lib_targetinstall_deps)
++	@$(call targetinfo, $@)
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Clean
++# ----------------------------------------------------------------------------
++
++epoll-lib_clean:
++	rm -rf $(STATEDIR)/epoll-lib.*
++	rm -rf $(EPOLL-LIB_DIR)
++
++# vim: syntax=make
+--- /dev/null	2002-09-13 15:08:32.000000000 -0700
++++ ptxdist-testing/rules/epoll-sys-kernel.make	2003-10-17 10:24:57.000000000 -0700
+@@ -0,0 +1,79 @@
++# -*-makefile-*-
++# $Id: template-patch,v 1.1.2.1 2003/09/25 10:50:58 mkl Exp $
++#
++# Copyright (C) 2003 by Ixia Corporation, By Milan Bobde
++#          
++# See CREDITS for details about who has contributed to this project.
++#
++# For further information about the PTXDIST project and license conditions
++# see the README file.
++#
++
++#
++# We provide this package
++#
++ifdef PTXCONF_EPOLL-SYS-KERNEL
++KERNEL_PATCHES			+= $(STATEDIR)/epoll-sys-kernel.install
++endif
++
++#specifying the precise patch URL for different kernel versions.
++#For every supported kernel version, 
++#similar if [condition] needs to be added
++#The kernel patches for the versions 2.4.21 and 2.4.20 provide sys_epoll
++
++ifeq ($(KERNEL_VERSION),2.4.21)
++	EPOLL_SYS_KERNEL_URL = http://www.xmailserver.org/linux-patches/epoll-lt-2.4.21-0.18.diff
++	EPOLL_SYS_KERNEL-PATCH-NAME = epoll-lt-2.4.21-0.18.diff
++endif
++ifeq ($(KERNEL_VERSION),2.4.20)
++	EPOLL_SYS_KERNEL_URL = http://www.xmailserver.org/linux-patches/sys_epoll-2.4.20-0.61.diff
++	EPOLL_SYS_KERNEL-PATCH-NAME = sys_epoll-2.4.20-0.61.diff
++endif
++
++ifeq ($(EPOLL_SYS_KERNEL_URL),)
++	epoll-sys-kernel_get_deps = /dev/null/no-kernel-patch-found-for-version-$(KERNEL_VERSION)-FIXME-modify-kernel-sys-epoll.make-thanks
++endif
++
++#
++# Paths and names
++#
++EPOLL_SYS_KERNEL_SUFFIX	= .tar.gz
++EPOLL_SYS_KERNEL_SOURCE	= $(SRCDIR)/$(EPOLL_SYS_KERNEL-PATCH-NAME)
++
++# ----------------------------------------------------------------------------
++# Get
++# ----------------------------------------------------------------------------
++
++epoll-sys-kernel_get: $(STATEDIR)/epoll-sys-kernel.get
++
++epoll-sys-kernel_get_deps += \
++	$(EPOLL_SYS_KERNEL_SOURCE)
++
++$(STATEDIR)/epoll-sys-kernel.get: $(epoll-sys-kernel_get_deps)
++	@$(call targetinfo, $@)
++	touch $@
++
++$(EPOLL_SYS_KERNEL_SOURCE):
++	@$(call targetinfo, $@)
++	@$(call get, $(EPOLL_SYS_KERNEL_URL))
++
++# ----------------------------------------------------------------------------
++# Install
++# ----------------------------------------------------------------------------
++
++epoll-sys-kernel_install: $(STATEDIR)/epoll-sys-kernel.install
++
++$(STATEDIR)/epoll-sys-kernel.install: $(STATEDIR)/epoll-sys-kernel.get
++	@$(call targetinfo, $@)
++	@$(call patch_apply, $(EPOLL_SYS_KERNEL_SOURCE),$(KERNEL_DIR))
++	@$(call patch_apply, $(EPOLL_SYS_KERNEL_SOURCE),$(XCHAIN_KERNEL_BUILDDIR))
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Clean
++# ----------------------------------------------------------------------------
++
++epoll-sys-kernel_clean:
++	rm -rf $(STATEDIR)/kernel*
++
++# vim: syntax=make
+--- /dev/null	2002-09-13 15:08:32.000000000 -0700
++++ ptxdist-testing/rules/epoll-dev-kernel.make	2003-10-17 10:24:45.000000000 -0700
+@@ -0,0 +1,75 @@
++# -*-makefile-*-
++# $Id: template-patch,v 1.1.2.1 2003/09/25 10:50:58 mkl Exp $
++#
++# Copyright (C) 2003 by Ixia Corporation, By Milan Bobde
++#          
++# See CREDITS for details about who has contributed to this project.
++#
++# For further information about the PTXDIST project and license conditions
++# see the README file.
++#
++
++#
++# We provide this package
++#
++ifdef PTXCONF_EPOLL-DEV-KERNEL
++KERNEL_PATCHES			+= $(STATEDIR)/epoll-dev-kernel.install
++endif
++
++#specifying the precise patch URL for different kernel versions.
++#For every supported kernel version, 
++#similar if [condition] needs to be added
++#The kernel patches for the versions 2.4.18 provide /dev/epoll
++
++ifeq ($(KERNEL_VERSION),2.4.18)
++	EPOLL_KERNEL_URL = http://www.xmailserver.org/linux-patches/ep_patch-2.4.18-0.32.diff 
++	EPOLL_KERNEL-PATCH-NAME = ep_patch-2.4.18-0.32.diff
++endif
++
++ifeq ($(EPOLL_KERNEL_URL),)
++	epoll-dev-kernel_get_deps = /dev/null/no-kernel-patch-found-for-version-$(KERNEL_VERSION)-FIXME-modify-kernel-dev-epoll.make-thanks
++endif
++
++#
++# Paths and names
++#
++EPOLL_KERNEL_SUFFIX	= .tar.gz
++EPOLL_KERNEL_SOURCE	= $(SRCDIR)/$(EPOLL_KERNEL-PATCH-NAME)
++
++# ----------------------------------------------------------------------------
++# Get
++# ----------------------------------------------------------------------------
++
++epoll-dev-kernel_get: $(STATEDIR)/epoll-dev-kernel.get
++
++epoll-dev-kernel_get_deps += \
++	$(EPOLL_KERNEL_SOURCE)
++
++$(STATEDIR)/epoll-dev-kernel.get: $(epoll-dev-kernel_get_deps)
++	@$(call targetinfo, $@)
++	touch $@
++
++$(EPOLL_KERNEL_SOURCE):
++	@$(call targetinfo, $@)
++	@$(call get, $(EPOLL_KERNEL_URL))
++
++# ----------------------------------------------------------------------------
++# Install
++# ----------------------------------------------------------------------------
++
++epoll-dev-kernel_install: $(STATEDIR)/epoll-dev-kernel.install
++
++$(STATEDIR)/epoll-dev-kernel.install: $(STATEDIR)/epoll-dev-kernel.get
++	@$(call targetinfo, $@)
++	@$(call patch_apply, $(EPOLL_KERNEL_SOURCE),$(KERNEL_DIR))
++	@$(call patch_apply, $(EPOLL_SYS_KERNEL_SOURCE),$(XCHAIN_KERNEL_BUILDDIR))
++	touch $@
++
++# ----------------------------------------------------------------------------
++# Clean
++# ----------------------------------------------------------------------------
++
++epoll-dev-kernel_clean:
++	rm -rf $(STATEDIR)/kernel*
++
++# vim: syntax=make
+--- rules/kernel.in.old	2003-10-23 13:51:03.000000000 -0700
++++ ptxdist-testing/rules/kernel.in	2003-10-23 13:50:49.000000000 -0700
+@@ -496,6 +496,10 @@
+ 		depends on KERNEL_BEN
+ endchoice
+ 
++comment "---"
++source "rules/epoll.in"
++comment "---"
++
+ config RTAI
+ 	bool "Realtime Extension: RTAI"
+ 
+--- /dev/null	2002-09-13 15:08:32.000000000 -0700
++++ ptxdist-testing/rules/epoll.in	2003-10-16 09:20:41.000000000 -0700
+@@ -0,0 +1,15 @@
++config EPOLL-SYS-KERNEL
++       bool
++       prompt "Add Kernel support for sys_epoll"
++       default y
++
++config EPOLL-DEV-KERNEL
++       bool
++       prompt "Add Kernel support for /dev/epoll"
++       default y
++       
++config EPOLL-LIB
++       bool
++       prompt "Add user access library for epoll"
++       default y
++

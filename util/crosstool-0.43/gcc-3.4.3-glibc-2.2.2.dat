@@ -1,0 +1,7 @@
+BINUTILS_DIR=binutils-2.15
+GCC_CORE_DIR=gcc-2.95.3
+GCC_DIR=gcc-3.4.3
+GLIBC_DIR=glibc-2.2.2
+LINUX_DIR=linux-2.6.8
+LINUX_SANITIZED_HEADER_DIR=linux-libc-headers-2.6.12.0
+GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.2.2

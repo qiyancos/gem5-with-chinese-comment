@@ -1,0 +1,11 @@
+--- ptxdist-20030909/rules/libnet.make	Sun Sep  7 11:29:42 2003
++++ ptxdist-new/rules/libnet.make	Tue Sep  9 16:53:01 2003
+@@ -126,7 +126,7 @@
+ 
+ libnet_targetinstall: $(STATEDIR)/libnet.targetinstall
+ 
+-libnet_targetinstall_deps	=  $(STATEDIR)/libnet.compile
++libnet_targetinstall_deps	=  $(STATEDIR)/libnet.install
+ 
+ $(STATEDIR)/libnet.targetinstall: $(libnet_targetinstall_deps)
+ 	@$(call targetinfo, libnet.targetinstall)

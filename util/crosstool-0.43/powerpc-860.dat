@@ -1,0 +1,4 @@
+TARGET=powerpc-860-linux-gnu
+TARGET_CFLAGS="-O"
+GCC_EXTRA_CONFIG="--with-cpu=860 --enable-cxx-flags=-mcpu=860"
+GLIBC_EXTRA_CONFIG="$GLIBC_EXTRA_CONFIG --without-fp"

@@ -1,0 +1,38 @@
+--- ptxdist-0.3.23/rules/xchain-gccstage1.make.old	Tue Aug 26 17:11:20 2003
++++ ptxdist-0.3.23/rules/xchain-gccstage1.make	Tue Aug 26 17:12:00 2003
+@@ -12,6 +12,8 @@
+ # We provide this package
+ #
+ 
++ifdef PTXCONF_BUILD_CROSSCHAIN
++
+ ifdef PTXCONF_GCC_2_95_3
+ GCC_VERSION		= 2.95.3
+ endif
+@@ -298,5 +300,7 @@
+ 	rm -fr $(STATEDIR)/xchain-gccstage1.*
+ 	rm -fr $(GCC_DIR)
+ 
++
++endif
+ 
+ # vim: syntax=make
+--- ptxdist-0.3.23/rules/xchain-gccstage2.make.old	Tue Aug 26 17:17:58 2003
++++ ptxdist-0.3.23/rules/xchain-gccstage2.make	Tue Aug 26 17:18:21 2003
+@@ -8,6 +8,8 @@
+ # see the README file.
+ #
+ 
++ifdef PTXCONF_BUILD_CROSSCHAIN
++
+ #
+ # Paths and names 
+ #
+@@ -129,5 +131,7 @@
+ xchain-gccstage2_clean:
+ 	rm -fr $(GCC_STAGE2_DIR) $(STATEDIR)/xchain-gccstage2.* 
+ 
++
++endif
+ 
+ # vim: syntax=make

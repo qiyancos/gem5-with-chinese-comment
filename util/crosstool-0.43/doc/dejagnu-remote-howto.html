@@ -1,0 +1,310 @@
+<html>
+<head>
+<title>Remote Testing with Dejagnu</title>
+</head>
+<body>
+<h1>Remote Testing with Dejagnu</h1>
+
+<a href="http://www.gnu.org/software/dejagnu/">DejaGnu</a> is the testing
+framework used by the <a href="http://gcc.gnu.org/">GCC</a>,
+<a href="http://www.gnu.org/software/binutils/">binutils</a>, and <a href="http://www.gnu.org/software/gdb/">gdb</a> projects.
+<p>
+For local testing of native toolchains, you don't need to know a thing about how
+to configure DejaGnu; just type 'make check' in the gcc directory, and gcc's Makefile
+will run the gcc test suite.
+<p>
+Remote testing of cross-toolchains, on the other hand, has never been
+well-documented.  The documentation even states in several places that
+you can use telnet to execute remote tests, when in fact only rsh and
+ssh can be used with DejaGnu to run gcc regression tests remotely.
+Like many others, I had trouble figuring out how remote testing works with DejaGnu.
+I wrote this document as a way of figuring it out myself, and hope
+this will save others some trouble.
+<P>
+What follows is a simple recipe to illustrate how to get remote testing of
+noninteractive programs working.  Once you have this working, it should
+be fairly easy to do remote gcc testing.  Remote testing of interactive
+tools like gdb is beyond the scope of this example.
+<p>
+When DejaGnu misbehaves:
+<ul>
+<li>Read through the log file, testrun.log, created by runtest
+<li>If you need to make the log file more verbose, add up to four -v's to the runtest command line
+<li>If that's not enough, approach the problem from a position of strength.  Read up on the <a href="http://www.tcl.tk/">TCL programming language</a>,
+then read the source code for DejaGnu (usually, /usr/share/dejagnu/*.exp).
+<li>To track down what code is executing, sprinkle 'puts' statements throughout the .exp scripts that make up DejaGnu
+and rerun, redirecting the output of runtest to a file; then look at the file for the output from those puts statements
+<li>If you've very lucky, you can start <a href="http://expect.nist.gov/tcl-debug/">the built-in TCL debugger</a>
+by giving runtest the -D1 flag.  However, when I tried it, it was horribly broken.
+<li>The unix strace or truss utilities can be very handy for seeing what dejagnu is doing.
+To try this, run runtest via strace, e.g. '<tt>strace -f -o foo.log runtest ...</tt>'
+Then use grep to pick out the events of interest, 
+e.g. '<tt>grep open foo.log</tt>' to display just the 'open' system calls,
+or '<tt>grep exec foo.log</tt>' to display just what other programs it tries to run.
+</ul>
+<p>
+The example assumes you have already installed DejaGnu.
+DejaGnu consists largely of the shell script /usr/bin/runtest, which invokes
+the TCL script /usr/share/dejagnu/runtest.exp.
+If you give the command 'runtest --version', you should see something like this:
+<pre>
+Expect version is       5.32.2
+Tcl version is          8.3
+Framework version is    1.4.3
+</pre>
+(Don't worry if it complains that it can't find a global config file.)
+<p>
+If your framework version is lower than 1.4.3, you may not get the same
+results as I did.  In particular, I've noticed that the DejaGnu installed
+on Debian 3.0, which reports 1.4.2.x, behaves differently (it uses the
+board name rather than the IP address or hostname set in the board file
+when communicating via rsh, which won't work).
+<p>
+It's probably a good idea to install the latest versions of
+<a href="http://tcl.tk">tcl</a>, <a href="http://expect.nist.gov">expect</a>,
+and <a href="http://www.gnu.org/software/dejagnu/">dejagnu</a> from source.  
+See also <a href="http://gcc.gnu.org/PR12096">gcc bug 12096</a> for a patch to expect that might be
+required to avoid occasional truncated results.
+
+<h2>Files</h2>
+The example consists of five files:
+
+<h3>The C Program, simple.c</h3>
+This is the program we're going to test.  All it does it print out the hostname
+of the computer it's running on, and return the integer value of its first argument.
+<pre>
+#include &lt;stdio.h&gt;
+int main(int argc, char **argv)
+{
+    char buf[256];
+    buf[0]=0;
+    gethostname(buf, sizeof(buf));
+    printf("hostname is %s\n", buf);
+    return atoi(argv[1]);
+}
+</pre>
+
+<h3>The Test Script, simple.exp</h3>
+This is the TCL script that will compile, run, and judge whether the C program
+managed to run and return the expected exit status.
+<pre>
+# simple: compile and run a C program (possibly remotely) with various arguments
+
+print "Compile simple.c"
+target_compile simple.c simple executable -O2
+
+print "simple.1: Run simple with '0' argument; it should exit with zero status, causing remote_load to return 'pass'."
+set result [remote_load target simple 0]
+if {[lindex $result 0] == "pass"} {
+   pass "simple.1"
+} else {
+   fail "simple.1"
+}
+
+print "simple.2: Run simple with nonzero argument; it should exit with nonzero status, causing remote_load to return 'fail'."
+set result [remote_load target simple 17]
+if {[lindex $result 0] == "fail"} {
+   pass "simple.2"
+} else {
+   fail "simple.2"
+}
+
+print "simple.3: Run simple without arguments; it should crash, causing remote_load to return 'fail'."
+set result [remote_load target simple]
+if {[lindex $result 0] == "fail"} {
+   pass "simple.3"
+} else {
+   fail "simple.3"
+}
+</pre>
+
+The TCL command <tt>target_compile</tt> used in simple.exp is part of DejaGnu; it looks up how to compile
+a C program, and runs the compiler.
+<p>
+The TCL command <tt>remote_load</tt> used in simple.exp uploads the given file to the target machine and runs it,
+then returns whether it successfully ran.
+
+<h3>The site configuration file, site.exp</h3>
+This is read by runtest on startup.  
+All we need to put in here for this example is a command to tell runtest our board files live in the current directory:
+<pre>
+lappend boards_dir "."
+</pre>
+
+<h3>The board definition files</h3>
+When you tell runtest to run a test on a remote machine, you use the option "--target_board=foo",
+which makes runtest load the board definition file foo.exp
+to see how to compile, upload, and run programs for/to/on that board.
+<p>
+By default, dejagnu uses rsh for remote execution, and rcp for uploading.
+Here's an example for that case:
+<pre>
+# Board definition file for board "myboard_rshrcp"
+load_generic_config "unix";
+set_board_info hostname dank2
+set_board_info username dank
+set_board_info compiler /usr/bin/gcc
+</pre>
+
+<p>
+If you want instead to use ssh for remote execution and scp for uploading,
+you need to change this a bit.  Here's an example, myboard_sshscp.exp:
+<pre>
+# Board definition file for board "myboard_sshscp"
+
+# How to compile C programs for this board
+set_board_info compiler /usr/bin/gcc
+
+# Network address of board
+set_board_info hostname dank2
+
+# How to log into this board via ssh and copy files via scp.
+# Ideally, you'll set it up to not need a password to log in via ssh
+# (see e.g. http://www-csli.stanford.edu/semlab/muri/system/howto/ssh.html).
+set_board_info username dank
+
+set_board_info shell_prompt    "dank2>" 
+# For DejaGnu 1.4.3 and above; DejaGnu 1.4.2.x (Debian 3.0) ignores these settings!
+set_board_info rsh_prog /usr/bin/ssh
+set_board_info rcp_prog /usr/bin/scp
+</pre>
+
+If you want instead to use rsh for remote execution and ftp for uploading,
+you need to change this a bit.  Here's an example, myboard_rshftp.exp:
+<pre>
+# Board definition file for board "myboard_rshftp"
+
+load_generic_config "unix";
+
+# How to compile C programs for this board
+set_board_info compiler /home3/dank/crosstool-0.7/result/ppc-750-linux-gnu/gcc-3.3-glibc-2.3.2/bin/ppc-750-linux-gnu-gcc
+
+# Network address of board
+# For DejaGnu 1.4.3 and above; DejaGnu 1.4.2.x (Debian 3.0) ignores this setting!
+set_board_info hostname 11.3.1.1
+
+# How to log into this board via rsh and transfer files via ftp.
+set_board_info username root
+set_board_info file_transfer   ftp
+set_board_info ftp_username    root
+set_board_info ftp_password    "DaisyMae"
+</pre>
+<p>
+You'll need to edit these files a bit; see below.
+
+<h2>The Recipe</h2>
+
+<h3>Run a local test</h3>
+Run a local test with the command
+<pre>runtest simple.exp</pre>
+(Note that for local testing, the current directory should be in your path,
+else runtest will not find your executables.  You can force this for just one run
+with <tt>PATH=.:$PATH runtest simple.exp</tt> if need be.)
+<p>
+All three tests in simple.exp should pass.  You should see a bunch of output ending with
+<pre>                ===  Summary ===
+
+# of expected passes            3
+</pre>
+Take a look at the log file testrun.log left behind by runtest.
+It should contain what you saw on stdout, plus a bit more detail.  
+In particular, note the three runs of 'simple.c':
+<pre>
+hostname is dank
+Exiting with status 0
+PASS: simple.1
+hostname is dank
+Exiting with status 17
+PASS: simple.2
+PASS: simple.3
+</pre>
+Only the output from the first two is visible.  (It should show the hostname of your workstation.)
+The third run crashed as expected, so its output was lost.
+
+<h3>Run a remote test via ssh and scp</h3>
+Pick a remote machine of the same type as your workstation;
+let's say its hostname is 'dank2'.
+<ol>
+<li>
+Set up the remote machine to let you do ssh and scp without entering a password
+(see <a href="http://www-csli.stanford.edu/semlab/muri/system/howto/ssh.html">one of the many
+documents on the net describing how to do this</a> if you haven't done this before.)
+<li>
+Verify that 'ssh dank2 ls' shows you a list of files on the remote machine
+without prompting you for a password
+<li>
+Verify that 'scp /etc/hosts dank2:'
+copies that file to dank2 without prompting for a password.
+<li>
+edit myboard_sshscp.exp to reflect the hostname, username, and password for
+that machine.
+<li>
+Finally, run a remote test on that machine with the command
+<pre>
+runtest --target_board=myboard_sshscp simple.exp
+</pre>
+</ol>
+You should again see output ending with
+<pre>
+===  Summary ===
+
+# of expected passes            3
+</pre>
+Take a look at the log file testrun.log left behind by runtest.
+On my system, it looks like this:
+<pre>
+Executed simple, status 0
+RSA host key for IP address '192.168.3.104' not in list of known hosts.
+hostname is dank2
+Exiting with status 0
+PASS: simple.1
+Executing on myboard_sshscp: /tmp/simple.25935 17   (timeout = 300)
+Executing on myboard_sshscp: rm -f  /tmp/simple.25935    (timeout = 300)
+Executed simple, status 1
+RSA host key for IP address '192.168.3.104' not in list of known hosts.
+hostname is dank2
+Exiting with status 17
+PASS: simple.2
+Executing on myboard_sshscp: /tmp/simple.25935    (timeout = 300)
+Executing on myboard_sshscp: rm -f  /tmp/simple.25935    (timeout = 300)
+Executed simple, status 1
+RSA host key for IP address '192.168.3.104' not in list of known hosts.
+PASS: simple.3
+</pre>
+It must have run on the remote machine, since the output from simple 
+says 'hostname is dank2'.
+
+<h3>Run a remote test via rsh and ftp</h3>
+This is exactly the same as the previous step, but this time
+replacing ssh and scp with rsh and ftp.  
+<p>
+Set up a remote machine  of the same type as your workstation
+to allow executing commands via rsh, and saving files via ftp.
+Let's say it's at ip address 11.3.1.1.  Verify that 
+'rsh 11.3.1.1 ls' gives you a list of files on the remote machine, and
+that 'ftp 11.3.1.1' lets you upload files to that machine.
+Then edit myboard_rshftp.exp to reflect the hostname, username, and password
+for that machine.
+<p>
+Finally, run a remote test on that machine with the command
+<pre>
+runtest --target_board=myboard_rshftp simple.exp
+</pre>
+
+<h2>What now?</h2>
+Once you have the above working, go try to run remote gcc regression tests;
+I believe the way to coax gcc's Makefile into running the tests remotely is
+by setting the RUNTESTFLAGS environment variable, e.g.
+<pre>
+RUNTESTFLAGS="--target_board=myboard_sshscp" make check
+</pre>
+but you will need to put your board config files in a more
+standard place for runtest to find them.  Consult the DejaGnu doc for details :-)
+or see my <a href="crosstool-howto.html">crosstool-howto</a>.
+<p>
+<hr>
+Copyright 2003, <a href="http://ixiacom.com">Ixia Communications</a>.<br>
+Released under the GPL.<br>
+Last revision 4 Jan 2004 by dkegel@ixiacom.com
+</body>
+</head>

@@ -1,0 +1,251 @@
+Date: Tue, 29 Mar 2005 12:25:18 -0700
+Message-ID: <BE2C77780CB47E40BA12908B51727C3A043479FE@DEN-EXM-01.corp.ebay.com>
+Thread-Topic: Randomization by slots
+Thread-Index: AcU0g+OzJ09oMURFTMKCNuiUwFReXAAEIqww
+From: "Donohue, Michael" <mdonohue@paypal.com>
+To: <distcc@lists.samba.org>
+Subject: [distcc] Randomization by slots
+
+I modified my original patch by hand, and checked that it applies
+cleanly, and that the code compiles, and still does the right thing.
+
+I've attached my randomization patch to this message.
+
+It stores the remote hosts file in a global now.  This isn't strictly
+necessary for this patch, but in general, if you want to put options in
+the hosts file, it needs to be parsed earlier.  
+
+This is also more symmetric with the localhost global that is
+maintained.
+
+Michael
+
+diff -u -r distcc-2.18.3/man/distcc.1 distcc-2.18.3-mine/man/distcc.1
+--- distcc-2.18.3/man/distcc.1	Sat Oct 23 22:05:23 2004
++++ distcc-2.18.3-mine/man/distcc.1	Mon Mar 28 14:21:49 2005
+@@ -237,6 +237,12 @@
+ client is less than one fifth of the total, then the client should be
+ left out of the list.
+ .PP
++There is a special host entry
++.B --randomize
++which chooses a remote host randomly in the domain of slots, instead of preferring
++hosts earlier in the list.   As it is in the domain of slots, a machine with 4 execution
++slots is 4 times more likely to be selected than a machine with only 1.
++.PP
+ Performance depends on the details of the source and makefiles used
+ for the project, and the machine and network speeds.  Experimenting
+ with different settings for the host list and -j factor may improve
+@@ -246,14 +252,16 @@
+ .PP
+ .nf
+   DISTCC_HOSTS = HOSTSPEC ...
+-  HOSTSPEC = LOCAL_HOST | SSH_HOST | TCP_HOST | OLDSTYLE_TCP_HOST
++  HOSTSPEC = LOCAL_HOST | SSH_HOST | TCP_HOST | OLDSTYLE_TCP_HOST 
++           | GLOBAL_OPTION
+   LOCAL_HOST = localhost[/LIMIT]
+   SSH_HOST = [USER]@HOSTID[/LIMIT][:COMMAND][OPTIONS]
+   TCP_HOST = HOSTID[:PORT][/LIMIT][OPTIONS]
+   OLDSTYLE_TCP_HOST = HOSTID[/LIMIT][:PORT][OPTIONS]
+   HOSTID = HOSTNAME | IPV4
+   OPTIONS = ,OPTION[OPTIONS]
+   OPTION = lzo
++  GLOBAL_OPTION = --randomize
+ .fi
+ .PP
+ Here are some individual examples of the syntax:
+diff -u -r distcc-2.18.3/src/distcc.c distcc-2.18.3-mine/src/distcc.c
+--- distcc-2.18.3/src/distcc.c	Fri Oct  1 17:47:07 2004
++++ distcc-2.18.3-mine/src/distcc.c	Mon Mar 28 13:46:15 2005
+@@ -150,7 +150,7 @@
+     int status, sg_level, tweaked_path = 0;
+     char **compiler_args;
+     char *compiler_name;
+-    int ret;
++    int ret, n_hosts;
+ 
+     dcc_client_catch_signals();
+     atexit(dcc_cleanup_tempfiles);
+@@ -169,6 +169,8 @@
+     sg_level = dcc_recursion_safeguard();
+ 
+     rs_trace("compiler name is \"%s\"", compiler_name);
++
++    dcc_get_hostlist(&dcc_hostdef_remote, &n_hosts);
+ 
+     if (strstr(compiler_name, "distcc") != NULL) {
+         /* Either "distcc -c hello.c" or "distcc gcc -c hello.c" */
+diff -u -r distcc-2.18.3/src/hosts.c distcc-2.18.3-mine/src/hosts.c
+--- distcc-2.18.3/src/hosts.c	Sat Oct 23 22:05:47 2004
++++ distcc-2.18.3-mine/src/hosts.c	Mon Mar 28 17:22:31 2005
+@@ -99,6 +99,7 @@
+ 
+ const int dcc_default_port = DISTCC_DEFAULT_PORT;
+ 
++int dcc_randomize = 0;
+ 
+ #ifndef HAVE_STRNDUP
+ /**
+@@ -389,6 +390,12 @@
+ 
+         token_start = where;
+         token_len = strcspn(where, " #\t\n\f\r");
++
++	if(!strncmp(token_start, "--randomize", 11)) {
++            dcc_randomize = 1;
++            where = token_start + token_len;
++            continue;
++	}
+ 
+         /* Allocate new list item */
+         curr = calloc(1, sizeof(struct dcc_hostdef));
+diff -u -r distcc-2.18.3/src/hosts.h distcc-2.18.3-mine/src/hosts.h
+--- distcc-2.18.3/src/hosts.h	Thu Jul 29 18:12:13 2004
++++ distcc-2.18.3-mine/src/hosts.h	Mon Mar 28 14:24:00 2005
+@@ -57,6 +57,7 @@
+ 
+ /** Static definition of localhost **/
+ extern struct dcc_hostdef *dcc_hostdef_local;
++extern struct dcc_hostdef *dcc_hostdef_remote;
+ 
+ 
+ /* hosts.c */
+@@ -64,6 +65,8 @@
+                      int *ret_nhosts);
+ 
+ int dcc_free_hostdef(struct dcc_hostdef *host);
++
++extern int dcc_randomize;
+ 
+ 
+ /* hostfile.c */
+diff -u -r distcc-2.18.3/src/lock.c distcc-2.18.3-mine/src/lock.c
+--- distcc-2.18.3/src/lock.c	Sat Oct 23 22:05:49 2004
++++ distcc-2.18.3-mine/src/lock.c	Mon Mar 28 13:50:50 2005
+@@ -86,6 +86,7 @@
+ 
+ struct dcc_hostdef *dcc_hostdef_local = &_dcc_local;
+ 
++struct dcc_hostdef *dcc_hostdef_remote = NULL;
+ 
+ /**
+  * Returns a newly allocated buffer.
+diff -u -r distcc-2.18.3/src/where.c distcc-2.18.3-mine/src/where.c
+--- distcc-2.18.3/src/where.c	Sat Oct 23 22:05:47 2004
++++ distcc-2.18.3-mine/src/where.c	Mon Mar 28 23:33:46 2005
+@@ -81,17 +81,20 @@
+                         struct dcc_hostdef **buildhost,
+                         int *cpu_lock_fd);
+ 
++static int dcc_lock_one_random(struct dcc_hostdef *hostlist,
++                               struct dcc_hostdef **buildhost,
++                               int *cpu_lock_fd);
++
++static int dcc_lock_one_serial(struct dcc_hostdef *hostlist,
++                               struct dcc_hostdef **buildhost,
++                               int *cpu_lock_fd);
++
+ 
+ int dcc_pick_host_from_list(struct dcc_hostdef **buildhost,
+                             int *cpu_lock_fd)
+ {
+-    struct dcc_hostdef *hostlist;
++    struct dcc_hostdef *hostlist = dcc_hostdef_remote;
+     int ret;
+-    int n_hosts;
+-    
+-    if ((ret = dcc_get_hostlist(&hostlist, &n_hosts)) != 0) {
+-        return EXIT_NO_HOSTS;
+-    }
+ 
+     if ((ret = dcc_remove_disliked(&hostlist)))
+         return ret;
+@@ -142,7 +146,79 @@
+  **/
+ static int dcc_lock_one(struct dcc_hostdef *hostlist,
+                         struct dcc_hostdef **buildhost,
+-                        int *cpu_lock_fd)
++                        int *cpu_lock_fd) {
++    if(dcc_randomize) {
++        return dcc_lock_one_random(hostlist, buildhost, cpu_lock_fd);
++    } else {
++        return dcc_lock_one_serial(hostlist, buildhost, cpu_lock_fd);
++    }
++}
++
++static int dcc_lock_one_random(struct dcc_hostdef *hostlist,
++                               struct dcc_hostdef **buildhost,
++                               int *cpu_lock_fd) {
++    struct dcc_hostdef *h;
++    int i;
++    int ret;
++    int slot, slots_remain = 0;
++    int total_slots = 0;
++    struct dcc_hostdef **host_lookup;
++    int *slot_lookup;
++
++    for(h = hostlist; h; h = h->next) {
++        total_slots += h->n_slots;
++    }
++    host_lookup = malloc(sizeof(struct dcc_hostdef *) * total_slots);
++    slot_lookup = malloc(sizeof(int) * total_slots);
++
++    slot = 0;
++    for(h = hostlist; h; h = h->next) {
++        for(i = 0; i < h->n_slots; i++, slot++) {
++            host_lookup[slot] = h;
++            slot_lookup[slot] = i;
++        }
++    }
++
++    while (1) {
++        slots_remain = total_slots;
++        while(slots_remain) {
++            slot = random() % slots_remain;
++            h = host_lookup[slot];
++            i = slot_lookup[slot];
++            ret = dcc_lock_host("cpu", h, i, 0, cpu_lock_fd);
++
++            if(ret == EXIT_BUSY) {
++                slots_remain--;
++                host_lookup[slot] = host_lookup[slots_remain];
++                slot_lookup[slot] = slot_lookup[slots_remain];
++                host_lookup[slots_remain] = h;
++                slot_lookup[slots_remain] = i;
++
++                continue;
++            }
++
++            // We're definitely returning at this point
++            free(host_lookup);
++            free(slot_lookup);
++            if (ret == 0) {
++                *buildhost = h;
++                dcc_note_state_slot(i);
++                return 0;
++            } else {
++                rs_log_error("failed to lock");
++                return ret;
++            }
++        }
++
++        dcc_lock_pause();
++    }
++}
++
++
++
++static int dcc_lock_one_serial(struct dcc_hostdef *hostlist,
++                               struct dcc_hostdef **buildhost,
++                               int *cpu_lock_fd)
+ {
+     struct dcc_hostdef *h;
+     int i_cpu;
+@@ -174,7 +250,6 @@
+ }
+ 
+ 
+-
+ /**
+  * Lock localhost.  Used to get the right balance of jobs when some of
+  * them must be local.

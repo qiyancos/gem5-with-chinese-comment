@@ -1,0 +1,4 @@
+KERNELCONFIG=`pwd`/i686.config
+TARGET=i686-unknown-linux-gnu
+TARGET_CFLAGS="-O -g"
+GLIBC_EXTRA_CONFIG="$GLIBC_EXTRA_CONFIG --enable-static-nss"

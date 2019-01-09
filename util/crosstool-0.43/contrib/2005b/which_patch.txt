@@ -1,0 +1,55 @@
+Subject:
+Re: Which patch?
+From:
+Lennert Buytenhek <buytenh@wantstofly.org>
+Date:
+Fri, 22 Apr 2005 10:42:27 +0200
+To:
+Dan Kegel <dank@kegel.com>
+
+On Thu, Apr 21, 2005 at 09:35:05PM -0700, Dan Kegel wrote:
+
+
+>> I have two versions of your endian patch for gcc-4.0.
+>> Which one do you prefer?
+>> Here are the differences:
+
+
+I prefer the arm*b-*-linux* version.  The arm*b-* version can match
+non-big-endian target triples such as armv4l-frob-linux-gnu (for the
+hypothetical little-endian ARM linux distro from Frob, Inc.)
+
+BTW, www.google.nl has been annoying me for ages since it shows
+"Advertentie programma's" (advertising programs), but that ought to
+be spelled as one word, not two.  I can understand why it's misspelled
+that way, because the majority of the Dutch population simply doesn't
+understand the relevant rules, and I see people messing this up
+_everywhere_, even in official government correspondence.  (Imagine
+the writer of your tax forms not having been able to distinguish
+between there, their and they're.)
+
+
+--L
+
+
+
+>> < + * 'config.gcc' defines TARGET_BIG_ENDIAN_DEFAULT as 1 for
+>> < + * arm*b-*-linux* (big endian) configurations.
+>> ---
+>
+>>> > + * 'config.gcc' defines TARGET_BIG_ENDIAN_DEFAULT as 1 for arm*b-*
+>>> > + * (big endian) configurations.
+>
+>> 56c96
+>> < +     arm*b-*-linux*)
+>> ---
+>
+>>> > +     arm*b-*)
+>
+>> 
+>> -- 
+>> Trying to get a job as a c++ developer?  See 
+>> http://kegel.com/academy/getting-hired.html
+
+
+

@@ -1,0 +1,4 @@
+KERNELCONFIG=`pwd`/arm.config
+TARGET=arm-xscale-linux-gnu
+TARGET_CFLAGS="-O"
+GCC_EXTRA_CONFIG="--with-cpu=xscale  --enable-cxx-flags=-mcpu=xscale"

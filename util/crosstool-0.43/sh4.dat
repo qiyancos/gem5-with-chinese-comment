@@ -1,0 +1,5 @@
+KERNELCONFIG=`pwd`/sh4.config
+TARGET=sh4-unknown-linux-gnu
+TARGET_CFLAGS="-O -ml -m4"
+GCC_EXTRA_CONFIG="--with-multilib-list=m4,m4-nofpu"
+GLIBC_CONFIGPARMS="no-z-defs=yes"

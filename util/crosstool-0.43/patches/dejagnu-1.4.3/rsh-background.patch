@@ -1,0 +1,13 @@
+--- dejagnu-1.4.3/lib/rsh.exp.old	Mon Jun 30 16:23:50 2003
++++ dejagnu-1.4.3/lib/rsh.exp	Mon Jun 30 16:28:00 2003
+@@ -183,8 +183,8 @@
+ 	set desthost [board_info $desthost hostname];
+     }
+ 
+-    set status [catch "exec $RSH $rsh_useropts $desthost rm -f $destfile |& cat" output]
+-    set status [catch "exec $RCP $srcfile $rcp_user$desthost:$destfile |& cat" output]
++    set status [catch "exec $RSH -n $rsh_useropts $desthost rm -f $destfile |& cat" output]
++    set status [catch "exec $RCP $srcfile $rcp_user$desthost:$destfile |& cat" output]
+     if { $status == 0 } {
+ 	verbose "Copied $srcfile to $desthost:$destfile" 2
+ 	return $destfile;

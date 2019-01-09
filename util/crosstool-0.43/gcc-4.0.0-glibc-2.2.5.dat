@@ -1,0 +1,6 @@
+BINUTILS_DIR=binutils-2.16.1
+GCC_DIR=gcc-4.0.0
+GLIBC_DIR=glibc-2.2.5
+LINUX_DIR=linux-2.6.15.4
+GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.2.5
+EXTRA_TARGET_CFLAGS="-fno-unit-at-a-time"

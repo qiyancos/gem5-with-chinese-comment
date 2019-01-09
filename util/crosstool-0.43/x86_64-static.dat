@@ -1,0 +1,6 @@
+TARGET=x86_64-unknown-linux-gnu
+TARGET_CFLAGS="-O -g"
+GCC_EXTRA_CONFIG="--disable-multilib"
+USE_SYSROOT=1
+KERNELCONFIG=`pwd`/x86_64.config
+GLIBC_EXTRA_CONFIG="$GLIBC_EXTRA_CONFIG --enable-static-nss"

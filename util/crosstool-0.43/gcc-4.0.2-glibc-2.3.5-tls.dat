@@ -1,0 +1,7 @@
+BINUTILS_DIR=binutils-2.16.1
+GCC_DIR=gcc-4.0.2
+GLIBC_DIR=glibc-2.3.5
+LINUX_DIR=linux-2.6.15.4
+LINUX_SANITIZED_HEADER_DIR=linux-libc-headers-2.6.12.0
+GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.3.5
+GLIBC_EXTRA_CONFIG="$GLIBC_EXTRA_CONFIG --with-tls --with-__thread  --enable-kernel=2.4.18"

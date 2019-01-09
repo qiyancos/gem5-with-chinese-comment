@@ -1,0 +1,41 @@
+Index: ptxdist-testing/rules/Rules.make
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/rules/Rules.make,v
+retrieving revision 1.1.1.4
+diff -u -u -r1.1.1.4 Rules.make
+--- ptxdist-testing/rules/Rules.make	14 Oct 2003 02:32:25 -0000	1.1.1.4
++++ ptxdist-testing/rules/Rules.make	23 Oct 2003 18:35:28 -0000
+@@ -295,6 +295,17 @@
+ TARGET_CFLAGS		+= $(PTXCONF_TARGET_EXTRA_CFAGS)
+ TARGET_CXXFLAGS		+= $(PTXCONF_TARGET_EXTRA_CXXFLAGS)
+ 
++# PTXCONF_PARALLEL defaults to not set, which means normal serial builds.
++# Users can do parallel builds by setting PTXCONF_PARALLEL when running make, e.g.
++#   make world PTXCONF_PARALLEL=-j2
++# or perhaps it could be set in 'make menuconfig'.
++# In case distcc works with native and not cross, or vice versa, let's allow
++# controlling paralellization separately for the two.
++# Native packages that support parallel building should be built with make $(NATIVE_MAKE_JOBS) 
++# Cross packages that support parallel building should be built with make $(CROSS_MAKE_JOBS) 
++
++NATIVE_MAKE_JOBS	= $(PTXCONF_PARALLEL)
++CROSS_MAKE_JOBS		= $(PTXCONF_PARALLEL)
+ 
+ #
+ # crossenvironment
+Index: ptxdist-testing/rules/pdksh.make
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/rules/pdksh.make,v
+retrieving revision 1.1.1.4
+diff -u -u -r1.1.1.4 pdksh.make
+--- ptxdist-testing/rules/pdksh.make	16 Oct 2003 02:58:18 -0000	1.1.1.4
++++ ptxdist-testing/rules/pdksh.make	23 Oct 2003 18:35:40 -0000
+@@ -132,7 +132,7 @@
+ 
+ $(STATEDIR)/pdksh.compile: $(STATEDIR)/pdksh.prepare 
+ 	@$(call targetinfo, $@)
+-	$(PDKSH_PATH) make -C $(PDKSH_DIR)
++	$(PDKSH_PATH) make $(CROSS_MAKE_JOBS) -C $(PDKSH_DIR)
+ 	touch $@
+ 
+ # ----------------------------------------------------------------------------

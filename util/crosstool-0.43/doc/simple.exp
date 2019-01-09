@@ -1,0 +1,28 @@
+# simple: compile and run a C program (possibly remotely) with various arguments
+
+print "Compile simple.c"
+target_compile simple.c simple executable -O2
+
+print "simple.1: Run simple with '0' argument; it should exit with zero status, causing remote_load to return 'pass'."
+set result [remote_load target simple 0]
+if {[lindex $result 0] == "pass"} {
+   pass "simple.1"
+} else {
+   fail "simple.1"
+}
+
+print "simple.2: Run simple with nonzero argument; it should exit with nonzero status, causing remote_load to return 'fail'."
+set result [remote_load target simple 17]
+if {[lindex $result 0] == "fail"} {
+   pass "simple.2"
+} else {
+   fail "simple.2"
+}
+
+print "simple.3: Run simple without arguments; it should crash, causing remote_load to return 'fail'."
+set result [remote_load target simple]
+if {[lindex $result 0] == "fail"} {
+   pass "simple.3"
+} else {
+   fail "simple.3"
+}

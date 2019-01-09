@@ -1,0 +1,513 @@
+# This specfile expanded by crosstool's buildsrpms.sh.
+# This should have had the following six keywords expanded,
+# __PKGPREFIX__
+# __CROSSTOOLVERSION__
+# __RESULT_TOP__
+# __CPUS__
+# __TOOLCOMBO__
+# and must have had the __FOR ... __ENDFOR loop expanded.
+
+# Uncomment this line when debugging this spec file to get a trace of its execution
+#%trace
+
+# parameters
+%define PKGPREFIX           __PKGPREFIX__
+%define TOOLCOMBO           __TOOLCOMBO__
+%define RESULT_TOP          __RESULT_TOP__
+
+# Strange rule to make us fit Fedora's rule of needing to buld without flags.
+# If --without all is not given, build everything.
+%if %{?_without_all:0}%{!?_without_all:1}
+__FOR __CPU__ __CPUS__
+%define _with___CPU__ 1
+__ENDFOR
+%endif
+
+# Set CPUS to the list of CPUS enabled by the user
+# with --with i386, --with i686, etc.
+# See /usr/share/rpm-4.2/conditionalbuilds
+# I think this is a 4.0-ism, but earlier versions of RPM
+# can probably use the syntax --define _with_i386=1, or something like that.
+%define CPUS                dummy
+__FOR __CPU__ __CPUS__
+%{expand:%%define CPUS %{CPUS} %{?_with___CPU__: __CPU__}}
+__ENDFOR
+
+%define Name                %{PKGPREFIX}-%{TOOLCOMBO}
+%define Version             __CROSSTOOLVERSION__
+%define Release             1
+%define crosstool_pkg       crosstool-__CROSSTOOLVERSION__.tar.gz
+%define summary             %{TOOLCOMBO} cross compiler
+%define __os_install_post %{nil} 
+%define __check_files %{nil}
+
+Name            : %{Name}
+Summary         : %{summary}
+Version         : %{Version}
+Release         : %{Release}
+License         : GPL/LGPL
+Group           : Development/Languages
+URL             : http://www.kegel.com/crosstool
+Source0         : %{crosstool_pkg}
+__SOURCES__
+Buildroot: %{_tmppath}/%{name}-%{version}-%{release}-root
+Autoreqprov     : no
+# First cut at BuildRequires taken from rh's gcc34 specfile, 
+# minus version numbers, minus dejagnu
+BuildRequires: binutils, glibc-devel
+BuildRequires: zlib-devel, gettext, bison, flex, texinfo
+Requires: binutils, glibc-devel
+
+# When we switch to building relocatable toolchains, uncomment this line
+#Prefix          : %{RESULT_TOP}
+
+%Description
+%{summary}
+For people building from .srpms only:
+This .srpm builds for the following CPU types by default:
+__FOR __CPU__ __CPUS__
+__CPU__
+__ENDFOR
+If you want to control which CPU types to build for, give
+the --without all option, then --with foo for each CPU type foo
+you want to enable.  If you give a CPU type that is not on
+the above list, it will be silently ignored.
+Each CPU enabled builds one subpackage.
+For more information on crosstool, see http://www.kegel.com/crosstool
+
+#------------ unpack and patch ---------------------------------
+%prep
+%setup -n crosstool-__CROSSTOOLVERSION__
+# Following loop is silly, since it unpacks exactly the same
+# sources and applies exactly the same patches every time,
+# but I haven't bothered to figure out how to share source trees between CPU types yet
+for CPU in %{CPUS}; do
+  if test $CPU = dummy; then continue; fi
+  # Fix up broken CPU name (RPM does not allow dashes in variable names)
+  CPU=`echo $CPU | sed 's/_/-/;s/x86-64/x86_64/'`
+  TARGET=`cat $CPU.dat | grep TARGET= | sed 's/.*=//'`
+  # Set env variables required by getandpatch.sh
+  TARBALLS_DIR=$RPM_SOURCE_DIR
+  export TARBALLS_DIR
+  TOOLCOMBO=%{TOOLCOMBO}
+  export TOOLCOMBO
+  SRC_DIR=build/%{TOOLCOMBO}/$TARGET
+  mkdir -p $SRC_DIR
+  SRC_DIR=`cd $SRC_DIR; /bin/pwd`
+  export SRC_DIR
+  mkdir -p ${SRC_DIR}
+  NO_DOWNLOAD=1
+  export NO_DOWNLOAD
+  
+  # This won't download anything if all the tarballs are already in $RPM_SOURCE_DIR,
+  # but it will unpack and patch them.
+  eval `cat $TOOLCOMBO.dat` sh getandpatch.sh
+done
+
+#------------ build ---------------------------------
+%build
+for CPU in %{CPUS}; do
+  if test $CPU = dummy; then continue; fi
+  # Fix up broken CPU name (RPM does not allow dashes in variable names)
+  CPU=`echo $CPU | sed 's/_/-/;s/x86-64/x86_64/'`
+  TARGET=`cat $CPU.dat | grep TARGET= | sed 's/.*=//'`
+  # Set env variables required by crosstool.sh
+  PREFIX=%{buildroot}%{RESULT_TOP}/%{TOOLCOMBO}/$TARGET
+  export PREFIX
+  # Remove destination first to prevent pollution from previous builds (shouldn't crosstool do this?)
+  test -d ${PREFIX} && rm -rf ${PREFIX}
+  mkdir -p ${PREFIX}
+  SRC_DIR=`cd build/%{TOOLCOMBO}/$TARGET; /bin/pwd`
+  export SRC_DIR
+  BUILD_DIR=$SRC_DIR
+  export BUILD_DIR
+
+  #----- (hack
+  # Special hack: when users say -static, give them static copies of libnss*.a.
+  # This means they have to add stanzas like
+  # -Wl,--start-group -lpthread -lc -lnss_files -lnss_dns -lresolv -Wl,--end-group
+  # to get static binaries to link.  The benefit is, they no longer need to 
+  # have exactly matching copies of /lib/libnss*.so.* on the target system.
+  #GLIBC_EXTRA_CONFIG="--enable-static-nss"
+  #export GLIBC_EXTRA_CONFIG
+  #----- )
+
+  eval `cat $CPU.dat %{TOOLCOMBO}.dat` sh crosstool.sh
+
+  # build gdb only if GDB_DIR set in %{toolcombo}.dat
+  grep GDB_DIR %{TOOLCOMBO}.dat && eval `cat $CPU.dat %{TOOLCOMBO}.dat` sh gdb.sh
+
+  # Avoid rpmlint errors like
+  # W: crosstool-gcc-3.4.3-glibc-2.3.4-i386 manpage-not-gzipped /opt/crosstool/i686-pc-linux-gnu/i386/gcc-3.4.3-glibc-2.3.4/man/man1/i386-unknown-linux-gnu-addr2line.1
+  find $PREFIX/man -type f -not -name '*.gz' -print | xargs gzip -9f
+
+  if false; then
+    # Strip executables to avoid rpmlint errors like
+    # W: crosstool-gcc-3.4.3-glibc-2.3.4-i386 unstripped-binary-or-object /opt/crosstool/i686-pc-linux-gnu/i386/gcc-3.4.3-glibc-2.3.4/bin/i386-unknown-linux-gnu-ar
+    # when using old rpmbuild.  (New rpmbuild separates out the debugging info into separate package automatically.)
+    for foo in bin libexec lib/gcc-lib/$TARGET; do 
+      find $PREFIX/$foo -type f -not -name '*.o' -print
+    done | xargs file | grep 'ELF.*, dynamically linked.*not stripped' | sed 's/: .*//' | xargs --no-run-if-empty strip
+
+    EXCEPTIONS="ar as c++ gcc ld nm ranlib strip"
+    for file in $EXCEPTIONS; do
+      file $PREFIX/$TARGET/bin/$file
+    done | grep 'ELF.*, dynamically linked.*not stripped' | sed 's/: .*//' | xargs --no-run-if-empty strip
+
+    for foo in $TARGET/bin $TARGET/sbin; do 
+      find $PREFIX/$foo -type f -not -name '*.o' -print
+    done | xargs file | grep 'ELF.*, dynamically linked.*not stripped' | sed 's/: .*//' | xargs --no-run-if-empty $PREFIX/bin/$TARGET-strip 
+  fi
+done
+
+#------------ install ---------------------------------
+%Install
+# fix embedded paths so they'll work outside the buildroot
+for CPU in %{CPUS}; do
+  if test $CPU = dummy; then continue; fi
+  # Fix up broken CPU name (RPM does not allow dashes in variable names)
+  CPU=`echo $CPU | sed 's/_/-/;s/x86-64/x86_64/'`
+  TARGET=`cat $CPU.dat | grep TARGET= | sed 's/.*=//'`
+  REALPREFIX=%{RESULT_TOP}/%{TOOLCOMBO}/$TARGET
+
+  # Generate list of parent directories for rpm to chmod and create/remove on install/uninstall
+  # (else they get created with the default umask, which can be bad)
+  # Can't precompute this list if we want to make this package relocatable
+  echo "%defattr(-,root,root)" > %{Name}-%{Version}-$CPU-files.dat
+  dir=`dirname %{RESULT_TOP}`
+  while [ "$dir" != "/" ]; do
+    echo "%dir $dir" >> %{Name}-%{Version}-$CPU-files.dat
+    dir=`dirname $dir`
+  done
+
+__IF %have_sharedlibs
+  # Install libgcc.so in /lib/$TARGET in buildroot
+  mkdir -p %{buildroot}/lib/$TARGET
+  # Different toolchains hide the libraries in various places; try them all
+  for dir in . sys-root; do
+    for lib in lib lib64 usr/lib usr/lib64; do 
+      foo=%{buildroot}$REALPREFIX/$TARGET/$dir/$lib
+      if test -d $foo; then
+        # Use grep to filter out the silly lib.dir directories created by crosstool
+        (cd $foo; find . -type f -name 'libgcc_s.so*' | grep -v '\.dir/lib' | cpio -pd %{buildroot}/lib/$TARGET)
+      fi
+    done
+  done
+  # Generate list of files
+  find  %{buildroot}/lib/$TARGET -type f | sed 's,%{buildroot},,' > %{Name}-%{Version}-$CPU-libgcc-files.dat
+  
+  # Install libstdc++.so, libssp.so, and libmudflap.so in /usr/lib/$TARGET in buildroot
+  mkdir -p %{buildroot}/usr/lib/$TARGET
+  # Different toolchains hide the libraries in various places; try them all
+  for dir in . sys-root; do
+    for lib in lib lib64 usr/lib usr/lib64; do
+      foo=%{buildroot}$REALPREFIX/$TARGET/$dir/$lib
+      if test -d $foo; then
+        # only grab modern libstdc++, not backwards-compatibility one
+        # Use grep to filter out the silly lib.dir directories created by crosstool
+        (cd $foo; find . -type f -name 'libstdc++.so.[567]*' | grep -v '\.dir/lib' | cpio -pd %{buildroot}/usr/lib/$TARGET)
+        # only grab libssp 
+        (cd $foo; find . -type f -name 'libssp.so*' | grep -v '\.dir/lib' | cpio -pd %{buildroot}/usr/lib/$TARGET)
+        # only grab libmudflap
+        (cd $foo; find . -type f -name 'libmudflap.so*' | grep -v '\.dir/lib' | cpio -pd %{buildroot}/usr/lib/$TARGET)
+      fi
+    done
+  done
+  # Generate list of files
+  find  %{buildroot}/usr/lib/$TARGET -type f -name 'libstdc*'    | sed 's,%{buildroot},,' > %{Name}-%{Version}-$CPU-libstdcxx-files.dat
+  find  %{buildroot}/usr/lib/$TARGET -type f -name 'libssp*'     | sed 's,%{buildroot},,' > %{Name}-%{Version}-$CPU-libssp-files.dat
+  find  %{buildroot}/usr/lib/$TARGET -type f -name 'libmudflap*' | sed 's,%{buildroot},,' > %{Name}-%{Version}-$CPU-libmudflap-files.dat
+__ENDIF
+
+  # For gcc-2.95.3, actively nuke libstdc++.so, forcing apps to link the .a instead.
+  # (I thought Red Hat 6.2 did this because of a bug with exceptions, but
+  #  I can't find any evidence for this right now.)
+  # rpm-4.0 doesn't support nested ifs, so carefully delete only files that
+  # look like gcc-2's libstdc++ shared library.
+  for lib in lib usr/lib; do
+    rm -f %{buildroot}$REALPREFIX/$TARGET/$lib/libstdc++-*libc*.so*
+  done
+
+  %{buildroot}$REALPREFIX/bin/fix-embedded-paths %{buildroot}$REALPREFIX $REALPREFIX %{buildroot}$REALPREFIX
+  # Set permissions (since the mkdirs above might 
+  # have been created with a nasty umask like 0007,
+  # and might not be readable by anyone but root)
+  find %{buildroot}$REALPREFIX -perm -400 -not -perm -044 | xargs --no-run-if-empty chmod ag+r
+  find %{buildroot}$REALPREFIX -perm -100 -not -perm -011 | xargs --no-run-if-empty chmod ag+x
+done
+
+#------------ clean ---------------------------------
+%Clean
+rm -rf %{buildroot}
+
+#----------- files ----------------------------------
+# Hmm.  Does the main package have any files?  Um, maybe config.guess?
+%Files
+
+#--------------------------- subpackages ---------------------------
+# One subpackage per CPU we're generating a toolchain for.
+# Shame rpm doesn't have a looping construct.  Let's pretend it does 
+# (__FOR ... __ENDFOR), and assume it's expanded by the same preprocessor 
+# that expands keywords like __CPUS__.
+__FOR __CPU__ __CPUS__
+
+# Only enable if user has asked for it with --with i386 etc.
+%if %{?_with___CPU__:1}%{!?_with___CPU__:0}
+
+# Fix up broken CPU name (RPM does not allow dashes in variable names)
+%{expand:%%define CPU %(echo __CPU__ | sed 's/_/-/;s/x86-64/x86_64/')}
+
+# __TARGET__ is a magic keyword expanded by expandForLoops.pl as a function of __CPU__
+%define TARGET __TARGET__
+
+%package %{CPU}-devel
+Autoreqprov     : no
+Summary         : %{summary} for %{CPU}
+Group           : Development/Languages
+
+%description %{CPU}-devel
+%{summary}
+Built using %{Name}-%{Version}, targeting %{CPU} aka %{TARGET}
+For more information on crosstool, see http://www.kegel.com/crosstool
+Be sure to test thoroughly before trusting; this gcc/glibc cross-toolchain 
+has not been tested as heavily as native gcc/glibc toolchains.
+The crossgcc mailing list is a good place to discuss any problems.
+
+%Files %{CPU}-devel -f %{Name}-%{Version}-%{CPU}-files.dat
+%defattr(-,root,root)
+%dir %{RESULT_TOP}
+%dir %{RESULT_TOP}/%{TOOLCOMBO}
+%{RESULT_TOP}/%{TOOLCOMBO}/%{TARGET}
+
+__IF %have_sharedlibs
+# Only needed for gcc-3.3 and higher 
+# Should only be installed if your system lacks of libmudflap.so and
+# you want to test apps built with this toolchain.
+
+%package %{CPU}-libmudflap
+Autoreqprov     : no
+Summary         : libmudflap.so for %{CPU} target systems which don't have one natively
+Group           : Development/Languages
+
+%description %{CPU}-libmudflap
+Should only be installed if your target lacks libmudflap.so and
+you want to run apps built with this toolchain.
+Built using %{Name}-%{Version}, targeting %{CPU} aka %{TARGET}
+For more information on crosstool, see http://www.kegel.com/crosstool
+
+%Files %{CPU}-libmudflap -f  %{Name}-%{Version}-%{CPU}-libmudflap-files.dat
+%defattr(-,root,root)
+%dir /usr/lib/%{TARGET}
+
+# Use umask 007 in case umask is 007 and the target system is using glibc-2.1.3 and lacks 
+# http://sourceware.org/cgi-bin/cvsweb.cgi/libc/elf/cache.c.diff?r1=1.2&r2=1.3&cvsroot=glibc
+# which would cause ld.so.cache to be unreadable (hey, there might be a few RH6.2 systems out there still!)
+%post %{CPU}-libmudflap
+umask 007
+if test -d /etc/ld.so.conf.d; then
+  CONFFILE=/etc/ld.so.conf.d/crosstool-%{TARGET}.conf
+  if test ! -f $CONFFILE; then
+    # create
+    echo /lib/%{TARGET}     > $CONFFILE
+    echo /usr/lib/%{TARGET} >> $CONFFILE
+  fi
+else
+  CONFFILE=/etc/ld.so.conf
+  if ! grep -q /lib/%{TARGET} $CONFFILE; then
+    # append
+    echo /lib/%{TARGET}     >> $CONFFILE
+    echo /usr/lib/%{TARGET} >> $CONFFILE
+  fi
+fi
+/sbin/ldconfig > /dev/null 2>&1
+
+# Can't use -p /sbin/ldconfig, that gives '/sbin/ldconfig: relative path `0' used to build cache' error
+%postun %{CPU}-libmudflap
+umask 007
+/sbin/ldconfig > /dev/null 2>&1
+
+# Only needed for gcc-3.3 and higher 
+# Should only be installed if your system lacks of libssp.so and
+# you want to test apps built with this toolchain.
+
+%package %{CPU}-libssp
+Autoreqprov     : no
+Summary         : libssp.so for %{CPU} target systems which don't have one natively
+Group           : Development/Languages
+
+%description %{CPU}-libssp
+Should only be installed if your target lacks libssp.so and
+you want to run apps built with this toolchain.
+Built using %{Name}-%{Version}, targeting %{CPU} aka %{TARGET}
+For more information on crosstool, see http://www.kegel.com/crosstool
+
+%Files %{CPU}-libssp -f  %{Name}-%{Version}-%{CPU}-libssp-files.dat
+%defattr(-,root,root)
+%dir /usr/lib/%{TARGET}
+
+# Use umask 007 in case umask is 007 and the target system is using glibc-2.1.3 and lacks 
+# http://sourceware.org/cgi-bin/cvsweb.cgi/libc/elf/cache.c.diff?r1=1.2&r2=1.3&cvsroot=glibc
+# which would cause ld.so.cache to be unreadable (hey, there might be a few RH6.2 systems out there still!)
+%post %{CPU}-libssp
+umask 007
+if test -d /etc/ld.so.conf.d; then
+  CONFFILE=/etc/ld.so.conf.d/crosstool-%{TARGET}.conf
+  if test ! -f $CONFFILE; then
+    # create
+    echo /lib/%{TARGET}     > $CONFFILE
+    echo /usr/lib/%{TARGET} >> $CONFFILE
+  fi
+else
+  CONFFILE=/etc/ld.so.conf
+  if ! grep -q /lib/%{TARGET} $CONFFILE; then
+    # append
+    echo /lib/%{TARGET}     >> $CONFFILE
+    echo /usr/lib/%{TARGET} >> $CONFFILE
+  fi
+fi
+/sbin/ldconfig > /dev/null 2>&1
+
+# Can't use -p /sbin/ldconfig, that gives '/sbin/ldconfig: relative path `0' used to build cache' error
+%postun %{CPU}-libssp
+umask 007
+/sbin/ldconfig > /dev/null 2>&1
+
+# Only needed for gcc-3.3 and higher 
+# Should only be installed if your system lacks of libgcc_s.so and
+# you want to test apps built with this toolchain.
+# Note: native libgcc rpms have to use a tiny statically linked
+# program, libgcc_post_upgrade, to invoke ldconfig.  No idea
+# why, but maybe it's because that RPM has to be installed so early,
+# before sh.  Anyway, we don't have that problem here;
+# this libgcc rpm is only for use on systems which don't use
+# libgcc natively at all (like Red Hat 7 or Red Hat 9).
+
+%package %{CPU}-libgcc
+Autoreqprov     : no
+Summary         : libgcc_s.so for %{CPU} target systems which don't have one natively
+Group           : Development/Languages
+
+%description %{CPU}-libgcc
+Should only be installed if your target lacks libgcc_s.so and
+you want to run apps built with this toolchain.
+Built using %{Name}-%{Version}, targeting %{CPU} aka %{TARGET}
+For more information on crosstool, see http://www.kegel.com/crosstool
+
+%Files %{CPU}-libgcc -f  %{Name}-%{Version}-%{CPU}-libgcc-files.dat
+%defattr(-,root,root)
+%dir /lib/%{TARGET}
+
+# Use umask 007 in case umask is 007 and the target system is using glibc-2.1.3 and lacks 
+# http://sourceware.org/cgi-bin/cvsweb.cgi/libc/elf/cache.c.diff?r1=1.2&r2=1.3&cvsroot=glibc
+# which would cause ld.so.cache to be unreadable (hey, there might be a few RH6.2 systems out there still!)
+%post %{CPU}-libgcc
+umask 007
+if test -d /etc/ld.so.conf.d; then
+  CONFFILE=/etc/ld.so.conf.d/crosstool-%{TARGET}.conf
+  if test ! -f $CONFFILE; then
+    # create
+    echo /lib/%{TARGET}     > $CONFFILE
+    echo /usr/lib/%{TARGET} >> $CONFFILE
+  fi
+else
+  CONFFILE=/etc/ld.so.conf
+  if ! grep -q /lib/%{TARGET} $CONFFILE; then
+    # append
+    echo /lib/%{TARGET}     >> $CONFFILE
+    echo /usr/lib/%{TARGET} >> $CONFFILE
+  fi
+fi
+/sbin/ldconfig > /dev/null 2>&1
+
+# Can't use -p /sbin/ldconfig, that gives '/sbin/ldconfig: relative path `0' used to build cache' error
+%postun %{CPU}-libgcc
+umask 007
+/sbin/ldconfig > /dev/null 2>&1
+
+# Only needed for gcc-3 and higher (gcc-2.95's libstdcxx didn't work as a shared library)
+# Should only be installed if your system lacks this version of libstdc++ and
+# you want to test apps built with this toolchain.
+# We can be lazy and use %dir /usr/lib because *nothing* is installed
+# in our buildroot's /usr/lib but libstdc++.
+
+%package %{CPU}-libstdc++
+Autoreqprov     : no
+Summary         : libstdc++.so.[56] for %{CPU} target systems which don't have one natively
+Group           : Development/Languages
+
+%description %{CPU}-libstdc++
+Should only be installed if your target lacks this version of libstdc++.so.[56] and
+you want to run apps built with this toolchain.
+Built using %{Name}-%{Version}, targeting %{CPU} aka %{TARGET}
+For more information on crosstool, see http://www.kegel.com/crosstool
+
+%Files %{CPU}-libstdc++ -f  %{Name}-%{Version}-%{CPU}-libstdcxx-files.dat
+%defattr(-,root,root)
+%dir /usr/lib/%{TARGET}
+
+%post %{CPU}-libstdc++
+umask 007
+if test -d /etc/ld.so.conf.d; then
+  CONFFILE=/etc/ld.so.conf.d/crosstool-%{TARGET}.conf
+  if test ! -f $CONFFILE; then
+    # create
+    echo /lib/%{TARGET}     > $CONFFILE
+    echo /usr/lib/%{TARGET} >> $CONFFILE
+  fi
+else
+  CONFFILE=/etc/ld.so.conf
+  if ! grep -q /usr/lib/%{TARGET} $CONFFILE; then
+    # append
+    echo /lib/%{TARGET}     >> $CONFFILE
+    echo /usr/lib/%{TARGET} >> $CONFFILE
+  fi
+fi
+/sbin/ldconfig > /dev/null 2>&1
+
+# Can't use -p /sbin/ldconfig, that gives '/sbin/ldconfig: relative path `0' used to build cache' error
+%postun %{CPU}-libstdc++ 
+umask 007
+/sbin/ldconfig > /dev/null 2>&1
+
+__ENDIF
+%endif
+
+__ENDFOR
+
+%changelog
+
+* Wed Nov 15 2006 Dan Kegel <dank at kegel.com> - 0:0.43-0.1
+- update to crosstool-0.43
+
+* Wed Mar 01 2006 Dan Kegel <dank at kegel.com> - 0:0.42-0.1
+- update to crosstool-0.42
+
+* Sat Feb 26 2006 Dan Kegel <dank at kegel.com> - 0:0.41-0.1
+- update to crosstool-0.41
+
+* Sat Feb 19 2006 Dan Kegel <dank at kegel.com> - 0:0.40-0.1
+- update to crosstool-0.40
+
+* Fri Jul 8 2005 Dan Kegel <dank at kegel.com> - 0:0.38-0.1
+- add commented-out hack for static libnss
+
+* Sat May 14 2005 Dan Kegel <dank at kegel.com> - 0:0.34-0.1
+- fix how ldconfig is invoked to get rid of garbage files in /
+
+* Sat May 7 2005 Dan Kegel <dank at kegel.com>
+- updated to crosstool-0.34
+- got rid of build system type in path, move toolcombo before target in directory name
+
+* Wed May 4 2005 Dan Kegel <dank at kegel.com> - 0:0.33-0.1
+- updated to crosstool-0.33
+
+* Sat Apr 9 2005 Dan Kegel <dank at kegel.com> - 0:0.32-0.1
+
+- added fix-embedded-paths and buildroot
+- added subpackages for libgcc and libstdc++
+
+* Fri Apr 1 2005 Dan Kegel <dank at kegel.com> - 0:0.31-0.1
+
+- created
+
+

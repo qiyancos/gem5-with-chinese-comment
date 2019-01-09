@@ -1,0 +1,252 @@
+Message-ID: <1f3029c60405281633692ce8b3@mail.gmail.com>
+Date: Fri, 28 May 2004 16:33:00 -0700
+From: Josh Hyman <josh.hyman@gmail.com>
+To: distcc@lists.samba.org
+
+In http://lists.samba.org/archive/distcc/2004q2/002250.html, Dan
+proposed randomizing the hosts list.  Here's a patch to add that
+feature, controlled by a special --randomize option in the hosts list.
+On a large shared build cluster, this helps spread the load
+without requiring separate hosts lists for each user.
+Martin, what do you think?
+
+-- Josh
+
+diff -ur /home/matthewbg/distcc-2.16/man/distcc.1 distcc-2.16/man/distcc.1
+--- /home/matthewbg/distcc-2.16/man/distcc.1	2004-05-02 17:37:10.000000000 -0700
++++ distcc-2.16/man/distcc.1	2004-07-29 16:02:12.000000000 -0700
+@@ -221,7 +221,9 @@
+ distcc prefers hosts towards the start of the list, so machines should
+ be listed in descending order of speed.  In particular, when only a
+ single compilation can be run (such as from a configure script), the
+-first machine listed is used.  
++first machine listed is used (but see
++.I --randomize
++below).
+ .PP
+ Placing 
+ .I localhost
+@@ -235,6 +237,14 @@
+ client is less than one fifth of the total, then the client should be
+ left out of the list.
+ .PP
++If you have a large shared build cluster and a single shared hosts file,
++the above rules would cause the first few machines in the hosts
++file to be tried first even though they are likely to be busier than machines
++later in the list.  To avoid this, place the keyword
++.I --randomize
++into the host list.  This will cause the host list to be randomized,
++which should improve performance slightly for large build clusters.
++.PP
+ Performance depends on the details of the source and makefiles used
+ for the project, and the machine and network speeds.  Experimenting
+ with different settings for the host list and -j factor may improve
+@@ -245,6 +255,7 @@
+ .nf
+   DISTCC_HOSTS = HOSTSPEC ...
+   HOSTSPEC = LOCAL_HOST | SSH_HOST | TCP_HOST | OLDSTYLE_TCP_HOST
++                        | GLOBAL_OPTION
+   LOCAL_HOST = localhost[/LIMIT]
+   SSH_HOST = [USER]@HOSTID[/LIMIT][:COMMAND][OPTIONS]
+   TCP_HOST = HOSTID[:PORT][/LIMIT][OPTIONS]
+@@ -252,6 +263,7 @@
+   HOSTID = HOSTNAME | IPV4
+   OPTIONS = ,OPTION[OPTIONS]
+   OPTION = lzo
++  GLOBAL_OPTION = --randomize
+ .fi
+ .PP
+ Here are some individual examples of the syntax:
+@@ -298,6 +310,9 @@
+ .TP
+ .B ,lzo
+ Enables LZO compression for this TCP or SSH host.
++.TP
++.B --randomize
++Randomize the host list before execution.
+ .PP
+ Here is an example demonstrating some possibilities:
+ .PP
+diff -ur /home/matthewbg/distcc-2.16/NEWS distcc-2.16/NEWS
+--- /home/matthewbg/distcc-2.16/NEWS	2004-07-07 22:56:55.000000000 -0700
++++ distcc-2.16/NEWS	2004-07-29 16:15:43.000000000 -0700
+@@ -87,6 +87,9 @@
+     * distcc can now be built with a build directory separate from the
+       source directory.  Patch from Dennis Henriksen.
+ 
++    * Added --randomize option to host list to help spread the load
++      across large shared clusters.  From patch by Google
++      (Josh Hyman <joshh@google.com>).
+ 
+   DOCUMENTATION:
+ 
+diff -ur /home/matthewbg/distcc-2.16/src/distcc.c distcc-2.16/src/distcc.c
+--- /home/matthewbg/distcc-2.16/src/distcc.c	2004-07-06 21:43:46.000000000 -0700
++++ distcc-2.16/src/distcc.c	2004-07-29 16:02:12.000000000 -0700
+@@ -102,6 +102,7 @@
+ "   HOST:PORT                  TCP connection, specified port\n"
+ "   @HOST                      SSH connection\n"
+ "   USER@HOST                  SSH connection to specified host\n"
++"   --randomize                Randomize the server list before execution\n"
+ "\n"
+ "distcc distributes compilation jobs across volunteer machines running\n"
+ "distccd.  Jobs that cannot be distributed, such as linking or \n"
+diff -ur /home/matthewbg/distcc-2.16/src/hosts.c distcc-2.16/src/hosts.c
+--- /home/matthewbg/distcc-2.16/src/hosts.c	2004-07-06 01:08:14.000000000 -0700
++++ distcc-2.16/src/hosts.c	2004-07-29 16:02:12.000000000 -0700
+@@ -4,6 +4,9 @@
+  *
+  * Copyright (C) 2002, 2003, 2004 by Martin Pool <mbp@samba.org>
+  *
++ * dcc_randomize_host_list() and friends:
++ *   Copyright (C) 2004 by Google (Josh Hyman <joshh@google.com>)
++ *
+  * This program is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public License as
+  * published by the Free Software Foundation; either version 2 of the
+@@ -36,6 +39,7 @@
+  *
+   DISTCC_HOSTS = HOSTSPEC ...
+   HOSTSPEC = LOCAL_HOST | SSH_HOST | TCP_HOST | OLDSTYLE_TCP_HOST
++                        | GLOBAL_OPTION
+   LOCAL_HOST = localhost[/LIMIT]
+   SSH_HOST = [USER]@HOSTID[/LIMIT][:COMMAND][OPTIONS]
+   TCP_HOST = HOSTID[:PORT][/LIMIT][OPTIONS]
+@@ -43,6 +47,7 @@
+   HOSTID = HOSTNAME | IPV4
+   OPTIONS = ,OPTION[OPTIONS]
+   OPTION = lzo
++  GLOBAL_OPTION = --randomize
+  *
+  * Any amount of whitespace may be present between hosts.
+  *
+@@ -89,6 +94,8 @@
+ #include <errno.h>
+ #include <time.h>
+ #include <ctype.h>
++#include <sys/time.h>
++#include <sys/types.h>
+ 
+ #include "distcc.h"
+ #include "trace.h"
+@@ -99,6 +106,18 @@
+ 
+ const int dcc_default_port = DISTCC_DEFAULT_PORT;
+ 
++/***
++ * A simple container which would hold a host -> rand int pair
++ ***/
++struct rand_container {
++    struct dcc_hostdef *host;
++    int rand;
++};
++
++int dcc_randomize_host_list(struct dcc_hostdef **host_list, int length);
++
++int dcc_compare_container(const void *a, const void *b);
++
+ 
+ #ifndef HAVE_STRNDUP
+ /**
+@@ -347,7 +366,7 @@
+                     struct dcc_hostdef **ret_list,
+                     int *ret_nhosts)
+ {
+-    int ret;
++    int ret, flag_randomize = 0;
+     struct dcc_hostdef *prev, *curr;
+ 
+     /* TODO: Check for '/' in places where it might cause trouble with
+@@ -389,6 +408,13 @@
+         token_start = where;
+         token_len = strcspn(where, " #\t\n\f");
+ 
++        /* intercept keywords which are not actually hosts */
++        if (!strncmp(token_start, "--randomize", 11)) {
++            flag_randomize = 1;
++            where = token_start + token_len;
++            continue;
++        }
++
+         /* Allocate new list item */
+         curr = calloc(1, sizeof(struct dcc_hostdef));
+         if (!curr) {
+@@ -440,6 +466,9 @@
+     }
+     
+     if (*ret_nhosts) {
++        if (flag_randomize)
++            if ((ret = dcc_randomize_host_list(ret_list, *ret_nhosts)) != 0)
++                return ret;
+         return 0;
+     } else {
+         rs_log_warning("%s contained no hosts; can't distribute work", source_name); 
+@@ -448,6 +477,68 @@
+ }
+ 
+ 
++int dcc_compare_container(const void *a, const void *b)
++{
++    struct rand_container *i, *j;
++    i = (struct rand_container *) a;
++    j = (struct rand_container *) b;
++
++    if (i->rand == j->rand)
++        return 0;
++    else if (i->rand > j->rand)
++        return 1;
++    else
++        return -1;
++}
++
++int dcc_randomize_host_list(struct dcc_hostdef **host_list, int length)
++{
++    int i, ret;
++    unsigned int rand_val;
++    struct dcc_hostdef *curr;
++    struct rand_container *c;
++    struct timeval tv;
++
++    c = malloc(length * sizeof(struct rand_container));
++    if (!c) {
++        rs_log_crit("failed to allocate host definition");
++        return EXIT_OUT_OF_MEMORY;
++    }
++
++#ifdef HAVE_GETTIMEOFDAY
++    if ((ret = gettimeofday(&tv, NULL)) == 0)
++        rand_val = (unsigned int) tv.tv_usec;
++    else
++#else
++        rand_val = (unsigned int) time(NULL) ^ (unsigned int) getpid();
++#endif
++
++    /* create pairs of hosts -> random numbers */
++    srand(rand_val);
++    curr = *host_list;
++    for (i = 0; i < length; i++) {
++        c[i].host = curr;
++        c[i].rand = rand();
++        curr = curr->next;
++    }
++
++    /* sort */
++    qsort(c, length, sizeof(struct rand_container), &dcc_compare_container);
++
++    /* reorder the list */
++    for (i = 0; i < length; i++) {
++        if (i != length - 1)
++            c[i].host->next = c[i+1].host;
++        else
++            c[i].host->next = NULL;
++    }
++
++    /* move the start of the list */
++    *host_list = c[0].host;
++
++    free(c);
++    return 0;
++}
+ 
+ int dcc_free_hostdef(struct dcc_hostdef *host)
+ {

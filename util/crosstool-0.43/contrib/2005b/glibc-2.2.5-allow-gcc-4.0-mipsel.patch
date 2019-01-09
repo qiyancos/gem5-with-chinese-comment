@@ -1,0 +1,50 @@
+--- glibc-2.2.5/sysdeps/mips/dl-machine.h.old	2005-03-28 18:19:56.000000000 +0100
++++ glibc-2.2.5/sysdeps/mips/dl-machine.h	2005-03-28 18:25:15.000000000 +0100
+@@ -534,14 +534,28 @@
+     }
+ }
+ 
+-static inline void
++#if __GNUC__ >= 4
++  auto inline void
++#else
++  static inline void
++#endif
++#if __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
++  __attribute ((always_inline))
++#endif
+ elf_machine_rel_relative (ElfW(Addr) l_addr, const ElfW(Rel) *reloc,
+ 			  ElfW(Addr) *const reloc_addr)
+ {
+   /* XXX Nothing to do.  There is no relative relocation, right?  */
+ }
+ 
+-static inline void
++#if __GNUC__ >= 4
++  auto inline void
++#else
++  static inline void
++#endif
++#if __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
++  __attribute ((always_inline))
++#endif
+ elf_machine_lazy_rel (struct link_map *map,
+ 		      ElfW(Addr) l_addr, const ElfW(Rel) *reloc)
+ {
+@@ -550,7 +564,14 @@
+ 
+ #ifndef RTLD_BOOTSTRAP
+ /* Relocate GOT. */
+-static inline void
++#if __GNUC__ >= 4
++  auto inline void
++#else
++  static inline void
++#endif
++#if __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
++  __attribute ((always_inline))
++#endif
+ elf_machine_got_rel (struct link_map *map, int lazy)
+ {
+   ElfW(Addr) *got;
+

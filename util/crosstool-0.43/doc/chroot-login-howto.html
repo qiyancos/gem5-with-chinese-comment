@@ -1,0 +1,322 @@
+<html>
+<head>
+<title>chroot login HOWTO</title>
+</head>
+<body>
+<h1>chroot login HOWTO</h1>
+<h2>Introduction</h2>
+Testing new cross-toolchains properly requires overriding your
+target system's core shared libraries with the newly created, and probably buggy, ones.
+Doing this without nuking your target system requires creating a sandbox of some sort.
+This document describes one way to set up a chroot jail on your target system
+suitable for running gcc and glibc remote regression tests 
+(or many other purposes).
+
+<h2>1. Set Up and Test a Jail</h2>
+Two shell scripts are provided as an example of how to set up a jail on linux.
+Please read and understand them.  They are provided as executable shell
+scripts, but they should not be run blindly.
+You may need to edit the two scripts to reflect your target system's peculiarities
+and the needs of the programs you intend to run in the jail.
+The scripts as furnished have been tested both on Debian x86 and on an embedded PPC
+Linux system based on busybox, and contain everything needed to run the gcc and glibc
+regression tests (which isn't much).  They assume that either busybox or ash is available, so 
+if you're running this on a workstation, you'll need install ash before running them.
+(ash is preferred over bash simply because it has fewer dependencies; you can use
+bash, but you'll need to modify the scripts to add the additional libraries used by bash,
+e.g. ncurses.)
+<p>
+The first shell script, <a href="../mkjail.sh">mkjail.sh</a>, makes a tarball containing core shared libraries
+and the jail's etc/passwd file.
+The second shell script, <a href="../initjail.sh">initjail.sh</a>,
+unpacks that tarball into the jail, and adds crucial /dev entries, a
+/proc filesystem, /etc files, core programs like sh, and non-toolchain
+shared libraries, and appends a given file to the jail's /etc/passwd file.
+<p>
+The two-step process is exactly what you need when testing
+cross-toolchains; you run the first script on the development system,
+and the second script on the target system.  However, you should run them
+both on the target system initially and verify that the jail works before
+testing them with your newly compiled and probably buggy toolchain's
+shared libraries.
+
+<h3>1.1. Setting up a jail</h3>
+For example, here's how to use the scripts to set up a minimal jail containing a copy of the system libraries
+and system /etc/passwd file:
+<pre>
+$ sh mkjail.sh / /etc/passwd
+$ su
+# zcat jail.tar.gz | sh initjail.sh myjail
+</pre>
+
+<h3>1.2. Testing the Jail</h3>
+Once you have the jail set up, test it by hand using the /usr/sbin/chroot program
+to run a shell inside the jail, e.g.
+<pre>
+$ su
+# /usr/sbin/chroot `pwd`/myjail /bin/sh
+</pre>
+(Note: the argument to chroot must be an absolute path, else exec fails.  This appears to be a bug in Linux.)
+If you can't run a shell inside the jail, try running something easier, e.g. /bin/true
+(the simplest program there is):
+<pre>
+$ su
+# /usr/sbin/chroot `pwd`/myjail /bin/true
+</pre>
+Once you get that working, go back to trying the shell.
+The most common cause of programs not running in the jail is missing
+shared libraries; to fix that, just copy the missing libraries from
+the system into the corresponding place in the jail.  (Note that shared
+libraries consist of one or two files, and zero or more symbolic links;
+take care to not follow symbolic links when copying.  In the provided scripts,
+I use the -d option to /bin/cp to avoid dereferencing links.)
+
+<h2>2. Configure Jail Login Scheme</h2>
+Specific users can be configured such that the moment they log in,
+a wrapper program (see <a href="../chrootshell.c">chrootshell.c</a>)
+jails the user in his home directory using the chroot system call,
+looks up his record in the jail's private /etc/passwd file, and uses it to
+set his current directory and transfer control to his preferred shell.
+Every program and shared library the user executes then comes from
+the jail, not from the surrounding system.
+<p>
+Only users who have the root password can set up jails, partly because
+setting up a jail requires mounting /proc inside the jail.  Users with
+the root password can set up jails on behalf of lesser users (though
+you might want to take away their ability to run setuid root programs
+if you do that, else they might be able to get out of the jail...)
+
+<h3>2.1. Install chrootshell</h3>
+chrootshell will be installed setuid root, so first audit the source (chrootshell.c)
+for security problems, then compile and install it with the commands
+<pre>
+$ cc chrootshell.c -o chrootshell
+$ su
+# install -o root -m 4755 chrootshell /sbin/chrootshell
+</pre>
+You probably need to add the line 
+<pre>
+/sbin/chrootshell
+</pre>
+to /etc/shells, else login may refuse to run it.
+
+<h3>2.2. Create outer /etc/passwd entry</h3>
+For each user you want to give access to a jail, create a new /etc/passwd
+entry for each user/jail combination, with home directory set to the
+jail's top directory, and the shell set to /sbin/chrootshell, e.g.
+<pre>
+fred2:x:1000:1000:Fred Smith's Jail:/home/fred/jail:/sbin/chrootshell
+</pre>
+
+<h3>2.3. Create inner /etc/passwd entry</h3>
+For each user created in the previous step, create a new /etc/passwd entry in
+the jail's /etc/passwd.  This entry should list a real home directory inside
+the jail, and a real shell, so it'll be quite different from the one in the system /etc/passwd.
+For example:
+<pre>
+fred2:x:1000:1000:Fred Smith In Jail:/home/fred2:/bin/sh
+</pre>
+
+<h3>2.4. Test and Troubleshoot Jail Login</h3>
+Try logging in as a jailed user via telnet, e.g.
+<pre>
+$ telnet localhost
+username: fred2
+password: xxxx
+$ ls
+</pre>
+When you do an ls, you should see just the files in that user's home directory inside the jail.
+<p>
+If telnet just closes the connection after login, first you need to figure out whether
+the problem is before or after chrootshell starts.  Begin by listing
+the target system's logfiles, e.g. 
+<pre>
+$ su
+# cd /var/log
+# ls -ltr
+</pre>
+and examine the most recently change log files for telnet or pam permission problems.
+If you see any, it means you haven't even gotten to chrootshell yet.
+<p>
+If it looks like chrootshell is started, but then aborts, you can turn on more helpful
+logging by uncommenting the line
+<pre>
+/* #define DEBUG_PRINTS */
+</pre>
+and recompiling and reinstalling chrootshell.
+This will cause verbose error messages to be sent directly to the file /var/log/chrootshell.log.
+The error messages tell you what line chrootshell.c is failing in, which should tell you
+enough to solve the problem.
+
+<h2>3. Setting Up Berkeley r-utilities (rsh, rlogin, rcp)</h2>
+For truly convenient (but insecure) access to the jail, you may want to set up the
+Berkely r-utilities (rsh, rlogin, and rcp).  For instance, they are the native and
+probably preferred way of running the gcc and glibc test suites
+on remote embedded systems with tcp/ip connectivity.
+<p>
+Incidentally, rcp and rsh are the reason I used a C program for chrootshell rather than a shell
+script.  A shell script version of chrootshell seems to fail to handle some of the remote commands
+
+<h3>3.1. Installing r-utilities clients and servers</h3>
+<b>Beware: this is highly insecure!</b>
+<p>
+To do this on a Red Hat or Debian Linux workstation, install the rsh-server and rsh-client packages.
+You can also do this by downloading, building, and installing
+ftp://ftp.gnu.org/gnu/inetutils/inetutils-1.4.2.tar.gz.  (Don't use version 1.4.1; the
+rshd in that version did not set up the remote environment properly.)
+For an embedded target, the only parts of inetutils you really need to build and install are
+rcp, rshd, and rlogind.  (Yes, you need rcp even if you just want to run the server side.)
+sent by the gcc regression test due to quoting problems.
+<p>
+Once the binaries are installed on the target, you need to configure the system
+to run them.  
+<p>
+rshd is run via inetd or xinetd or the like.  
+<br>
+If your target system uses inetd, here's an example line to add to /etc/inetd.conf:
+<pre>
+shell   stream  tcp     nowait.1000  root    /bin/rshd
+</pre>
+The ".1000" tells inetd to expect 1000 sessions per minute, which should be sufficient
+to handle the gcc regression tests.
+(If you leave this off, inetd will stop spawning rshd after about the 40th
+session in a one-minute period.)
+<p>
+If your target system uses xinetd, you probably need to set the "cps" field
+of /etc/xinetd.d/rsh to a large value such as "200 5" for xinet to handle
+the expected traffic.  I haven't tested this, but here's what I think 
+/etc/xinetd.d/rsh should look like:
+<pre>
+service login
+{
+   socket_type             = stream
+   wait                    = no
+   cps                     = 200 5
+   user                    = root
+   server                  = /usr/sbin/in.rlogind
+   disable                 = no
+}
+</pre>
+
+<p>
+rlogind is normally run standalone by giving the -d option.   For instance, add this line
+to the target system's startup scripts:
+<pre>
+/bin/rlogind -d
+</pre>
+If you want to allow remote access by root (which is highly insecure, 
+but useful in limited situations, as you'll see below), add the -o option.
+
+<h3>3.2. Opening up a security hole for the r-utilities</h3>
+If your systems use a firewall, you'll need to open up TCP ports 513 (the 'login' service)
+and 514 (the 'shell' service).  Note that this is a highly insecure thing to do,
+and should only be done inside a network entirely disconnected from the Internet or any large LAN,
+or at least well-shielded from it by another firewall.
+<P>
+If your system is using PAM, you may need to add entries in /etc/pam.d for rsh and rlogin.
+(If you installed the rsh-servers package, it probably added these entries for you.)
+<p>
+You probably need to add entries either to the systemwide /etc/hosts.equiv file
+(see 'man hosts.equiv') or the per-user .rhosts file (see 'man rhosts').
+
+<h3>3.2. Testing and Troubleshooting rsh</h3>
+First, verify you can run 'ls' remotely without the jail.
+Assuming the target system's hostname is 'target',
+and assuming you have an account with the same name on both systems,
+give the following command on your workstation:
+<pre>
+$ rsh target ls
+</pre>
+If this doesn't work, look at the most recently modified files in the target's /var/log directory
+for interesting error messages.  If that doesn't explain the problem,
+try running tcpdump and looking at the packets being sent and received.
+If that doesn't explain the problem, you can run rshd under strace to see what files it's
+opening -- maybe it's not looking where you expected for security info.
+(This requires modifying /etc/inetd.conf to invoke <tt>strace -o /tmp/strace.log /bin/rshd</tt>
+instead of just <tt>/bin/rshd</tt>.)
+When all else fails, you could build rsh from source and step through it in the debugger.
+<p>
+Once that's working, verify that you can spawn 200 commands in quick succession, e.g.
+<pre>
+x=0; while test $x -lt 200; do rsh 11.3.4.1 ls; x=$(($x+1)); echo $x; done
+</pre>
+and once that works, really overstress the system by verifying you can spawn 200 overlapping commands, e.g.
+<pre>
+x=0; while test $x -lt 200; do rsh -n 11.3.1.1 ls & true ; x=$(($x+1)); echo $x; done
+</pre>
+If you get the error 	
+<pre>
+poll: protocol failure in circuit setup
+</pre>
+around the 40th iteration, then you may need to edit /etc/inetd.conf and add .1000
+to the end of the 'nowait' keyword (or edit /etc/xinit.d/rsh and add the cps parameter...) 
+as described above.
+
+<h3>3.3. Testing rlogin</h3>
+Verify you can get a remote shell with either the command 'rlogin target' (or its synonym 'rsh target';
+rsh invokes rlogin if it's run without a command).
+
+<h3>3.4. Testing rcp</h3>
+Verify you can copy files to the target system using rcp, e.g.
+<pre>
+rcp /etc/hosts target:
+</pre>
+
+<h2>4. Setting up chroot jails remotely</h2>
+The entire reason I wrote this document was to help me achieve the goal
+of fully automated build-and-test of crosstoolchains.  This requires
+a way to remotely script replacing the contents of a chroot jail with
+new system libraries.  Once a jail has been set up for the user you
+plan to run the remote tests as, and it has passed all the above tests,
+you should be able to blow away the old jail's contents, and recreate
+the jail remotely filled with the system shared libraries you plan
+to test.  For example, assuming the toolchain you want to test is in
+/opt/my_toolchain, and the user 'jailuser' is set up to be inside the
+jail on the target, you can rebuild it with the following commands:
+<pre>
+$ TARGET=11.3.4.1
+$ rcp $JAILUSER@$TARGET:/jail/etc/passwd jail_etc_passwd
+$ sh mkjail.sh result/sh4-unknown-linux-gnu/gcc-3.3-glibc-2.2.5/sh4-unknown-linux-gnu jail_etc_passwd
+$ rcp initjail.sh root@$TARGET:
+$ cat jail.tar.gz | rsh -l root $TARGET /bin/sh initjail.sh /jail
+</pre>
+Then test the jail to make sure it still works, e.g.
+<pre>
+$ rsh -l jailuser target ls 
+$ rcp /etc/hosts jailuser@target:/tmp
+</pre>
+
+<h2>Summary</h2>
+This document has shown how to set up a target system to allow
+remote login and file copy into accounts running in a chroot jail.
+If everything described here works properly, you should be all set to
+Run gcc regression tests remotely on the target system.
+
+<h2>About this document</h2>
+Ideas and code snippets taken variously from:
+<ul>
+<li>the very similar
+<a href="http://www.tjw.org/chroot-login-HOWTO/">www.tjw.org/chroot-login-HOWTO</a>,
+by Terry J. White and Brian Rhodes.
+<li>
+ SVR4's login's feature whereby a "*" in the shell field of /etc/passwd triggered a chroot,
+  http://www.mcsr.olemiss.edu/cgi-bin/man-cgi?login+1
+  <li>
+ Martin P. Ibert's 1993 post,
+  http://groups.google.com/groups?selm=HNLAB98U%40heaven7.in-berlin.de
+  <li>
+ Ulf Bartelt's 1994 post,
+  http://groups.google.com/groups?selm=1994Jun5.144526.9091%40solaris.rz.tu-clausthal.de
+  <li>
+ Tony White's chroot-login-HOWTO from 2001,
+  http://www.tjw.org/chroot-login-HOWTO/
+  <li>
+ Mike Makonnen's June 2003 post,
+  http://groups.google.com/groups?selm=bbeuh2%2416j0%241%40FreeBSD.csie.NCTU.edu.tw
+</ul>
+
+<p>
+Copyright 2003, Ixia Communications.  Released under the GPL.<br>
+Last revision 26 August 2003 by dkegel@ixiacom.com
+</body>
+</html>

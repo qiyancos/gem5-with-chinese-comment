@@ -85,9 +85,9 @@ setGem5(){
 		L3size=""
 		L3assoc=""
 
-	enableDebug="No" # [Yes/No]
-		debugOutputFile="$gem5Dir/debug.log"
-		debugFlags="O3CPU,Fetch" # ,Decode,Rename,IEW,Commit,FreeList" 
+	enableDebug="Yes" # [Yes/No]
+		debugOutputDir="$gem5Dir"
+		debugFlags="Fetch" # ,Decode,Rename,IEW,Commit,FreeList" 
 		# [Flag1, Flag2] use "-h gem5 --debug-help" to see the debug flags 
 		debugStartTick=""
 		debugEndTick=""
@@ -352,10 +352,10 @@ printOutputInfo(){
 	if [ ${runSpec}x != 1x ]
 	then
 		debugDir="$tempDir"
-		gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir\/debug\.log%"`
+		gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir%"`
 	else
 		debugDir="$tempDir/spec/$fullTarget/m5out"
-		gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir\/debug\.log%"`
+		gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir%"`
 	fi
 	
 	if [ ${outputDir}x = x -a ${runSpec}x = 1x ]
@@ -373,11 +373,11 @@ printOutputInfo(){
 	
 	if [ ${enableDebug}x = Yesx ]
 	then
-		if [ ${debugOutputFile}x = x -a ${runSpec}x = 1x ]
-		then echo -e ">> Debug data will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out/debug.log\033[0m\"!"
-		elif [ ${debugOutputFile}x = x ]
+		if [ ${debugOutputDir}x = x -a ${runSpec}x = 1x ]
+		then echo -e ">> Debug data will be saved to \"\033[1;31m$tempDir/spec/$fullTarget/m5out\033[0m\"!"
+		elif [ ${debugOutputDir}x = x ]
 		then echo -e ">> Debug data will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
-		else echo -e ">> Debug data will be saved to \"\033[1;31m$debugOutputFile\033[0m\"!"
+		else echo -e ">> Debug data will be saved to \"\033[1;31m$debugOutputDir\033[0m\"!"
 		fi
 	fi
 }
@@ -394,15 +394,18 @@ runGem5(){
 	then
 		if [ ${gem5Only}x = 1x ]
 		then bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $options`"
-		else bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
+		else
+			gem5Options=`echo $gem5Options | sed "s/DEBUGFILE/debug\.log/"`
+			bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
 		fi
 	else
 		suiteID=0
 		while [ "${options[$suiteID]}x" != x ]
 		do
 			echo -e "\033[1;31m    ==================== Runing SubTest-$suiteID! ====================\033[0m"
+			gem5Options=`echo $gem5Options | sed "s/DEBUGFILE/debug_subtest_$suiteID\.log/"`
 			bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions ${options[$suiteID]}`"
-			mv $m5outDir/stats.txt $m5outDir/stats_subset_$suiteID.txt
+			mv $m5outDir/stats.txt $m5outDir/stats_subtest_$suiteID.txt
 			suiteID=$[suiteID + 1]
 		done
 	fi
@@ -490,9 +493,15 @@ settingParser(){
 		if [ "${debugFlags}x" != x ]
 		then gem5Options="$gem5Options --debug-flags=$debugFlags"
 		fi
-		if [ ${debugOutputFile}x = x ]
-		then gem5Options="$gem5Options --debug-file=DEBUGDIR"
-		else gem5Options="$gem5Options --debug-file=$debugOutputFile"
+		if [ ${debugOutputDir}x = x ]
+		then gem5Options="$gem5Options --debug-file=DEBUGDIR/DEBUGFILE"
+		else
+			if [ -d ${debugOutputDir} ]
+			then gem5Options="$gem5Options --debug-file=$debugOutputDir/DEBUGFILE"
+			else 
+				echo "Error: No such directory \"$debugOutputDir\"!" 
+				exit 1
+			fi
 		fi
 		if [ ${debugStartTick}x != x ]
 		then gem5Options="$gem5Options --debug-start=$debugStartTick"

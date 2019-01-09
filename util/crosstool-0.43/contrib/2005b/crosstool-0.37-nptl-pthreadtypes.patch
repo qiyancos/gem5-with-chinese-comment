@@ -1,0 +1,61 @@
+Message-ID: <42E7222D.6070900@mvista.com>
+Date: Tue, 26 Jul 2005 22:57:01 -0700
+From: Khem Raj <kraj@mvista.com>
+To: crossgcc@sources.redhat.com
+Subject: [PATCH] pthreadtypes.h not found  NPTL patch 
+
+I encountered a problem while building ppc64 NPTL toolchain. The copy 
+operation for pthreadtypes.h was assuming that sysdeps has same sub 
+directory name as
+${ARCH} variable meant for linux part. However this is not true in case 
+of ppc64/ppc where the sysdeps directory is called 'powerpc' similarily 
+for sparc and sparc64
+
+The build would fail complaining about 
+nptl/sysdeps/unix/sysv/linux/ppc64/bits/pthreadtypes.h not founds
+
+This patch corrects the problem. This patch may be incorporated into the 
+NPTL patch.
+
+--- crosstool-0.37/crosstool.sh.orig	2005-07-26 22:48:21.000000000 -0700
++++ crosstool-0.37/crosstool.sh	2005-07-26 16:17:07.000000000 -0700
+@@ -453,20 +453,31 @@ if grep -q 'gcc-[34]' ${GCC_CORE_DIR}/Ch
+         # will have to manually be copied from under the tree of the desired
+         # target pthread implementation.
+         cp ${GLIBC_DIR}/nptl/sysdeps/pthread/pthread.h $HEADERDIR/pthread.h
+-        cp ${GLIBC_DIR}/nptl/sysdeps/unix/sysv/linux/${ARCH}/bits/pthreadtypes.h
++        pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/${ARCH}/bits/pthreadtypes.h
+ 
+         # On s390, powerpc and sparc we also require bits/wordsize.h.
+         case $TARGET in
+         sparc* | s390* | powerpc* )
+             case $TARGET in
+-            sparc64* )   wordsize_h=sysdeps/sparc/sparc64/bits/wordsize.h ;;
+-            sparc* )     wordsize_h=sysdeps/sparc/sparc32/bits/wordsize.h ;;
+-            s390x* )     wordsize_h=sysdeps/s390/s390x/bits/wordsize.h ;;
+-            s390* )      wordsize_h=sysdeps/s390/s390/bits/wordsize.h ;;
+-            powerpc64* ) wordsize_h=sysdeps/powerpc/powerpc64/bits/wordsize.h ;;
+-            powerpc* )   wordsize_h=sysdeps/powerpc/powerpc32/bits/wordsize.h ;;
++            sparc64* )   wordsize_h=sysdeps/sparc/sparc64/bits/wordsize.h
++			 pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/sparc/bits/pthreadtypes.h
++			 ;;
++            sparc* )     wordsize_h=sysdeps/sparc/sparc32/bits/wordsize.h 
++			 pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/sparc/bits/pthreadtypes.h
++			 ;;
++            s390x* )     wordsize_h=sysdeps/s390/s390x/bits/wordsize.h 
++			 ;;
++            s390* )      wordsize_h=sysdeps/s390/s390/bits/wordsize.h 
++			 ;;
++            powerpc64* ) wordsize_h=sysdeps/powerpc/powerpc64/bits/wordsize.h
++			 pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/powerpc/bits/pthreadtypes.h
++			 ;;
++            powerpc* )   wordsize_h=sysdeps/powerpc/powerpc32/bits/wordsize.h
++			 pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/powerpc/bits/pthreadtypes.h
++			 ;;
+             esac
+             test ! -f $HEADERDIR/bits/wordsize.h && cp ${GLIBC_DIR}/${wordsize_h} $HEADERDIR/bits/wordsize.h
++            cp ${GLIBC_DIR}/${pthreadtypes_h} $HEADERDIR/bits/pthreadtypes.h
+ 	    ;;
+ 	esac
+     fi # GLIBC_ADDONS_NPTL
+

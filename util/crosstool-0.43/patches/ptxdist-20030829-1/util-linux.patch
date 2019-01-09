@@ -1,0 +1,96 @@
+Index: util-linux.in
+===================================================================
+RCS file: /var/lib/cvs/ptxdist/rules/util-linux.in,v
+retrieving revision 1.2
+diff -u -p -d -u -r1.2 util-linux.in
+--- ptxdist/rules/util-linux.in	26 Aug 2003 13:02:22 -0000	1.2
++++ ptxdist/rules/util-linux.in	1 Sep 2003 19:42:53 -0000
+@@ -14,4 +14,14 @@ config UTLNX_SWAPON
+ 	prompt "swapon"
+ 	depends on UTLNX
+ 
++config UTLNX_IPCS
++	bool
++	prompt "ipcs"
++	depends on UTLNX
++
++config UTLNX_READPROFILE
++	bool
++	prompt "readprofile"
++	depends on UTLNX
++
+ endmenu
+Index: util-linux.make
+===================================================================
+RCS file: /var/lib/cvs/ptxdist/rules/util-linux.make,v
+retrieving revision 1.1
+diff -u -p -d -u -r1.1 util-linux.make
+--- ptxdist/rules/util-linux.make	26 Aug 2003 13:20:12 -0000	1.1
++++ ptxdist/rules/util-linux.make	1 Sep 2003 19:51:28 -0000
+@@ -54,6 +54,7 @@ $(STATEDIR)/util-linux.extract: $(util-l
+ 	@$(call targetinfo, util-linux.extract)
+ 	@$(call clean, $(UTIL-LINUX_DIR))
+ 	@$(call extract, $(UTIL-LINUX_SOURCE))
++	@$(call patchin, $(UTIL-LINUX_DIR), $(UTIL-LINUX)) 
+ 	touch $@
+ 
+ # ----------------------------------------------------------------------------
+@@ -66,8 +67,7 @@ util-linux_prepare: $(STATEDIR)/util-lin
+ # dependencies
+ #
+ util-linux_prepare_deps =  \
+-	$(STATEDIR)/util-linux.extract \
+-#	$(STATEDIR)/virtual-xchain.install
++	$(STATEDIR)/util-linux.extract 
+ 
+ UTIL-LINUX_PATH	=  PATH=$(PTXCONF_PREFIX)/$(PTXCONF_GNU_TARGET)/bin:$(CROSS_PATH)
+ UTIL-LINUX_ENV 	=  $(CROSS_ENV)
+@@ -100,6 +100,12 @@ endif
+ ifeq (y, $(PTXCONF_UTLNX_SWAPON))
+ 	cd $(UTIL-LINUX_DIR)/mount && $(UTIL-LINUX_PATH) $(UTIL-LINUX_ENV) make swapon
+ endif	
++ifeq (y, $(PTXCONF_UTLNX_IPCS))
++	cd $(UTIL-LINUX_DIR)/sys-utils && $(UTIL-LINUX_PATH) $(UTIL-LINUX_ENV) make ipcs
++endif
++ifeq (y, $(PTXCONF_UTLNX_READPROFILE))
++	cd $(UTIL-LINUX_DIR)/sys-utils && $(UTIL-LINUX_PATH) $(UTIL-LINUX_ENV) make readprofile
++endif
+ 
+ 	# FIXME: implement other utilities
+ 
+@@ -133,6 +139,14 @@ endif
+ ifeq (y, $(PTXCONF_UTLNX_SWAPON))
+ 	install $(UTIL-LINUX_DIR)/mount/swapon $(ROOTDIR)/sbin/
+ 	$(CROSSSTRIP) $(ROOTDIR)/sbin/swapon
++endif
++ifeq (y, $(PTXCONF_UTLNX_IPCS))
++	install $(UTIL-LINUX_DIR)/sys-utils/ipcs $(ROOTDIR)/usr/bin/
++	$(CROSSSTRIP) $(ROOTDIR)/usr/bin/ipcs
++endif
++ifeq (y, $(PTXCONF_UTLNX_READPROFILE))
++	install $(UTIL-LINUX_DIR)/sys-utils/readprofile $(ROOTDIR)/usr/sbin/
++	$(CROSSSTRIP) $(ROOTDIR)/usr/sbin/readprofile
+ endif
+ 
+ 	touch $@
+--- /dev/null	2002-08-30 16:31:37.000000000 -0700
++++ ptxdist/patches/util-linux-2.12pre/MCONFIG.diff	2003-09-01 12:51:32.000000000 -0700
+@@ -0,0 +1,18 @@
++# Keep the makefile from inserting strange optimization
++# options based on CPU or ARCH.
++# FIXME: Might want to actually pass CPU and ARCH in environment when running configure,
++# and/or pass other config options such as DISABLE_NLS=yes
++
++--- util-linux-2.11z/MCONFIG.orig	2003-02-19 17:51:51.000000000 -0800
+++++ util-linux-2.11z/MCONFIG	2003-02-19 17:53:19.000000000 -0800
++@@ -10,8 +10,8 @@
++ # Select for ARCH one of intel, alpha, sparc, arm, m68k, mips
++ # Select for CPU i386 if the binaries must be able to run on an intel 386
++ # (by default i486 code is generated, see below)
++-CPU=$(shell uname -m)
++-ARCH=$(shell echo $(CPU) | sed 's/i.86/intel/;s/arm.*/arm/')
+++#CPU=$(shell uname -m)
+++#ARCH=$(shell echo $(CPU) | sed 's/i.86/intel/;s/arm.*/arm/')
++ 
++ # If HAVE_PAM is set to "yes", then login, chfn, chsh, and newgrp
++ # will use PAM for authentication. Additionally, passwd will not be

@@ -1,0 +1,21 @@
+diff -aur glibc-2.3.5/linuxthreads/Makefile glibc-2.3.5-cygwin/linuxthreads/Makefile
+--- glibc-2.3.5/linuxthreads/Makefile	2005-02-16 12:26:38.000000000 +0100
++++ glibc-2.3.5-cygwin/linuxthreads/Makefile	2005-05-11 08:32:50.453125000 +0200
+@@ -159,7 +159,7 @@
+ install: $(inst_libdir)/libpthread.so
+ $(inst_libdir)/libpthread.so: $(common-objpfx)format.lds \
+ 			      $(objpfx)libpthread.so$(libpthread.so-version) \
+-			      $(inst_libdir)/$(patsubst %,$(libtype.oS),\
++			      $(inst_libdir)/$(patsubst %,$(libtype.oST),\
+ 							$(libprefix)pthread) \
+ 			      $(+force)
+ 	(echo '/* GNU ld script';\
+@@ -167,7 +167,7 @@
+ 	 echo '   the static library, so try that secondarily.  */';\
+ 	 cat $<; \
+ 	 echo 'GROUP ( $(slibdir)/libpthread.so$(libpthread.so-version)' \
+-	      '$(libdir)/$(patsubst %,$(libtype.oS),$(libprefix)pthread)'\
++	      '$(libdir)/$(patsubst %,$(libtype.oST),$(libprefix)pthread)'\
+ 	      ')' \
+ 	) > $@.new
+ 	mv -f $@.new $@

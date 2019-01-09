@@ -1,0 +1,38 @@
+See
+https://sourceforge.net/tracker/?func=detail&atid=310894&aid=656765&group_id=10894
+Fixes
+../generic/tclClock.c: In function `FormatClock':
+../generic/tclClock.c:314: warning: assignment makes integer from pointer without a cast
+../generic/tclClock.c:315: error: invalid lvalue in assignment
+../generic/tclClock.c:360: error: invalid lvalue in assignment
+make: *** [tclClock.o] Error 1
+when building tcl-8.4.5 under cygwin.
+
+--- tcl8.4.5/generic/tclClock.c.old	2004-03-18 14:05:05.000000000 -0800
++++ tcl8.4.5/generic/tclClock.c	2004-03-18 14:08:06.000000000 -0800
+@@ -311,8 +311,13 @@
+             savedTZEnv = NULL;
+ 	}
+         Tcl_SetVar2(interp, "env", "TZ", "GMT", TCL_GLOBAL_ONLY);
++#if !defined(__CYGWIN__)
+         savedTimeZone = timezone;
+         timezone = 0;
++#else 
++        savedTimeZone = _timezone;
++        _timezone = 0;
++#endif 
+         tzset();
+     }
+ #endif
+@@ -357,7 +362,11 @@
+         } else {
+             Tcl_UnsetVar2(interp, "env", "TZ", TCL_GLOBAL_ONLY);
+         }
++#if !defined(__CYGWIN__)
+         timezone = savedTimeZone;
++#else 
++        _timezone = savedTimeZone;
++#endif
+         tzset();
+     }
+     Tcl_MutexUnlock( &clockMutex );

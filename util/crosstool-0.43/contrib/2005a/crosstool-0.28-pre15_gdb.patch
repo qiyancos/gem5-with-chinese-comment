@@ -1,0 +1,282 @@
+#/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\#
+#
+# Patch to the "crosstool-0.28-pre15" scripts written by Dan Kegel.
+# Respectfully submitted by Andre Ancelin (andrea@adtecinc.com) on 2004-04-22.
+#
+# The purpose of this patch is to add the gdb tools to the build process.
+# It will build both a host gdb and a target gdbserver. I have currently only
+# built and tested it for the PowerPC 405GP, though it should be generic
+# enough to work for most other architectures.
+#
+# Applied by dropping this patch into the base "crosstool-0.28-pre15" directory
+# and running "patch -rNp1 <crosstool-0.28-pre15_gdb.patch".
+#
+# Files affected and rationale:
+#
+#   all.sh
+#       - added "$GDB_DIR" variable for gdb directory.
+#   crosstool.sh
+#       - added "$GDB_DIR" variable for gdb directory.
+#       - added various "$xxxMAKEFLAGS" to make invocations to allow building
+#         statically linked tools. Could not use $PARALLELMAKEFLAGS, since
+#		  they apply equally to all builds and we need seperate make options.
+#		- got rid of the extra "cd .." in original script.
+#       - added gdb & gdbserver build sections (most of the new stuff here).
+#	demo-ppc405.sh
+#		- use user defined "mkdir -p $RESULT_TOP" instead of hard coded 
+#		  "mkdir -p /opt/crosstool"
+#		- built & tested with gcc 2.95 and glibc 2.2.5.
+#	gcc-2.95.3-glibc-2.2.5.dat
+#		- set "GDB_DIR" to gdb version (currently gdb-6.0).
+#		- using GNU/Linux Kernel 2.4.21.
+#	getandpatch.sh
+#       - added "$GDB_DIR" variable for gdb directory.
+#		- added ability to download and unpack gdb source from gnu ftp site.
+#	powerpc-405.dat
+#		- dropped "--with-cpu=405" option, was generating error at glibc build.
+#		  May not be a problem with newer binutils, gcc or glibc (did not try).
+#		- dropped glibc flag "--without-fp", was getting a math libarry error.
+#		  May not be a problem with newer binutils, gcc or glibc (did not try).
+#		- added "xxxMAKEFLAGS" for static linking the tools. 
+#		  Note that binutils uses "all-static" and gcc, gcccore, and gdb
+#		  all use "static". I observed that binutils still used dynamic
+#		  libraries with "static", but not with "all-static"
+#		  (not quite sure why???)
+#
+#	... plus maybe some structural-sugar from my editor or (worse) me.
+#
+# TODO:
+#   - Perhaps a target native gdb ???
+#	- Unable to statically link gdbserver- currently still requires 
+#	  libthreads_db. Perhaps some extra configuration flags are available,
+#     but I have not researched yet.
+#	- Test on platforms other than PowerPC 405GP.
+#\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/#
+
+diff -Naru dan/all.sh andre/all.sh
+--- dan/all.sh	Thu Apr 22 12:39:28 2004
++++ andre/all.sh	Thu Apr 22 17:20:11 2004
+@@ -11,11 +11,12 @@
+ # As Bill Gatliff says, "THINK!"
+ #
+ # Meant to be invoked from another shell script.
+-# Usage: six environment variables must be set, namely:
++# Usage: seven environment variables must be set, namely:
+ test -z "${TARGET}"           && abort "Please set TARGET to the Gnu target identifier (e.g. pentium-linux)"
+ test -z "${TARGET_CFLAGS}"    && abort "Please set TARGET_CFLAGS to any compiler flags needed when building glibc (-O recommended)"
+ test -z "${BINUTILS_DIR}"     && abort "Please set BINUTILS_DIR to the bare filename of the binutils tarball or directory"
+ test -z "${GCC_DIR}"          && abort "Please set GCC_DIR to the bare filename of the gcc tarball or directory"
++test -z "${GDB_DIR}"          && abort "Please set GDB_DIR to the bare filename of the gdb tarball or directory"
+ test -z "${LINUX_DIR}"        && abort "Please set LINUX_DIR to the bare filename of the kernel tarball or directory"
+ test -z "${GLIBC_DIR}"        && abort "Please set GLIBC_DIR to the bare filename of the glibc tarball or directory"
+ 
+diff -Naru dan/crosstool.sh andre/crosstool.sh
+--- dan/crosstool.sh	Thu Apr 22 12:39:28 2004
++++ andre/crosstool.sh	Thu Apr 22 17:23:45 2004
+@@ -17,23 +17,27 @@
+ # authors, but do your homework first.  As Bill says, "THINK!"
+ #
+ # Meant to be invoked from another shell script.
+-# Usage: nine environment variables must be set, namely:
++# Usage: ten environment variables must be set, namely:
+ test -z "${PREFIX}"           && abort "Please set PREFIX to where you want the toolchain installed."
+ test -z "${BUILD_DIR}"        && abort "Please set BUILD_DIR to the directory where the tools are to be built"
+ test -z "${SRC_DIR}"          && abort "Please set SRC_DIR to the directory where the source tarballs are to be unpacked"
+ test -z "${BINUTILS_DIR}"     && abort "Please set BINUTILS_DIR to the bare filename of the binutils tarball or directory"
+ test -z "${GCC_DIR}"          && abort "Please set GCC_DIR to the bare filename of the gcc tarball or directory"
+ test -z "${GLIBC_DIR}"        && abort "Please set GLIBC_DIR to the bare filename of the glibc tarball or directory"
++test -z "${GDB_DIR}"          && abort "Please set GDB_DIR to the bare filename of the gdb tarball or directory"
+ test -z "${LINUX_DIR}"        && abort "Please set LINUX_DIR to the bare filename of the kernel tarball or directory"
+ test -z "${TARGET}"           && abort "Please set TARGET to the Gnu target identifier (e.g. pentium-linux)"
+ test -z "${TARGET_CFLAGS}"    && abort "Please set TARGET_CFLAGS to any compiler flags needed when building glibc (-O recommended)"
+ 
+-test -z "${BINUTILS_EXTRA_CONFIG}" && echo  "BINUTILS_EXTRA_CONFIG not set, so not passing any extra options to binutils' configure script"
+-test -z "${GCC_EXTRA_CONFIG}" && echo  "GCC_EXTRA_CONFIG not set, so not passing any extra options to gcc's configure script"
+-test -z "${GLIBC_EXTRA_CONFIG}" && echo "GLIBC_EXTRA_CONFIG not set, so not passing any extra options to glibc's configure script"
+-test -z "${GLIBC_EXTRA_ENV}"  && echo "GLIBC_EXTRA_ENV not set, so not passing any extra environment variables to glibc's configure script"
+-test -z "${KERNELCONFIG}" && test -z ${LINUX_DIR}/.config  && echo  "KERNELCONFIG not set, and no .config file found, so not configuring linux kernel"
+-test -z "${USE_SYSROOT}"     && echo  "USE_SYSROOT not set, so not configuring with --with-sysroot"
++test -z "${BINUTILS_EXTRA_CONFIG}"  && echo "BINUTILS_EXTRA_CONFIG not set, so not passing any extra options to binutil's configure script"
++test -z "${GCC_EXTRA_CONFIG}"       && echo "GCC_EXTRA_CONFIG not set, so not passing any extra options to gcc's configure script"
++test -z "${GLIBC_EXTRA_CONFIG}"     && echo "GLIBC_EXTRA_CONFIG not set, so not passing any extra options to glibc's configure script"
++test -z "${GLIBC_EXTRA_ENV}"        && echo "GLIBC_EXTRA_ENV not set, so not passing any extra environment variables to glibc's configure script"
++test -z "${GDB_EXTRA_CONFIG}"       && echo "GDB_EXTRA_CONFIG not set, so not passing any extra options to gdb's configure script"
++test -z "${GDBSERVER_EXTRA_CONFIG}" && echo "GDBSERVER_EXTRA_CONFIG not set, so not passing any extra options to gdbserver's configure script"
++test -z "${KERNELCONFIG}" && \
++test -z  ${LINUX_DIR}/.config       && echo "KERNELCONFIG not set, and no .config file found, so not configuring linux kernel"
++test -z "${USE_SYSROOT}"            && echo "USE_SYSROOT not set, so not configuring with --with-sysroot"
+ 
+ test -z "${KERNELCONFIG}" || test -r "${KERNELCONFIG}"  || abort  "Can't read file KERNELCONFIG = $KERNELCONFIG, please fix."
+ 
+@@ -81,6 +85,7 @@
+ GCC_DIR=`cd ${SRC_DIR}/${GCC_DIR}; pwd`
+ LINUX_DIR=`cd ${SRC_DIR}/${LINUX_DIR}; pwd`
+ GLIBC_DIR=`cd ${SRC_DIR}/${GLIBC_DIR}; pwd`
++GDB_DIR=`cd ${SRC_DIR}/${GDB_DIR}; pwd`
+ 
+ # make sure the build product's binaries are in the search path
+ PATH="${PREFIX}/bin:${PATH}"
+@@ -171,8 +176,8 @@
+     ${BINUTILS_DIR}/configure --target=$TARGET --host=$HOST --prefix=$PREFIX --disable-nls ${BINUTILS_EXTRA_CONFIG} $BINUTILS_SYSROOT_ARG
+ fi
+ 
+-make $PARALLELMFLAGS all 
+-make install 
++make $PARALLELMFLAGS $BINUTILSMAKEFLAGS all
++make install
+ 
+ cd ..
+ 
+@@ -261,7 +266,7 @@
+ 	--disable-shared
+ fi
+ 
+-make $PARALLELMFLAGS all-gcc install-gcc
++make $PARALLELMFLAGS $GCCCOREMAKEFLAGS all-gcc install-gcc
+ 
+ cd ..
+ 
+@@ -364,8 +369,8 @@
+         --enable-long-long
+ fi
+ 
+-make $PARALLELMFLAGS all 
+-make install 
++make $PARALLELMFLAGS $GCCMAKEFLAGS all
++make install
+ 
+ echo "kludge: If the chip does not have a floating point unit "
+ echo "(i.e. if GLIBC_EXTRA_CONFIG contains --without-fp),"
+@@ -382,11 +387,60 @@
+ esac
+ 
+ cd ..
++
++test -x ${PREFIX}/bin/${TARGET}-gcc || Build failed during final gcc
++
++#---------------------------------------------------------
++echo Build gdb
++
++mkdir -p build-gdb; cd build-gdb
++
++if test '!' -f Makefile; then
++    # Remember- gdb will run on the host using host resources.
++	# As such, we compile to run natively BUT with the target of interest.
++    ${GDB_DIR}/configure --target=$TARGET --host=$HOST --prefix=$PREFIX ${GDB_EXTRA_CONFIG}
++fi
++
++make $PARALLELMFLAGS $GDBMAKEFLAGS all
++make install
++
+ cd ..
+ 
+-test -x ${PREFIX}/bin/${TARGET}-gcc || Build failed during final gcc 
++test -x ${PREFIX}/bin/${TARGET}-gdb || abort Build failed during gdb
+ 
+ #---------------------------------------------------------
++echo Build gdbserver
++
++mkdir -p build-gdbserver; cd build-gdbserver
++
++if test '!' -f Makefile; then
++    # For some reason, and unlike $GDB_DIR/configure, $GDB_DIR/gdb/gdbserver/configure
++	# is distrubuted with no executable permissions (at least for 5.2.1 & 6.0).
++	# Gotta' be executable, so we do so here.
++    chmod +x ${GDB_DIR}/gdb/gdbserver/configure
++
++	# As this runs on the $TARGET, we need to use the target's compiler tool chain.
++	# Also note that we set --host to $TARGET, not --target. Same reason as above.
++	CC=${TARGET}-gcc \
++    ${GDB_DIR}/gdb/gdbserver/configure --host=$TARGET --prefix=$PREFIX ${GDBSERVER_EXTRA_CONFIG}
++fi
++
++make $PARALLELMFLAGS $GDBSERVERMAKEFLAGS all
++make install
++
++cd ..
++
++test -x ${PREFIX}/bin/gdbserver || abort Build failed during gdbserver
++
++# Best to minimize impact on target resources, so this should almost always be stripped.
++# If you need to debug the remote debugger you will not want to do this,
++# though this should only apply to people using low level hardware based debuggers (JTAG, BDM, etc.)
++# This file is the only required target file for remote debugging,
++# and it should be copied into the target's /usr/bin directory.
++${TARGET}-strip ${PREFIX}/bin/gdbserver
++
++#---------------------------------------------------------
++cd ..
+ echo Cross-toolchain build complete.  Result in ${PREFIX}.
+ exit 0
+ 
+diff -Naru dan/demo-ppc405.sh andre/demo-ppc405.sh
+--- dan/demo-ppc405.sh	Thu Apr 22 12:39:28 2004
++++ andre/demo-ppc405.sh	Thu Apr 22 17:10:51 2004
+@@ -4,8 +4,8 @@
+ export RESULT_TOP=/opt/crosstool
+ 
+ # Really, you should do the mkdir before running this,
+-# and chown /opt/crosstool to yourself so you don't need to run as root.
+-mkdir -p /opt/crosstool
++# and chown $RESULT_TOP to yourself so you don't need to run as root.
++mkdir -p $RESULT_TOP
+ 
+ # Build the toolchain.  Takes a couple hours and a couple gigabytes.
+ #eval `cat powerpc-405.dat gcc-3.3-glibc-2.2.5.dat`    sh all.sh --notest
+@@ -15,6 +15,6 @@
+ #eval `cat powerpc-405.dat gcc-3.3.2-glibc-2.3.2.dat`  sh all.sh --notest
+ #eval `cat powerpc-405.dat gcc-3.3-20040112-glibc-2.3.2.dat` sh all.sh --notest
+ #eval `cat powerpc-405.dat gcc-3.3-20040126-glibc-2.3.2.dat` sh all.sh --notest
+- eval `cat powerpc-405.dat gcc-3.3.3-glibc-2.3.2.dat`  sh all.sh --notest
++eval `cat powerpc-405.dat gcc-2.95.3-glibc-2.2.5.dat`  sh all.sh --notest
+ 
+ echo Done.
+diff -Naru dan/gcc-2.95.3-glibc-2.2.5.dat andre/gcc-2.95.3-glibc-2.2.5.dat
+--- dan/gcc-2.95.3-glibc-2.2.5.dat	Thu Apr 22 12:39:28 2004
++++ andre/gcc-2.95.3-glibc-2.2.5.dat	Thu Apr 22 16:49:03 2004
+@@ -2,5 +2,6 @@
+ BINUTILS_URL=ftp://ftp.gnu.org/pub/gnu/binutils
+ GCC_DIR=gcc-2.95.3
+ GLIBC_DIR=glibc-2.2.5
+-LINUX_DIR=linux-2.4.3
++GDB_DIR=gdb-6.0
++LINUX_DIR=linux-2.4.21
+ GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.2.5
+diff -Naru dan/getandpatch.sh andre/getandpatch.sh
+--- dan/getandpatch.sh	Thu Apr 22 12:39:28 2004
++++ andre/getandpatch.sh	Thu Apr 22 17:26:51 2004
+@@ -11,11 +11,12 @@
+ }
+ 
+ # Meant to be invoked from another shell script.
+-# Usage: seven environment variables must be set, namely:
++# Usage: eight environment variables must be set, namely:
+ test -z "${BINUTILS_DIR}"     && abort "Please set BINUTILS_DIR to the bare filename of the binutils tarball or directory"
+ test -z "${SRC_DIR}"          && abort "Please set SRC_DIR to the directory where the source tarballs are to be unpacked"
+ test -z "${GCC_DIR}"          && abort "Please set GCC_DIR to the bare filename of the gcc tarball or directory"
+ test -z "${GLIBC_DIR}"        && abort "Please set GLIBC_DIR to the bare filename of the glibc tarball or directory"
++test -z "${GDB_DIR}"          && abort "Please set GDB_DIR to the bare filename of the gdb tarball or directory"
+ test -z "${LINUX_DIR}"        && abort "Please set LINUX_DIR to the bare filename of the kernel tarball or directory"
+ test -z "${TARBALLS_DIR}"     && abort "Please set TARBALLS_DIR to the directory to download tarballs to."
+ test -z "${PTXDIST_DIR}"      && abort "Please set PTXDIST_DIR to the bare filename of the ptxdist tarball or directory."
+@@ -155,6 +156,7 @@
+       getUnpackAndPatch ftp://ftp.gnu.org/pub/gnu/gcc/$GCC_DIR.tar.gz ;;
+ esac
+ getUnpackAndPatch ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBC_DIR.tar.bz2 ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBC_DIR.tar.gz
++getUnpackAndPatch ftp://ftp.gnu.org/pub/gnu/gdb/$GDB_DIR.tar.bz2 ftp://ftp.gnu.org/pub/gnu/gdb/$GDB_DIR.tar.gz
+ case $LINUX_DIR in
+   *2.4*) getUnpackAndPatch http://www.kernel.org/pub/linux/kernel/v2.4/$LINUX_DIR.tar.bz2 http://www.kernel.org/pub/linux/kernel/v2.4/$LINUX_DIR.tar.gz ;;
+   *2.6*) getUnpackAndPatch http://www.kernel.org/pub/linux/kernel/v2.6/$LINUX_DIR.tar.bz2 http://www.kernel.org/pub/linux/kernel/v2.6/$LINUX_DIR.tar.gz ;;
+diff -Naru dan/powerpc-405.dat andre/powerpc-405.dat
+--- dan/powerpc-405.dat	Thu Apr 22 12:39:28 2004
++++ andre/powerpc-405.dat	Thu Apr 22 16:52:43 2004
+@@ -1,4 +1,7 @@
+ TARGET=powerpc-405-linux-gnu
+ TARGET_CFLAGS="-O -mcpu=405"
+-GCC_EXTRA_CONFIG="--with-cpu=405 --enable-cxx-flags=-mcpu=405"
+-GLIBC_EXTRA_CONFIG="--without-fp"
++GCC_EXTRA_CONFIG="--enable-cxx-flags=-mcpu=405"
++BINUTILSMAKEFLAGS="LDFLAGS=-all-static"
++GCCCOREMAKEFLAGS="LDFLAGS=-static"
++GCCMAKEFLAGS="LDFLAGS=-static"
++GDBMAKEFLAGS="LDFLAGS=-static"

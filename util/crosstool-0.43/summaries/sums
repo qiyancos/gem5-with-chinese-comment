@@ -1,0 +1,9 @@
+09006    35 powerpc-405-linux-gnu-gcc-3.3.1-glibc-2.3.2.binutils.sum
+61989     9 powerpc-405-linux-gnu-gcc-3.3.1-glibc-2.3.2.gcc.sum
+41923    32 powerpc-405-linux-gnu-gcc-3.3.1-glibc-2.3.2.glibc.sum
+55879    35 powerpc-750-linux-gnu-gcc-3.3.1-glibc-2.3.2.binutils.sum
+37622     8 powerpc-750-linux-gnu-gcc-3.3.1-glibc-2.3.2.gcc.sum
+05397    30 powerpc-750-linux-gnu-gcc-3.3.1-glibc-2.3.2.glibc.sum
+09414    35 sh4-unknown-linux-gnu-gcc-3.3.1-glibc-2.3.2.binutils.sum
+51867    10 sh4-unknown-linux-gnu-gcc-3.3.1-glibc-2.3.2.gcc.sum
+45219    37 sh4-unknown-linux-gnu-gcc-3.3.1-glibc-2.3.2.glibc.sum

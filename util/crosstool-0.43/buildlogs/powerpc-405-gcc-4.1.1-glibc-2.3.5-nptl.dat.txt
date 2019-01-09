@@ -1,0 +1,38 @@
+AR=
+BINUTILS_DIR=binutils-2.16.1
+BINUTILS_EXTRA_CONFIG=
+BUILD_DIR=/home/dank/queue/jobdir.fast/crosstool-0.43/build/powerpc-405-linux-gnu/gcc-4.1.1-glibc-2.3.5
+BUILD=i686-pc-linux-gnu
+CC=
+DEJAGNU=
+EXTRA_TARGET_CFLAGS=
+GCC_BUILD=
+GCC_CORE_DIR=gcc-3.3.6
+GCC_DIR=gcc-4.1.1
+GCC_EXTRA_CONFIG=--with-cpu=405 --enable-cxx-flags=-mcpu=405
+GCC_HOST=
+GCC_LANGUAGES=c,c++
+GDB_DIR=gdb-6.5
+GLIBC_ADDON_OPTIONS==nptl
+GLIBC_DIR=glibc-2.3.5
+GLIBC_EXTRA_CC_ARGS=
+GLIBC_EXTRA_CONFIG= --without-fp --with-tls --with-__thread --enable-kernel=2.4.18
+GLIBC_EXTRA_ENV=
+JUST_DOWNLOAD=
+KERNELCONFIG=
+LINUX_DIR=linux-2.6.15.4
+LINUX_SANITIZED_HEADER_DIR=linux-libc-headers-2.6.12.0
+NO_DOWNLOAD=1
+PREFIX=/home/dank/crosstooltest/gcc-4.1.1-glibc-2.3.5/powerpc-405-linux-gnu
+PTXDIST_DIR=
+SHARED_MODE=--enable-shared
+SRC_DIR=/home/dank/queue/jobdir.fast/crosstool-0.43/build/powerpc-405-linux-gnu/gcc-4.1.1-glibc-2.3.5
+TARBALLS_DIR=/home/dank/tarballs
+TARGET_CFLAGS=-O -mcpu=405
+TARGET=powerpc-405-linux-gnu
+TOP_DIR=/home/dank/queue/jobdir.fast/crosstool-0.43
+USE_SYSROOT=
+toolchain=FAIL
+kernel=FAIL
+gdb=FAIL
+gdbserver=FAIL

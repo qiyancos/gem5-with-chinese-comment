@@ -1,0 +1,16 @@
+Index: ptxdist-testing/rules/busybox.make
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/rules/busybox.make,v
+retrieving revision 1.1.1.5
+diff -u -r1.1.1.5 busybox.make
+--- ptxdist-testing/rules/busybox.make	24 Oct 2003 01:34:48 -0000	1.1.1.5
++++ ptxdist-testing/rules/busybox.make	27 Oct 2003 18:45:29 -0000
+@@ -77,7 +77,7 @@
+ 
+ BUSYBOX_PATH		=  PATH=$(CROSS_PATH)
+ BUSYBOX_ENV 		=  $(CROSS_ENV)
+-BUSYBOX_MAKEVARS	=  CROSS=$(PTXCONF_GNU_TARGET)- HOSTCC=$(HOSTCC) EXTRA_CFLAGS=$(TARGET_CFLAGS)
++BUSYBOX_MAKEVARS	=  CROSS=$(PTXCONF_GNU_TARGET)- HOSTCC=$(HOSTCC) EXTRA_CFLAGS="$(TARGET_CFLAGS)"
+ 
+ #
+ # dependencies

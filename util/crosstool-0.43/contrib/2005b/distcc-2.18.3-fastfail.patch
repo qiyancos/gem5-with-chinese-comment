@@ -1,0 +1,273 @@
+A patch to make distcc keep trying servers if the first one can't be
+connected to.  This may be useful if most of the servers are down,
+and there is not yet any cached information about which servers are good.
+e.g. if you only have 16 servers distcc1..distcc16,
+but the host list has 64 hosts distcc1..distcc64 in it.
+
+TODO: add limit on number of servers tried (old code implicitly
+limited it to one server).
+
+Copyright 2005 Google, Inc.
+Licensed under the same terms as distcc
+T. Kho (and D. Kegel)
+
+
+diff -ur distcc-2.18.3-orig/src/compile.c distcc-2.18.3/src/compile.c
+--- distcc-2.18.3-orig/src/compile.c	2004-10-01 17:47:07.000000000 -0700
++++ distcc-2.18.3/src/compile.c	2005-08-12 15:17:00.858701000 -0700
+@@ -40,10 +40,10 @@
+ #include "bulk.h"
+ #include "implicit.h"
+ #include "exec.h"
++#include "compile.h"
+ #include "where.h"
+ #include "lock.h"
+ #include "timeval.h"
+-#include "compile.h"
+ 
+ 
+ /**
+@@ -118,6 +118,7 @@
+     int cpu_lock_fd;
+     int ret;
+     struct dcc_hostdef *host = NULL;
++    struct dcc_conndef conn;
+ 
+     if (sg_level)
+         goto run_local;
+@@ -135,7 +136,7 @@
+     dcc_note_state(DCC_PHASE_STARTUP, input_fname, NULL);
+ #endif
+ 
+-    if ((ret = dcc_pick_host_from_list(&host, &cpu_lock_fd)) != 0) {
++    if ((ret = dcc_connect_host_from_list(&host, &conn, &cpu_lock_fd)) != 0) {
+         /* Doesn't happen at the moment: all failures are masked by
+            returning localhost. */
+         goto fallback;
+@@ -157,8 +158,8 @@
+     if ((ret = dcc_compile_remote(argv_stripped,
+                                   input_fname,
+                                   cpp_fname,
+-                                  output_fname,
+-                                  cpp_pid, host, status)) != 0) {
++                                  output_fname, cpp_pid,
++                                  host, &conn, status)) != 0) {
+         /* Returns zero if we successfully ran the compiler, even if
+          * the compiler itself bombed out. */
+         goto fallback;
+diff -ur distcc-2.18.3-orig/src/compile.h distcc-2.18.3/src/compile.h
+--- distcc-2.18.3-orig/src/compile.h	2004-07-29 18:12:13.000000000 -0700
++++ distcc-2.18.3/src/compile.h	2005-08-12 14:16:47.554269000 -0700
+@@ -20,6 +20,15 @@
+  * USA
+  */
+ 
++/**
++ * A simple structure to hold connection info
++ **/
++struct dcc_conndef {
++    int to_net_fd;
++    int from_net_fd;
++    pid_t ssh_pid;
++};
++
+ /* remote.c */
+ int dcc_compile_remote(char **argv,
+                        char *input_fname,
+@@ -27,8 +36,15 @@
+                        char *output_fname,
+                        pid_t cpp_pid,
+                        struct dcc_hostdef *host,
++                       struct dcc_conndef *conn,
+                        int *status);
+ 
+ int dcc_build_somewhere_timed(char *argv[],
+                               int sg_level,
+                               int *status);
++
++int dcc_remote_connect(struct dcc_hostdef *host, 
++                              int *to_net_fd, 
++                              int *from_net_fd, 
++                              pid_t *ssh_pid);
++
+diff -ur distcc-2.18.3-orig/src/remote.c distcc-2.18.3/src/remote.c
+--- distcc-2.18.3-orig/src/remote.c	2004-10-23 22:05:49.000000000 -0700
++++ distcc-2.18.3/src/remote.c	2005-08-12 15:19:09.009217000 -0700
+@@ -63,7 +63,7 @@
+  * Open a connection using either a TCP socket or SSH.  Return input
+  * and output file descriptors (which may or may not be different.)
+  **/
+-static int dcc_remote_connect(struct dcc_hostdef *host,
++int dcc_remote_connect(struct dcc_hostdef *host,
+                               int *to_net_fd,
+                               int *from_net_fd,
+                               pid_t *ssh_pid)
+@@ -175,11 +175,10 @@
+                        char *output_fname,
+                        pid_t cpp_pid,
+                        struct dcc_hostdef *host,
++                       struct dcc_conndef *conn,
+                        int *status)
+ {
+-    int to_net_fd, from_net_fd;
+     int ret;
+-    pid_t ssh_pid = 0;
+     int ssh_status;
+     off_t doti_size;
+     struct timeval before, after;
+@@ -188,31 +187,24 @@
+         rs_log_warning("gettimeofday failed");
+ 
+     dcc_note_execution(host, argv);
+-    dcc_note_state(DCC_PHASE_CONNECT, input_fname, host->hostname);
+-
+-    /* For ssh support, we need to allow for separate fds writing to and
+-     * reading from the network, because our connection to the ssh client may
+-     * be over pipes, which are one-way connections. */
+ 
+     *status = 0;
+-    if ((ret = dcc_remote_connect(host, &to_net_fd, &from_net_fd, &ssh_pid)))
+-        goto out;
+     
+     dcc_note_state(DCC_PHASE_SEND, NULL, NULL);
+ 
+     /* This waits for cpp and puts its status in *status.  If cpp failed, then
+      * the connection will have been dropped and we need not bother trying to
+      * get any response from the server. */
+-    ret = dcc_send_header(to_net_fd, argv, host);
++    ret = dcc_send_header(conn->to_net_fd, argv, host);
+ 
+     if ((ret = dcc_wait_for_cpp(cpp_pid, status, input_fname)))
+         goto out;
+     
+-    if ((ret = dcc_x_file(to_net_fd, cpp_fname, "DOTI", host->compr, &doti_size)))
++    if ((ret = dcc_x_file(conn->to_net_fd, cpp_fname, "DOTI", host->compr, &doti_size)))
+         goto out;
+ 
+     rs_trace("client finished sending request to server");
+-    tcp_cork_sock(to_net_fd, 0);
++    tcp_cork_sock(conn->to_net_fd, 0);
+     /* but it might not have been read in by the server yet; there's
+      * 100kB or more of buffers in the two kernels. */
+ 
+@@ -221,21 +213,21 @@
+      * start compiling it.  */
+     dcc_note_state(DCC_PHASE_COMPILE, NULL, host->hostname);
+ 
+-    if (to_net_fd != from_net_fd) {
++    if (conn->to_net_fd != conn->from_net_fd) {
+         /* in ssh mode, we can start closing down early */
+-        dcc_close(to_net_fd);
++        dcc_close(conn->to_net_fd);
+     }
+ 
+     /* If cpp failed, just abandon the connection, without trying to
+      * receive results. */
+     if (ret == 0 && *status == 0) {
+-        ret = dcc_retrieve_results(from_net_fd, status, output_fname,
++        ret = dcc_retrieve_results(conn->from_net_fd, status, output_fname,
+                                    host);
+     }
+ 
+     /* Close socket so that the server can terminate, rather than
+      * making it wait until we've finished our work. */
+-    dcc_close(from_net_fd);
++    dcc_close(conn->from_net_fd);
+ 
+     if (gettimeofday(&after, NULL)) {
+         rs_log_warning("gettimeofday failed");
+@@ -255,8 +247,8 @@
+      * background.  But it helps make sure that we don't assume we succeeded
+      * when something possibly went wrong, and it allows us to account for the
+      * cost of the ssh child. */
+-    if (ssh_pid) {
+-        dcc_collect_child("ssh", ssh_pid, &ssh_status); /* ignore failure */
++    if (conn->ssh_pid) {
++        dcc_collect_child("ssh", conn->ssh_pid, &ssh_status); /* ignore failure */
+     }
+     
+     return ret;
+diff -ur distcc-2.18.3-orig/src/where.c distcc-2.18.3/src/where.c
+--- distcc-2.18.3-orig/src/where.c	2004-10-23 22:05:47.000000000 -0700
++++ distcc-2.18.3/src/where.c	2005-08-12 15:28:43.783513000 -0700
+@@ -73,6 +73,8 @@
+ #include "util.h"
+ #include "hosts.h"
+ #include "lock.h"
++#include "exec.h"
++#include "compile.h"
+ #include "where.h"
+ #include "exitcode.h"
+ 
+@@ -81,6 +83,57 @@
+                         struct dcc_hostdef **buildhost,
+                         int *cpu_lock_fd);
+ 
++int dcc_pick_host_from_list(struct dcc_hostdef **buildhost, 
++                            int *cpu_lock_fd);
++
++
++/**
++ * Loops through available hosts and establishes a connection
++ **/
++int dcc_connect_host_from_list(struct dcc_hostdef **buildhost,
++                               struct dcc_conndef *conn,
++                               int *cpu_lock_fd)
++{
++    int ret;
++    int ssh_status;
++
++    /* loop until hostlist is empty, or we have a server to connect to */
++    while (1) {
++        conn->ssh_pid = 0;
++
++        ret = dcc_pick_host_from_list(buildhost, cpu_lock_fd);
++        if (ret != 0) {
++            /* pass through error */
++            return ret;
++        }
++    
++        if ((*buildhost)->mode == DCC_MODE_LOCAL) {
++            /* don't need to initiate connection for local builds */
++            return 0;
++        }
++        
++        dcc_note_state(DCC_PHASE_CONNECT, NULL, (*buildhost)->hostname);
++    
++        /* For ssh support, we need to allow for separate fds writing to and
++         * reading from the network, because our connection to the ssh
++         * client may be over pipes, which are one-way connections. */
++    
++        if (!dcc_remote_connect(*buildhost, &conn->to_net_fd, &conn->from_net_fd, &conn->ssh_pid)) {
++            /* successfully connected to a host */
++            return 0;
++        }
++    
++        dcc_disliked_host(*buildhost);
++
++        /* cleanup connection, if necessary */
++        if (conn->ssh_pid) {
++            dcc_collect_child("ssh", conn->ssh_pid, &ssh_status); /* ignore failure */
++        }
++    }
++
++    return 0;
++}
++
+ 
+ int dcc_pick_host_from_list(struct dcc_hostdef **buildhost,
+                             int *cpu_lock_fd)
+diff -ur distcc-2.18.3-orig/src/where.h distcc-2.18.3/src/where.h
+--- distcc-2.18.3-orig/src/where.h	2004-07-29 18:12:14.000000000 -0700
++++ distcc-2.18.3/src/where.h	2005-08-12 13:12:38.493043000 -0700
+@@ -21,7 +21,8 @@
+  */
+ 
+ /* where.c */
+-int dcc_pick_host_from_list(struct dcc_hostdef **,
+-                            int *cpu_lock_fd);
++int dcc_connect_host_from_list(struct dcc_hostdef **,
++                               struct dcc_conndef *,
++                               int *cpu_lock_fd);
+ 
+ int dcc_lock_local(int *cpu_lock_fd);

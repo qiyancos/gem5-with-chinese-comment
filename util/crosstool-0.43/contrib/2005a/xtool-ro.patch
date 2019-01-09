@@ -1,0 +1,68 @@
+From: jfree <jfree@lineo.com>
+Date: Thu, 7 Aug 2003 09:13:53 -0600
+To: dank@kegel.com
+Subject: read-only crosstool-x.y/
+Message-ID: <20030807151353.GA12122@lineo.com>
+Reply-To: jfreeman@metrowerks.com
+
+The following let me run crosstool (at least the build phase)
+from another directory, letting crosstool-x.y/ dir be readonly.
+
+...
+
+--- crosstool-0.17/all.sh	2003/08/07 07:26:30	1.1
++++ crosstool-0.17/all.sh	2003/08/07 12:17:32
+@@ -30,6 +30,7 @@
+ 
+ TOOLCOMBO=$GCC_DIR-$GLIBC_DIR
+ BUILD_DIR=`pwd`/build/$TARGET/$TOOLCOMBO
++XT_DIR=`dirname $0`
+ TOP_DIR=`pwd`
+ 
+ # Arbitrary locations for the input and output of the build.
+@@ -57,7 +58,7 @@
+ 	   opt_no_test=1
+ 	   ;;
+ 	*)
+-	    abort "Usage: build.sh [--nounpack|--nobuild|--notest]"
++	    abort "Usage: all.sh [--nounpack|--nobuild|--notest]"
+     esac
+     shift
+ done
+@@ -65,7 +66,7 @@
+ if test "$opt_no_unpack" = ""; then
+    # Download and patch
+    rm -rf $BUILD_DIR; mkdir -p $BUILD_DIR
+-   sh getandpatch.sh
++   sh ${XT_DIR}/getandpatch.sh
+ fi
+ 
+ if test "$opt_no_build" = ""; then
+@@ -74,7 +75,7 @@
+     mkdir -p $PREFIX
+     mkdir -p $BUILD_DIR
+     cd $BUILD_DIR
+-    sh $TOP_DIR/crosstool.sh
++    sh ${XT_DIR}/crosstool.sh
+     cd $TOP_DIR
+ 
+     # Cute little compile test
+@@ -84,6 +85,6 @@
+ if test "$opt_no_test" = ""; then
+     # Beefy test that lasts for hours
+     cd $BUILD_DIR
+-    sh $TOP_DIR/crosstest.sh 
++    sh ${XT_DIR}/crosstest.sh 
+ fi
+ 
+--- crosstool-0.17/getandpatch.sh	2003/08/07 07:36:04	1.1
++++ crosstool-0.17/getandpatch.sh	2003/08/07 07:41:40
+@@ -29,7 +29,7 @@
+ # Assumes that the tarball unpacks to a name guessable from its url,
+ # and that patches already exist locally in a directory named after the tarball.
+ getUnpackAndPatch() {
+-        BASENAME=`echo $1 | sed 's,.*/,,;s,\.tar\.gz$,,;'`
++	BASENAME=`echo $1 | sed 's,.*/,,;s,\.tar\.gz$,,;'`
+ 	cd $TARBALLS_DIR
+ 
+ 	# Download if not present

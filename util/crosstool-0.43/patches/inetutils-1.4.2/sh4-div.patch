@@ -1,0 +1,33 @@
+Fixes odd problem where rcp aborts on sh4 with gcc <= 3.0.2.
+The preprocessed source that causes the error is
+  size = ((((((stb).st_blksize > 0 ? (stb).st_blksize : 512))+((blksize)-1))/(blksize))*(blksize));
+When the bug hits, size is set to a rediculously large number, causing
+an allocation to fail.
+See http://sources.redhat.com/ml/crossgcc/2003-07/msg00054.html
+
+--- inetutils-1.4.2/rcp/util.c.old	Tue Jul  8 11:38:47 2003
++++ inetutils-1.4.2/rcp/util.c	Tue Jul  8 11:40:03 2003
+@@ -130,6 +130,11 @@
+ 	return (status);
+ }
+ 
++static size_t froundup(size_t x, size_t y)
++{
++	return (((x+(y-1))/y)*y);
++}
++
+ BUF *
+ allocbuf(BUF *bp, int fd, int blksize)
+ {
+@@ -140,10 +145,7 @@
+ 		run_err("fstat: %s", strerror(errno));
+ 		return (0);
+ 	}
+-#ifndef roundup
+-#  define roundup(x, y)   ((((x)+((y)-1))/(y))*(y))
+-#endif
+-	size = roundup(ST_BLKSIZE(stb), blksize);
++	size = froundup(ST_BLKSIZE(stb), blksize);
+ 	if (size == 0)
+ 		size = blksize;
+ 	if (bp->cnt >= size)

@@ -1,0 +1,15 @@
+Index: Makefile
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/Makefile,v
+retrieving revision 1.1.1.5
+diff -u -r1.1.1.5 Makefile
+--- ptxdist-testing/Makefile.old	14 Oct 2003 02:32:09 -0000	1.1.1.5
++++ ptxdist-testing/Makefile	22 Oct 2003 23:27:35 -0000
+@@ -276,5 +276,7 @@
+ $(INSTALL_LOG): 
+ 	make -C $(TOPDIR)/tools/install-log-1.9
+ 
++print-%:
++	echo $* is $($*)
+ .PHONY: dep_output_clean dep_tree dep_world skip_vendortweaks
+ # vim600:set foldmethod=marker:

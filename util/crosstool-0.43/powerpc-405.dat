@@ -1,0 +1,4 @@
+TARGET=powerpc-405-linux-gnu
+TARGET_CFLAGS="-O -mcpu=405"
+GCC_EXTRA_CONFIG="--with-cpu=405 --enable-cxx-flags=-mcpu=405"
+GLIBC_EXTRA_CONFIG="$GLIBC_EXTRA_CONFIG --without-fp"

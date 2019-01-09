@@ -1,0 +1,3 @@
+KERNELCONFIG=`pwd`/mipsel.config
+TARGET=mipsel-unknown-linux-gnu
+TARGET_CFLAGS="-O2 -finline-limit=10000"

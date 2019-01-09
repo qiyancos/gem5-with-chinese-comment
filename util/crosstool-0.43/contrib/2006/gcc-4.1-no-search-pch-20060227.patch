@@ -1,0 +1,33 @@
+Little hack to let you turn off searching for precompiled headers.
+Really just here for benchmarking the effect on the preprocessor.
+Signed-off-by: dank@kegel.com
+
+diff -Nuar gcc-4.1-20060217/libcpp/files.c gcc-4.1-20060227/libcpp/files.c
+--- gcc-4.1-20060217/libcpp/files.c	2005-11-03 18:10:19.000000000 -0800
++++ gcc-4.1-20060227/libcpp/files.c	2006-02-27 17:20:35.000000000 -0800
+@@ -28,6 +28,7 @@
+ #include "mkdeps.h"
+ #include "hashtab.h"
+ #include "md5.h"
++#include <stdlib.h>
+ #include <dirent.h>
+ 
+ /* Variable length record files on VMS will have a stat size that includes
+@@ -248,9 +249,16 @@
+   char *pchname;
+   struct stat st;
+   bool valid = false;
++  static int my_first_run = 1;
++  static int my_gcc_no_search_pch;
++
++  if (my_first_run) {
++    my_gcc_no_search_pch = (getenv("GCC_NO_SEARCH_PCH") != NULL);
++    my_first_run = 0;
++  }
+ 
+   /* No PCH on <stdin> or if not requested.  */
+-  if (file->name[0] == '\0' || !pfile->cb.valid_pch)
++  if (file->name[0] == '\0' || !pfile->cb.valid_pch || my_gcc_no_search_pch)
+     return false;
+ 
+   flen = strlen (path);

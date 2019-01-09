@@ -1,0 +1,32 @@
+AJLuse: 
+     * Create SRC_DIR if it does not exist.
+     * If building to a potentially shared tree only delete TARGET files.
+
++++ ../crosstool/all.sh	2004-03-15 13:48:29.575278300 -0700
+@@ -79,13 +79,24 @@ done
+ if test "$opt_no_unpack" = ""; then
+    # Download and patch
+    rm -rf $BUILD_DIR; mkdir -p $BUILD_DIR
++   if test ! -d $SRC_DIR; then mkdir -p $SRC_DIR; fi
+    sh getandpatch.sh
+ fi
+ 
+ if test "$opt_no_build" = ""; then
++    # Simply remove and recreate target subtree if its our own unique tree;
++    if test "$PREFIX" = "$RESULT_TOP/$TARGET/$TOOLCOMBO"; then
++	rm -rf  $PREFIX
++	mkdir -p $PREFIX
++    # Otherwise remove our targets from a potentially shared tree.
++    else
++	rm -rf ${PREFIX}/${TARGET}
++	rm -rf ${PREFIX}/lib/gcc-lib/${TARGET}
++	rm -rf ${PREFIX}/bin/${TARGET}*
++	rm -rf ${PREFIX}/man/*/${TARGET}-*
++    fi
++
+     # Build
+-    rm  -rf  $PREFIX
+-    mkdir -p $PREFIX
+     mkdir -p $BUILD_DIR
+     cd $BUILD_DIR
+     sh $TOP_DIR/crosstool.sh

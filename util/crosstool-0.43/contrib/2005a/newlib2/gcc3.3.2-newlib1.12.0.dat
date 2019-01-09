@@ -1,0 +1,6 @@
+BINUTILS_DIR=binutils-2.14
+BINUTILS_URL=ftp://ftp.gnu.org/pub/gnu/binutils
+NEWLIB_DIR=newlib-1.12.0
+NEWLIB_URL=ftp://sources.redhat.com/pub/newlib
+GCC_DIR=gcc-3.3.2
+GCC_EXTRA_CONFIG=

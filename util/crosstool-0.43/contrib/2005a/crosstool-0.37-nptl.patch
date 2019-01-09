@@ -1,0 +1,791 @@
+Message-ID: <42DD6226.3010701@mvista.com>
+Date: Tue, 19 Jul 2005 13:27:18 -0700
+From: Khem Raj <kraj@mvista.com>
+To: crossgcc <crossgcc@sources.redhat.com>
+Subject: crosstool-nptl patch refreshed against 0.37
+
+Hi
+
+I have refreshed the contrib/crosstool-0.34-nptl.patch to apply on 
+crosstool-0.37 base
+the patch did not apply cleanly because there were some changes in patch 
+which are part of
+0.37 already.
+
+diff -urN --exclude='*.orig' crosstool-0.37.orig/crosstool.sh crosstool-0.37/crosstool.sh
+--- crosstool-0.37.orig/crosstool.sh	2005-07-09 17:47:29.000000000 -0700
++++ crosstool-0.37/crosstool.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -70,23 +70,28 @@
+ test -z "$BUILD" && abort "bug: BUILD not set?!"
+ 
+ if test -z "${GLIBC_ADDON_OPTIONS}"; then
+-   echo "GLIBC_ADDON_OPTIONS not set, so guessing addons from GLIBCTHREADS_FILENAME and GLIBCCRYPT_FILENAME"
+-   # this is lame, need to fix this for nptl later?
+-   # (nptl is an addon, but it's shipped in the main tarball)
++   echo "GLIBC_ADDON_OPTIONS not set"
+    GLIBC_ADDON_OPTIONS="="
+-   case "${GLIBCTHREADS_FILENAME}" in
+-     *linuxthreads*) GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}linuxthreads," ;;
+-   esac
++   if test '!' -z ${GLIBC_ADDON_LINUXTHREADS}; then
++       GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}linuxthreads,"
++   elif test '!' -z ${GLIBC_ADDON_NPTL}; then
++       GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}nptl,"
++   fi
+    # crypt is only an addon for glibc-2.1.x
+    test -z "${GLIBCCRYPT_FILENAME}"   || GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}crypt,"
+ fi
+ 
++if test '!' -z "${GLIBC_ADDON_NPTL}"; then
++    GLIBC_EXTRA_CONFIG="--with-tls --with-__thread ${GLIBC_EXTRA_CONFIG}"
++    GLIBC_MIN_KERNEL=2.6.4
++else
++    GLIBC_EXTRA_CONFIG="--without-tls --without-__thread ${GLIBC_EXTRA_CONFIG}"
++    GLIBC_MIN_KERNEL=2.4.3
++fi
++
+ # One is forbidden
+ test -z "${LD_LIBRARY_PATH}" || abort  "glibc refuses to build if LD_LIBRARY_PATH is set.  Please unset it before running this script."
+ 
+-# And one is derived.
+-GLIBCTHREADS_FILENAME=`echo $GLIBC_DIR | sed 's/glibc-/glibc-linuxthreads-/'`
+-
+ # Check for a few prerequisites that have tripped people up.
+ awk '/x/' < /dev/null  || abort "You need awk to build a toolchain."
+ test -z "${CFLAGS}"    || abort "Don't set CFLAGS, it screws up the build"
+@@ -437,13 +442,36 @@
+     # http://sourceware.org/ml/crossgcc/2005-05/msg00168.html
+     cp misc/syscall-list.h $HEADERDIR/bits/syscall.h
+ 
++    if test '!' -z "${GLIBC_ADDON_NPTL}"; then 
++        # To build gcc with thread support requires real pthread headers. These
++        # will have to manually be copied from under the tree of the desired
++        # target pthread implementation.
++        cp ${GLIBC_DIR}/nptl/sysdeps/pthread/pthread.h $HEADERDIR/pthread.h
++        cp ${GLIBC_DIR}/nptl/sysdeps/unix/sysv/linux/${ARCH}/bits/pthreadtypes.h $HEADERDIR/bits/pthreadtypes.h
++
++        # On s390, powerpc and sparc we also require bits/wordsize.h.
++        case $TARGET in
++        sparc* | s390* | powerpc* )
++            case $TARGET in
++            sparc64* )   wordsize_h=sysdeps/sparc/sparc64/bits/wordsize.h ;;
++            sparc* )     wordsize_h=sysdeps/sparc/sparc32/bits/wordsize.h ;;
++            s390x* )     wordsize_h=sysdeps/s390/s390x/bits/wordsize.h ;;
++            s390* )      wordsize_h=sysdeps/s390/s390/bits/wordsize.h ;;
++            powerpc64* ) wordsize_h=sysdeps/powerpc/powerpc64/bits/wordsize.h ;;
++            powerpc* )   wordsize_h=sysdeps/powerpc/powerpc32/bits/wordsize.h ;;
++            esac
++            test ! -f $HEADERDIR/bits/wordsize.h && cp ${GLIBC_DIR}/${wordsize_h} $HEADERDIR/bits/wordsize.h
++	    ;;
++	esac
++    fi # GLIBC_ADDONS_NPTL
++
+     cd ..
+ fi
+ 
+ #---------------------------------------------------------
+-echo "Build gcc-core (just enough to build glibc)"
++echo "Build gcc-core w/o shared libgcc (just enough to build glibc starfiles)"
+ 
+-mkdir -p build-gcc-core; cd build-gcc-core
++mkdir -p build-gcc-core-static; cd build-gcc-core-static
+ 
+ echo Copy headers to install area of bootstrap gcc, so it can build libgcc2
+ mkdir -p $CORE_PREFIX/$TARGET/include
+@@ -475,8 +503,122 @@
+ 
+ logresult gcc-core $CORE_PREFIX/bin/${TARGET}-gcc${EXEEXT}
+ 
++# Following extra steps required for building an NPTL enabled glibc.
++if test '!' -z "${GLIBC_ADDON_NPTL}"; then
++    #---------------------------------------------------------
++    echo "Build glibc startfiles (required for shared libgcc)"
++
++    mkdir -p build-glibc-startfiles; cd build-glibc-startfiles
++
++    # sh4 really needs to set configparms as of gcc-3.4/glibc-2.3.2
++    # note: this is awkward, doesn't work well if you need more than one line in configparms
++    echo ${GLIBC_CONFIGPARMS} > configparms
++
++    echo "libc_cv_forced_unwind=yes" > config.cache
++    echo "libc_cv_c_cleanup=yes" >> config.cache
++    # this here is moot, currently you cannot build nptl for sparc64
++    case ${TARGET} in
++        sparc64* ) echo "libc_cv_sparc64_tls=yes" >> config.cache ;;
++    esac
++
++    if test '!' -f Makefile; then
++        # Configure with --prefix the way we want it on the target...
++        # There are a whole lot of settings here.  You'll probably want
++        # to read up on what they all mean, and customize a bit.
++        # e.g. I picked --enable-kernel=2.4.3 here just because it's the kernel Bill 
++        # used in his example gcc2.95.3 script.  That means some backwards compatibility 
++        # stuff is turned on in glibc that you may not need if you're using a newer kernel.
++        # Compare these options with the ones used when installing the glibc headers above - they're different.
++        # Adding "--without-gd" option to avoid error "memusagestat.c:36:16: gd.h: No such file or directory" 
++        # See also http://sources.redhat.com/ml/libc-alpha/2000-07/msg00024.html. 
++        # Set BUILD_CC, or you won't be able to build datafiles
++        # Set --build, else glibc-2.3.2 will think you're not cross-compiling, and try to run the test programs
++
++        BUILD_CC=gcc CFLAGS="$TARGET_CFLAGS" CC="${TARGET}-gcc $GLIBC_EXTRA_CC_ARGS" \
++        AR=${TARGET}-ar RANLIB=${TARGET}-ranlib \
++            ${GLIBC_DIR}/configure --prefix=/usr \
++	    --build=$BUILD --host=$TARGET \
++            ${GLIBC_EXTRA_CONFIG} \
++            --enable-kernel=${GLIBC_MIN_KERNEL} \
++            --without-cvs --disable-profile --disable-debug --without-gd \
++            $SHARED_MODE \
++            --enable-add-ons${GLIBC_ADDON_OPTIONS} --with-headers=$HEADERDIR \
++            --cache-file=config.cache
++    fi
++
++    #TODO: should check whether slibdir has been set in configparms to */lib64
++    #      and copy the startfiles into the appropriate libdir.
++    make csu/subdir_lib
++    
++    test -z "${USE_SYSROOT}" &&
++    cp -fp csu/crt[1in].o ${SYSROOT}/lib/ ||
++    cp -fp csu/crt[1in].o ${SYSROOT}/usr/lib/ 
++
++    cd ..
++
++    #---------------------------------------------------------
++    echo "Build gcc-core w shared libgcc"
++
++    mkdir -p build-gcc-core-shared; cd build-gcc-core-shared
++
++    # Use --with-local-prefix so older gccs don't look in /usr/local (http://gcc.gnu.org/PR10532)
++
++    if test '!' -f Makefile; then
++        ${GCC_DIR}/configure $CANADIAN_BUILD --target=$TARGET --host=$GCC_HOST --prefix=$PREFIX \
++	    --with-local-prefix=${SYSROOT} \
++	    --disable-multilib \
++            ${GCC_EXTRA_CONFIG} \
++	    ${GCC_SYSROOT_ARG_CORE} \
++	    --disable-nls \
++	    --enable-symvers=gnu \
++	    --enable-__cxa_atexit \
++            --enable-languages=c \
++            --enable-shared
++    fi
++
++    # HACK: we need to override SHLIB_LC from gcc/config/t-slibgcc-elf-ver or
++    #       gcc/config/t-libunwind so -lc is removed from the link for 
++    #       libgcc_s.so, as we do not have a target -lc yet.
++    #       This is not as ugly as it appears to be ;-) All symbols get resolved
++    #       during the glibc build, and we provide a proper libgcc_s.so for the
++    #       cross toolchain during the final gcc build.
++    #
++    #       As we cannot modify the source tree, nor override SHLIB_LC itself
++    #       during configure or make, we have to edit the resultant 
++    #       gcc/libgcc.mk itself to remove -lc from the link.
++    #       This causes us to have to jump through some hoops...
++    #
++    #       To produce libgcc.mk to edit we firstly require libiberty.a,
++    #       so we configure then build it.
++    #       Next we have to configure gcc, create libgcc.mk then edit it...
++    #       So much easier if we just edit the source tree, but hey...
++    if test '!' -f ${GCC_DIR}/gcc/BASE-VER; then
++        make configure-libiberty
++        make -C libiberty libiberty.a
++        make configure-gcc
++    else
++        make configure-gcc
++	make configure-libcpp
++	make configure-build-libiberty
++	make all-libcpp
++	make all-build-libiberty
++    fi
++    make -C gcc libgcc.mk
++
++    if test '!' -f gcc/libgcc.mk-ORIG ; then cp -p gcc/libgcc.mk gcc/libgcc.mk-ORIG; fi
++    sed 's@-lc@@g' < gcc/libgcc.mk-ORIG > gcc/libgcc.mk
++
++    test "$CANADIAN_BUILD" = "" || make $PARALLELMFLAGS all-build-libiberty || true
++    make $PARALLELMFLAGS all-gcc 
++    make install-gcc
++
++    cd ..
++
++    test -x ${PREFIX}/bin/${TARGET}-gcc || abort Build failed during gcc-core 
++
++fi # GLIBC_ADDON_NPTL
+ #---------------------------------------------------------
+-echo Build glibc and linuxthreads
++echo Build glibc
+ 
+ mkdir -p build-glibc; cd build-glibc
+ 
+@@ -484,6 +626,16 @@
+ # note: this is awkward, doesn't work well if you need more than one line in configparms
+ echo ${GLIBC_CONFIGPARMS} > configparms
+ 
++if test '!' -z "${GLIBC_ADDON_NPTL}"; then
++    # Following configure tests fail while cross-compiling
++    echo "libc_cv_forced_unwind=yes" > config.cache
++    echo "libc_cv_c_cleanup=yes" >> config.cache
++    # The following is moot, currently you cannot build nptl for sparc64
++    case ${TARGET} in
++        sparc64* ) echo "libc_cv_sparc64_tls=yes" >> config.cache ;;
++    esac
++fi # GLIBC_ADDON_NPTL
++
+ if test '!' -f Makefile; then
+     # Configure with --prefix the way we want it on the target...
+     # There are a whole lot of settings here.  You'll probably want
+@@ -502,11 +654,11 @@
+         ${GLIBC_DIR}/configure --prefix=/usr \
+         --build=$BUILD --host=$TARGET \
+         ${GLIBC_EXTRA_CONFIG} \
+-        --enable-kernel=2.4.3 \
++        --enable-kernel=${GLIBC_MIN_KERNEL} \
+         --without-cvs --disable-profile --disable-debug --without-gd \
+-        --without-tls --without-__thread \
+         $SHARED_MODE \
+-        --enable-add-ons${GLIBC_ADDON_OPTIONS} --with-headers=$HEADERDIR
++        --enable-add-ons${GLIBC_ADDON_OPTIONS} --with-headers=$HEADERDIR \
++	--cache-file=config.cache
+ fi
+ 
+ if grep -l '^install-lib-all:' ${GLIBC_DIR}/Makerules > /dev/null; then
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-alpha-nptl.sh crosstool-0.37/demo-alpha-nptl.sh
+--- crosstool-0.37.orig/demo-alpha-nptl.sh	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.37/demo-alpha-nptl.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -0,0 +1,19 @@
++#!/bin/sh
++set -ex
++TARBALLS_DIR=$HOME/downloads
++RESULT_TOP=/opt/crosstool
++export TARBALLS_DIR RESULT_TOP
++GCC_LANGUAGES="c,c++"
++export GCC_LANGUAGES
++
++GLIBC_ADDON_NPTL=1
++export GLIBC_ADDON_NPTL=1
++
++# Really, you should do the mkdir before running this,
++# and chown /opt/crosstool to yourself so you don't need to run as root.
++mkdir -p $RESULT_TOP
++
++# Build the toolchain.  Takes a couple hours and a couple gigabytes.
++ eval `cat alpha.dat gcc-3.4.1-glibc-2.3.3.dat`    sh all.sh --notest
++
++echo Done.
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-alpha.sh crosstool-0.37/demo-alpha.sh
+--- crosstool-0.37.orig/demo-alpha.sh	2005-07-04 23:08:52.000000000 -0700
++++ crosstool-0.37/demo-alpha.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-arm9tdmi.sh crosstool-0.37/demo-arm9tdmi.sh
+--- crosstool-0.37.orig/demo-arm9tdmi.sh	2005-03-09 13:50:19.000000000 -0800
++++ crosstool-0.37/demo-arm9tdmi.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-armeb.sh crosstool-0.37/demo-armeb.sh
+--- crosstool-0.37.orig/demo-armeb.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-armeb.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-arm-iwmmxt.sh crosstool-0.37/demo-arm-iwmmxt.sh
+--- crosstool-0.37.orig/demo-arm-iwmmxt.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-arm-iwmmxt.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-arm.sh crosstool-0.37/demo-arm.sh
+--- crosstool-0.37.orig/demo-arm.sh	2005-07-09 22:15:18.000000000 -0700
++++ crosstool-0.37/demo-arm.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-arm-softfloat.sh crosstool-0.37/demo-arm-softfloat.sh
+--- crosstool-0.37.orig/demo-arm-softfloat.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-arm-softfloat.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-armv5b-softfloat.sh crosstool-0.37/demo-armv5b-softfloat.sh
+--- crosstool-0.37.orig/demo-armv5b-softfloat.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-armv5b-softfloat.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-cris.sh crosstool-0.37/demo-cris.sh
+--- crosstool-0.37.orig/demo-cris.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-cris.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-i686-nptl.sh crosstool-0.37/demo-i686-nptl.sh
+--- crosstool-0.37.orig/demo-i686-nptl.sh	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.37/demo-i686-nptl.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -0,0 +1,20 @@
++#!/bin/sh
++set -ex
++TARBALLS_DIR=$PWD/downloads
++RESULT_TOP=/opt/crosstool
++export TARBALLS_DIR RESULT_TOP
++GCC_LANGUAGES="c,c++"
++export GCC_LANGUAGES
++
++GLIBC_ADDON_NPTL=1
++export GLIBC_ADDON_NPTL
++
++# Really, you should do the mkdir before running this,
++# and chown /opt/crosstool to yourself so you don't need to run as root.
++mkdir -p $RESULT_TOP
++
++# Build the toolchain.  Takes a couple hours and a couple gigabytes.
++#
++eval `cat i686.dat gcc-3.4.3-glibc-2.3.3.dat` sh all.sh --notest
++
++echo Done.
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-i686.sh crosstool-0.37/demo-i686.sh
+--- crosstool-0.37.orig/demo-i686.sh	2005-07-09 22:08:35.000000000 -0700
++++ crosstool-0.37/demo-i686.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-ia64.sh crosstool-0.37/demo-ia64.sh
+--- crosstool-0.37.orig/demo-ia64.sh	2005-03-09 13:49:19.000000000 -0800
++++ crosstool-0.37/demo-ia64.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-m68k.sh crosstool-0.37/demo-m68k.sh
+--- crosstool-0.37.orig/demo-m68k.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-m68k.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-mipsel.sh crosstool-0.37/demo-mipsel.sh
+--- crosstool-0.37.orig/demo-mipsel.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-mipsel.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -20,6 +20,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-mips-nptl.sh crosstool-0.37/demo-mips-nptl.sh
+--- crosstool-0.37.orig/demo-mips-nptl.sh	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.37/demo-mips-nptl.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -0,0 +1,22 @@
++#!/bin/sh
++set -ex
++
++# Big-endian MIPS
++
++TARBALLS_DIR=$HOME/downloads
++RESULT_TOP=/opt/crosstool
++export TARBALLS_DIR RESULT_TOP
++GCC_LANGUAGES="c,c++"
++export GCC_LANGUAGES
++
++GLIBC_ADDON_NPTL=1
++export GLIBC_ADDON_NPTL=1
++
++# Really, you should do the mkdir before running this,
++# and chown /opt/crosstool to yourself so you don't need to run as root.
++mkdir -p $RESULT_TOP
++
++# Build the toolchain.  Takes a couple hours and a couple gigabytes.
++eval `cat mips.dat gcc-4.1.0-20050520-glibc-20050520.dat` sh all.sh --notest
++
++echo Done.
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-powerpc64-nptl.sh crosstool-0.37/demo-powerpc64-nptl.sh
+--- crosstool-0.37.orig/demo-powerpc64-nptl.sh	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.37/demo-powerpc64-nptl.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -0,0 +1,19 @@
++#!/bin/sh
++set -ex
++TARBALLS_DIR=$HOME/downloads
++RESULT_TOP=/opt/crosstool
++export TARBALLS_DIR RESULT_TOP
++GCC_LANGUAGES="c,c++"
++export GCC_LANGUAGES
++
++GLIBC_ADDON_NPTL=1
++export GLIBC_ADDON_NPTL
++
++# Really, you should do the mkdir before running this,
++# and chown /opt/crosstool to yourself so you don't need to run as root.
++mkdir -p $RESULT_TOP
++
++# Build the toolchain.  Takes a couple hours and a couple gigabytes.
++ eval `cat powerpc-970.dat gcc-3.4.1-glibc-2.3.3.dat` sh all.sh --notest
++
++echo Done.
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-ppc405.sh crosstool-0.37/demo-ppc405.sh
+--- crosstool-0.37.orig/demo-ppc405.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-ppc405.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-ppc440.sh crosstool-0.37/demo-ppc440.sh
+--- crosstool-0.37.orig/demo-ppc440.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-ppc440.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-ppc604.sh crosstool-0.37/demo-ppc604.sh
+--- crosstool-0.37.orig/demo-ppc604.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-ppc604.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-ppc7450.sh crosstool-0.37/demo-ppc7450.sh
+--- crosstool-0.37.orig/demo-ppc7450.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-ppc7450.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-ppc750.sh crosstool-0.37/demo-ppc750.sh
+--- crosstool-0.37.orig/demo-ppc750.sh	2005-07-05 10:25:20.000000000 -0700
++++ crosstool-0.37/demo-ppc750.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-ppc860.sh crosstool-0.37/demo-ppc860.sh
+--- crosstool-0.37.orig/demo-ppc860.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-ppc860.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-ppc970.sh crosstool-0.37/demo-ppc970.sh
+--- crosstool-0.37.orig/demo-ppc970.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-ppc970.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-s390.sh crosstool-0.37/demo-s390.sh
+--- crosstool-0.37.orig/demo-s390.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-s390.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-sh3.sh crosstool-0.37/demo-sh3.sh
+--- crosstool-0.37.orig/demo-sh3.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-sh3.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-sh4.sh crosstool-0.37/demo-sh4.sh
+--- crosstool-0.37.orig/demo-sh4.sh	2005-05-16 21:16:51.000000000 -0700
++++ crosstool-0.37/demo-sh4.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-sparc64.sh crosstool-0.37/demo-sparc64.sh
+--- crosstool-0.37.orig/demo-sparc64.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-sparc64.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -8,6 +8,9 @@
+ #PARALLELMFLAGS="-j2"
+ #export PARALLELMFLAGS
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-sparc.sh crosstool-0.37/demo-sparc.sh
+--- crosstool-0.37.orig/demo-sparc.sh	2005-03-07 16:34:34.000000000 -0800
++++ crosstool-0.37/demo-sparc.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -6,6 +6,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-x86_64-nptl.sh crosstool-0.37/demo-x86_64-nptl.sh
+--- crosstool-0.37.orig/demo-x86_64-nptl.sh	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.37/demo-x86_64-nptl.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -0,0 +1,22 @@
++#!/bin/sh
++set -ex
++TARBALLS_DIR=$HOME/downloads
++RESULT_TOP=/opt/crosstool
++export TARBALLS_DIR RESULT_TOP
++#GCC_LANGUAGES="c,c++,java,f77"
++GCC_LANGUAGES="c,c++"
++export GCC_LANGUAGES
++
++GLIBC_ADDON_NPTL=1
++export GLIBC_ADDON_NPTL
++
++# Really, you should do the mkdir before running this,
++# and chown /opt/crosstool to yourself so you don't need to run as root.
++mkdir -p $RESULT_TOP
++
++# Build the toolchain.  Takes a couple hours and a couple gigabytes.
++# Must use --with-sysroot, which means you need gcc-3.3.3 or later.
++# eval `cat x86_64.dat gcc-3.4.1-glibc-2.3.3.dat` sh all.sh --notest
++ eval `cat x86_64.dat gcc-3.4.1-glibc-2.3.4.dat` sh all.sh --notest
++
++echo Done.
+diff -urN --exclude='*.orig' crosstool-0.37.orig/demo-x86_64.sh crosstool-0.37/demo-x86_64.sh
+--- crosstool-0.37.orig/demo-x86_64.sh	2005-06-29 16:04:05.000000000 -0700
++++ crosstool-0.37/demo-x86_64.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -7,6 +7,9 @@
+ GCC_LANGUAGES="c,c++"
+ export GCC_LANGUAGES
+ 
++GLIBC_ADDON_LINUXTHREADS=1
++export GLIBC_ADDON_LINUXTHREADS
++
+ # Really, you should do the mkdir before running this,
+ # and chown /opt/crosstool to yourself so you don't need to run as root.
+ mkdir -p $RESULT_TOP
+diff -urN --exclude='*.orig' crosstool-0.37.orig/gcc-3.2.3-glibc-2.3.2.dat crosstool-0.37/gcc-3.2.3-glibc-2.3.2.dat
+--- crosstool-0.37.orig/gcc-3.2.3-glibc-2.3.2.dat	2005-05-15 13:08:30.000000000 -0700
++++ crosstool-0.37/gcc-3.2.3-glibc-2.3.2.dat	2005-07-19 12:54:58.000000000 -0700
+@@ -2,4 +2,3 @@
+ GCC_DIR=gcc-3.2.3
+ GLIBC_DIR=glibc-2.3.2
+ LINUX_DIR=linux-2.4.26
+-GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.3.2
+diff -urN --exclude='*.orig' crosstool-0.37.orig/gcc-3.3.4-glibc-2.1.3.dat crosstool-0.37/gcc-3.3.4-glibc-2.1.3.dat
+--- crosstool-0.37.orig/gcc-3.3.4-glibc-2.1.3.dat	2005-03-09 14:05:23.000000000 -0800
++++ crosstool-0.37/gcc-3.3.4-glibc-2.1.3.dat	2005-07-19 12:54:58.000000000 -0700
+@@ -1,6 +1,5 @@
+ BINUTILS_DIR=binutils-2.15
+ GCC_DIR=gcc-3.3.4
+ GLIBC_DIR=glibc-2.1.3
+-GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.1.3
+ GLIBCCRYPT_FILENAME=glibc-crypt-2.1
+ LINUX_DIR=linux-2.4.26
+diff -urN --exclude='*.orig' crosstool-0.37.orig/gcc-3.3.4-glibc-2.2.5.dat crosstool-0.37/gcc-3.3.4-glibc-2.2.5.dat
+--- crosstool-0.37.orig/gcc-3.3.4-glibc-2.2.5.dat	2005-03-09 14:05:23.000000000 -0800
++++ crosstool-0.37/gcc-3.3.4-glibc-2.2.5.dat	2005-07-19 12:54:58.000000000 -0700
+@@ -1,5 +1,4 @@
+ BINUTILS_DIR=binutils-2.15
+ GCC_DIR=gcc-3.3.4
+ GLIBC_DIR=glibc-2.2.5
+-GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.2.5
+ LINUX_DIR=linux-2.4.26
+diff -urN --exclude='*.orig' crosstool-0.37.orig/gcc-3.3.4-glibc-2.3.2.dat crosstool-0.37/gcc-3.3.4-glibc-2.3.2.dat
+--- crosstool-0.37.orig/gcc-3.3.4-glibc-2.3.2.dat	2005-03-09 14:05:23.000000000 -0800
++++ crosstool-0.37/gcc-3.3.4-glibc-2.3.2.dat	2005-07-19 12:54:58.000000000 -0700
+@@ -1,5 +1,4 @@
+ BINUTILS_DIR=binutils-2.15
+ GCC_DIR=gcc-3.3.4
+ GLIBC_DIR=glibc-2.3.2
+-GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.3.2
+ LINUX_DIR=linux-2.4.26
+diff -urN --exclude='*.orig' crosstool-0.37.orig/gcc-3.3.4-glibc-2.3.3.dat crosstool-0.37/gcc-3.3.4-glibc-2.3.3.dat
+--- crosstool-0.37.orig/gcc-3.3.4-glibc-2.3.3.dat	2005-03-09 14:05:23.000000000 -0800
++++ crosstool-0.37/gcc-3.3.4-glibc-2.3.3.dat	2005-07-19 12:54:58.000000000 -0700
+@@ -1,5 +1,4 @@
+ BINUTILS_DIR=binutils-2.15
+ GCC_DIR=gcc-3.3.4
+ GLIBC_DIR=glibc-2.3.3
+-GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.3.3
+ LINUX_DIR=linux-2.4.26
+diff -urN --exclude='*.orig' crosstool-0.37.orig/gcc-3.3-glibc-2.3.2.dat crosstool-0.37/gcc-3.3-glibc-2.3.2.dat
+--- crosstool-0.37.orig/gcc-3.3-glibc-2.3.2.dat	2005-03-09 14:05:23.000000000 -0800
++++ crosstool-0.37/gcc-3.3-glibc-2.3.2.dat	2005-07-19 12:54:58.000000000 -0700
+@@ -2,4 +2,3 @@
+ GCC_DIR=gcc-3.3
+ LINUX_DIR=linux-2.4.26
+ GLIBC_DIR=glibc-2.3.2
+-GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.3.2
+diff -urN --exclude='*.orig' crosstool-0.37.orig/gcc-3.4.1-glibc-2.3.4.dat crosstool-0.37/gcc-3.4.1-glibc-2.3.4.dat
+--- crosstool-0.37.orig/gcc-3.4.1-glibc-2.3.4.dat	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.37/gcc-3.4.1-glibc-2.3.4.dat	2005-07-19 12:54:58.000000000 -0700
+@@ -0,0 +1,4 @@
++BINUTILS_DIR=binutils-2.15
++GCC_DIR=gcc-3.4.1
++GLIBC_DIR=glibc-2.3.4-20040701
++LINUX_DIR=linux-2.6.6
+diff -urN --exclude='*.orig' crosstool-0.37.orig/gcc-4.1.0-20050520-glibc-20050520.dat crosstool-0.37/gcc-4.1.0-20050520-glibc-20050520.dat
+--- crosstool-0.37.orig/gcc-4.1.0-20050520-glibc-20050520.dat	1969-12-31 16:00:00.000000000 -0800
++++ crosstool-0.37/gcc-4.1.0-20050520-glibc-20050520.dat	2005-07-19 12:54:58.000000000 -0700
+@@ -0,0 +1,5 @@
++BINUTILS_EXTRA_CONFIG="--disable-werror"
++BINUTILS_DIR=binutils-2.16
++GCC_DIR=gcc-4.1.0-20050520
++GLIBC_DIR=glibc-20050520
++LINUX_DIR=linux-2.6.12-rc4
+diff -urN --exclude='*.orig' crosstool-0.37.orig/getandpatch.sh crosstool-0.37/getandpatch.sh
+--- crosstool-0.37.orig/getandpatch.sh	2005-07-05 15:37:25.000000000 -0700
++++ crosstool-0.37/getandpatch.sh	2005-07-19 12:54:58.000000000 -0700
+@@ -33,7 +33,9 @@
+   test -z "${LINUX_SANITIZED_HEADER_DIR}" && echo "Not downloading linux-libc-headers. Set LINUX_SANITIZED_HEADER_DIR to do so"
+   test -z "${LINUX_DIR}"        && echo "Not downloading kernel sources. Set LINUX_DIR if you want to do so"
+   # And one is derived.
+-  GLIBCTHREADS_FILENAME=`echo $GLIBC_DIR | sed 's/glibc-/glibc-linuxthreads-/'`
++  if test '!' -z "${GLIBC_ADDON_LINUXTHREADS}"; then
++      GLIBCTHREADS_FILENAME=`echo $GLIBC_DIR | sed 's/glibc-/glibc-linuxthreads-/'`
++  fi
+ fi
+ 
+ test -z "${TARBALLS_DIR}"     && abort "Please set TARBALLS_DIR to the directory to download tarballs to."
+@@ -248,7 +250,7 @@
+   # Fetch linux-libc-headers, if requested
+   test -n "${LINUX_SANITIZED_HEADER_DIR}" && getUnpackAndPatch    http://ep09.pld-linux.org/~mmazur/linux-libc-headers/${LINUX_SANITIZED_HEADER_DIR}.tar.bz2
+   # Glibc addons must come after glibc
+-  getUnpackAndPatch     \
++  test x$GLIBCTHREADS_FILENAME = x || getUnpackAndPatch     \
+        ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCTHREADS_FILENAME.tar.bz2 \
+        ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCTHREADS_FILENAME.tar.gz \
+        ftp://gcc.gnu.org/pub/glibc/releases/$GLIBCTHREADS_FILENAME.tar.bz2 \
+

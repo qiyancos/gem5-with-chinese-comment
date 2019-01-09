@@ -1,0 +1,634 @@
+<html>
+<head>
+<title>crosstool-howto</title>
+</head>
+<body>
+<h1>crosstool-howto</h1>
+Crosstool is a set of scripts to build and test several versions of gcc and glibc for 
+most architectures supported by glibc.
+It will even download and patch the original tarballs for you.
+The resulting script and associated patches, and the latest version of this doc,
+are available at <a href="http://kegel.com/crosstool/">kegel.com/crosstool</a>.
+<p>
+Crosstool was originally developed for embedded system developers, but is also useful for mainstream developers who
+simply want their compiles to go fast or who need to build programs that
+run on older versions of Linux (e.g. Red Hat 6.2), but don't want to develop
+on those ancient systems.
+<p>
+It includes minimal patches for gcc and glibc needed to build a few combinations of 
+(alpha, arm, i686, ia64, mips, powerpc, powerpc64, sh4, sparc, sparc64, s390, x86_64) x 
+(gcc-2.95.3 ... gcc-4.0.0) x 
+(glibc-2.1.3 ... glibc-2.3.5).
+<p>
+It also supports building toolchains that target Cygwin; see demo-cygwin.sh.
+<p>
+Crosstool is a portable shell script.  You can use it to build linux-targeted compilers that run
+on Linux, Mac OS X, Solaris, and Cygwin.   It includes support for creating hetrogenous build
+clusters; it lets you use virtually every computer in the building, regardless of operating
+system or CPU type, to speed up your Linux compiles.  
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#quick">Quick Start</a></li>
+<li><a href="#rpm">Building RPMs</a></li>
+<li><a href="#static">Static Builds</a></li>
+<li><a href="#distcc">Faster builds with distcc</a></li>
+<li><a href="#hetrogenous">Hetrogenous distcc clusters</a></li>
+<li><a href="#canadian">Canadian Cross Builds</a></li>
+<li><a href="#scripts">Scripts</a></li>
+<li><a href="#data">Data Files</a></li>
+<li><a href="#notes">Notes</a></li>
+<li><a href="#testing">Testing</a></li>
+<li><a href="#all">all.sh</a></li>
+<li><a href="#buildnotes">Build Platform Notes</a>
+<ul>
+<li><a href="#linux">Linux</a></li>
+<li><a href="#netbsd">NetBSD</a></li>
+<li><a href="#mac">Mac OS X</a></li>
+<li><a href="#cygwin">Cygwin</a></li>
+<li><a href="#solaris">Solaris</a></li>
+</ul></li>
+<li><a href="#targetnotes">Target Platform Notes</a>
+<ul>
+<li><a href="#mips">MIPS</a></li>
+<li><a href="#sh3">SH3</a></li>
+<li><a href="#sh4">SH4</a></li>
+<li><a href="#cris">CRIS</a></li>
+<li><a href="#arm-xscale">ARM-Xscale</a></li>
+<li><a href="#arm-iwmmxt">ARM-iwmmxt</a></li>
+</ul></li>
+<li><a href="#troubleshooting">Troubleshooting</a></li>
+<li><a href="#issues">Current Issues</a></li>
+<li><a href="#buildlogs">Build Status</a></li>
+<li><a href="#uclibc">uClibc</a></li>
+<li><a href="#contrib">Contributed Patches</a></li>
+<li><a href="#links">Links</a></li>
+</ul>
+
+<h2><a name="quick">Quick Start</a></h2>
+Download and unpack.  For instance:
+<pre>
+wget http://kegel.com/crosstool/crosstool-0.42.tar.gz
+tar -xzvf crosstool-0.42.tar.gz
+cd crosstool-0.42
+</pre>
+Then look at the demo scripts; there's one for each supported CPU type.
+For instance, demo-i686.sh is an example of how to build a toolchain that targets
+the i686 processor.   It sets three important variables:
+<pre>
+TARBALLS_DIR=$HOME/downloads        # where it will save source tarballs
+RESULT_TOP=/opt/crosstool           # where it will install the tools
+GCC_LANGUAGES="c,c++,java,f77"      # which languages it will make compilers for
+</pre>
+It then builds gcc-3.4.0 and glibc-2.3.2 for i686 with the line
+<pre>
+ eval `cat i686.dat gcc-3.4.0-glibc-2.3.2.dat`  sh all.sh --notest 
+</pre>
+Edit the script if you want to change any of these settings or versions.
+Then (as root) create the directory /opt/crosstool and make it writable by you, and 
+finally (as yourself) run the demo script, e.g.
+<pre>
+sudo mkdir /opt/crosstool
+sudo chown $USER /opt/crosstool
+sh demo-i686.sh
+</pre>
+When it finishes, you can run the new compiler as /opt/crosstool/gcc-3.4.0-glibc-2.3.2/i686-unknown-linux-gnu/bin/i686-unknown-linux-gnu-gcc.
+(You might want to put /opt/crosstool/gcc-3.4.0-glibc-2.3.2/i686-unknown-linux-gnu/bin on your PATH; then you
+can run the compiler as i686-unknown-linux-gnu-gcc.)
+
+<h2><a name="static">Static Builds</a></h2>
+If for some reason you want the resulting toolchain binaries to
+be statically linked, set the following environment variables before
+running crosstool.sh (or all.sh):
+<pre>
+BINUTILS_EXTRA_CONFIG="LDFLAGS=-all-static"
+GCC_EXTRA_CONFIG="LDFLAGS=-static"
+</pre>
+
+<h2><a name=rpm>Building RPMs</a></h2>
+Building RPMs of the compiler used to be done by the same shell script, all.sh, with the --buildrpm option,
+but that was not enough to satisfy real Linux distributions, which require true .src.rpm's.
+So now the procedure to build an RPM is to first build the .src.rpm, then build the .rpm from
+that, using rpmbuild in the traditional way.  
+<p>
+A script demonstrating how to build .src.rpm's is buildsrpms.sh.
+A script demonstrating how to build both .src.rpm's and .rpm's is buildrpms.sh.
+Both of these are only examples; I use them myself to build a specific set of toolchains.
+<p>
+Each .src.rpm generated by buildsrpms.sh builds toolchains
+for all supported CPUs, where 'supported' means 'the CPU is listed in the buildlogs directory as
+having successfully built a working toolchain'.
+This greatly cuts down on the number of .src.rpm's needed.
+To build for just e.g. i686, run rpmbuild with options "--without all --with i686".
+
+<h2><a name="distcc">Faster builds with distcc</a></h2>
+You can use <a href="http://distcc.samba.org">distcc</a> to distribute compilation across multiple computers for faster compiles.
+The distcc that comes with your version of Linux will work fine for most cases.
+However, it may be more convenient to instead use the script 'mkdistcc.sh'
+included with crosstool to install a crosstool-specific distcc
+(partly because that's what the mkdistcclinks.sh script assumes,
+and partly because it includes a patch that improves support for large hetrogenous clusters; see <a href="hetrogenous">below</a>).
+<p>
+To install distcc/distccd from source, run
+<pre>
+RESULT_TOP=/opt/crosstool \
+TARBALLS_DIR=$HOME/downloads \
+sh mkdistcc.sh
+cd /opt/crosstool
+sh common/bin/mkdistcclinks.sh
+</pre>
+To set up distccd as a service, run
+<pre>
+sudo sh /opt/crosstool/common/bin/install-distccd.sh
+</pre>
+<p>
+Regardless of how you installed crosstool-distcc, you then need to
+edit /opt/crosstool/common/etc/hosts and append the hostnames of all the computers running your distccd.
+<p>
+You can then run the distributed compiler as /opt/crosstool/gcc-3.3.3-glibc-2.3.2/i686-unknown-linux-gnu/<b>distributed</b>/bin/i686-unknown-linux-gnu-gcc.
+(You might want to put /opt/crosstool/gcc-3.3.3-glibc-2.3.2/i686-unknown-linux-gnu/<b>distributed</b>/bin on your PATH; then you
+can run the distributed compiler as i686-unknown-linux-gnu-gcc.)
+<p>
+To get any speed benefit, you'll need
+to run several compiles in parallel.  See e.g. <a
+href="http://www.gnu.org/software/make/manual/html_chapter/make_5.html#SEC55">make's
+-j option</a>.  Also note that only simple <b>compiling with the -c option</b>,
+not linking, is sped up, and that only C and C++
+compiles are distributed (fortran and java compiles are not distributed,
+sorry).  
+<p>
+Getting the best performance out of distcc is a fine art.  
+See e.g. Benjamin Meyer's page 
+"<a href="http://www.csh.rit.edu/slashdot/distcc.html">Distcc optimizations and how to compile kdelibs from scratch in six minutes</a>".
+<p>
+You can monitor your distcc jobs by running
+<pre>
+/opt/crosstool/common/bin/distccmon-test 5
+</pre>
+This will display a description of your active remote jobs once every five seconds.
+
+<h2><a name="hetrogenous">Hetrogenous distcc clusters</a></h2>
+Here's a scenario sometimes useful at large universities or companies, where one often has a central file server which all clients access.
+Crosstool is built for multiple versions of gcc and glibc, once for kind of workstation in the cluster, 
+and installed in e.g. /shared/crosstool/`config.guess`.  
+Compilers are invoked via absolute paths so toolchains with different versions of glibc can be distinguished.
+The absolute path is built using config.guess so, regardless of which
+kind of workstation the developer is on, he or she can invoke a compiler that can run on their workstation.
+<p>
+For example, when building a C program for modern x86 linux, developers set
+<pre>
+CC=/shared/crosstool/`config.guess`/gcc-3.3.3-glibc-2.3.2/i686-unknown-linux-gnu/distributed/bin/i686-unknown-linux-gnu-gcc
+</pre>
+And when building a C program for old Red Hat Linux 6.2 x86, developers might set
+<pre>
+CC=/shared/crosstool/`config.guess`/gcc-3.3.3-glibc-2.1.3/i686-unknown-linux-gnu/distributed/bin/i686-unknown-linux-gnu-gcc
+</pre>
+<p>
+A tricky part of this scenario is that the distcc server needs to be able to handle absolute paths
+for *other* architectures, possibly installed at a different location.  
+The patch patches/distcc-2.14/distcc-stringmap.patch, applied by mkdistcc.sh,
+adds a feature to the distccd server to read a $prefix/etc/distcc/apps file containing absolute paths
+to all known compilers, and to ignore all but the last N path components when locating the compiler to satisfy received compile requests.
+The distccd startup scripts created by crosstool's install-distccd.sh turn on that feature.
+<p>
+gcc-3.4.0's precompiled headers and profile-driven optimization features
+require lockstep synchronization, so they probably work only if the client and 
+the server are the same CPU type and operating system.  (And using pch with distcc may require
+apple's -fpch-preprocess patch; see http://gcc.gnu.org/ml/gcc/2003-03/msg00369.html)
+
+<h2><a name="canadian">Canadian Cross Builds</a></h2>
+Those long, strange names of the form "i686-unknown-linux-gnu" are called
+<a href="http://sources.redhat.com/autobook/autobook/autobook_17.html">GNU
+configuration names</a>.   The GNU build and test scripts use these
+extensively.   When you run the demo-$CPU.sh script, it sources
+the $CPU.dat file, which sets a variable TARGET containing the GNU configuration
+name for the target CPU.  For instance, i686.dat contains the line
+<pre>
+TARGET=i686-unknown-linux-gnu
+</pre>
+In the general case, there can be three machine types: the <i>build</i> machine which builds the compilers,
+the <i>host</i> machine where the compilers will run, and the <i>target</i> machine
+for which the compilers will generate code.
+<p>
+Building compilers that will run on some <b>other</b> linux system
+is called a Canadian Cross.  It's useful if, say, you're putting together
+a hetrogenous build cluster consisting of 32 bit and 64 bit workstations,
+and you want to run natively compiled compilers on each.  
+<p>
+To do a Canadian Cross build with crosstool, you have to run it <b>three times</b>:
+<ol>
+<li>once to build a toolchain that runs on the build system and generates code for the host system
+<li>once to build a toolchain that runs on the build system and generates code for the target system
+<li>once to build a toolchain that runs on the host system and generates code for the target system
+</ol>
+The last two runs are identical except that on the last run, you have to set a few environment variables:
+<ul>
+<li>GCC_HOST should be the GNU configuration name (e.g. powerpc-750-linux-gnu) of the <i>host</i> machine
+<li>PATH must be set to include the bin directory of the host and target compilers that can run on the build machine
+<li>CC, AR, and RANLIB have to be set to a compiler that generates code that runs on the host, 
+and versions of ar and ranlib that
+can handle archives of code for the host.
+</ul>
+demo-canadian.sh (when I finish it) will demonstrate how to get this working.
+<p>
+If you want the use resulting toolchain as a native toolchain, i.e.
+if you want it to search /lib and /usr/lib, you'll probably need to edit 
+its specs file to set the cross_compiler parameter to 0; 
+see <a href="http://sources.redhat.com/ml/crossgcc/2004-06/msg00161.html">this thread in the crossgcc mailing list</a>.
+
+<h2><a name=scripts>Scripts</a></h2>
+<ul>
+<li><tt>crosstool.sh</tt>: Compiles gcc and glibc.  This is the most important file, and it can be used by itself,
+without any other files from the tarball, if you are so inclined.
+<li><tt>getandpatch.sh</tt>: Download, unpack, and patch the binutils, linux, gcc, and glibc source tarballs.
+<li><tt>crosstest.sh</tt>: Run the gcc and glibc regression tests remotely.
+<li><tt>ptx.sh</tt>: Build userland apps (e.g. /bin/sh) using <a href="http://ptxdist.sf.net">ptxdist</a>.
+<li><tt>testhello.sh</tt>: Verifies trivial programs can be built with the new compiler
+<li><tt>all.sh</tt>: Invoke all the above scripts.  Supposedly more convenient that running them individually.  (<a href="#all">See below.</a>)
+<li><tt>mkdistcc.sh</tt>: A script to download, build, and patch distcc.
+<li><tt>mkdistcclinks.sh</tt>: A script to create masquerade directories for each installed compiler to make using distcc easier.
+<li><tt>demo-CPU.sh</tt>: One demo script for each CPU type that sets environment variables for that CPU, then runs all.sh and mkdistcc.sh.
+<li><tt>demo.sh</tt>: Big demo script that runs all the little demo-CPU.sh scripts.
+<li><tt>clean.sh</tt>: remove junk files; used by maintainer before creating tarballs
+<li><tt>mkjail.sh</tt>: create the files needed for a chroot jail (useful when doing regression testing of glibc)
+<li><tt>testjail.sh</tt>: test a remote chroot jail
+</ul>
+
+<h2><a name=data>Data Files</a></h2>
+<ul>
+<li><tt>CPU.dat</tt>: One file for each CPU type; sets GNU target name
+<li><tt>gcc-VERSION-glibc-VERSION.dat</tt>: One file for each supported combination of gcc and glibc; sets binutils, gcc, and glibc versions and options
+<li><tt>patches/PROGRAM/*.patch</tt>: the patches I needed for each version of each program.  
+The patches for each tool are stored in a subdirectory of <a href="../patches/">patches/</a>
+named after the tool (e.g. <a href="../patches/gcc-3.3/">patches/gcc-3.3</a>).
+Each patch starts with comments about what it's for, and has links to any associated discussion.
+This is a small but hopefully high quality and maintainable patch repository; newer versions of ptxdist use a mirror of this repository.
+<li><tt>summaries/*</tt>: example outputs from old crosstest.sh runs
+</ul>
+
+<h2><a name=notes>Notes</a></h2>
+If you want to build gcc-3.3 or later, you'll need a recent gcc (3.2 or later)
+on your workstation to build it with.
+<p>
+The scripts are fairly generic.
+You may need to tweak the parameters of the script to match your exact CPU type,
+or add a few patches needed to the patches/* directories, and run the build script again,
+if your tests indicate that programs built with the new compiler have problems.
+<p>
+In particular, if your CPU lacks an FPU, you might need to tell glibc that by setting
+before running all.sh.  For example, see powerpc-405.dat, which sets
+<pre>
+GLIBC_EXTRA_CONFIG="--without-fp"
+</pre>
+<p>
+Once you trust the toolchain can build and run simple statically linked 'hello, world' programs
+(see e.g. testhello.sh), test it with real applications.  
+<p>
+If you use these scripts to build a toolchain, please send a note to the
+<a href="http://sources.redhat.com/ml/crossgcc/">crossgcc mailing list</a>
+indicating which platform you used it on, and
+how well it worked for you.  Please be sure to mention which release of the crosstool
+scripts you used.
+<p>
+If you add support for a new CPU type, please send your changes to the crossgcc mailing
+list so they can be incorporated in a future release.
+
+<h2><a name=testing>Testing</a></h2>
+If you're targeting i686-linux, and are using a released version of gcc
+and glibc, you probably don't need to worry about testing the toolchain.
+<p>
+But if you're using a new or uncommon CPU type, or an unreleased version
+of gcc or glibc, and want some assurance that you have built a working
+compiler and C library, you should run the gcc and glibc test suites.
+See <a href="crosstest-howto.html">crosstest-howto.html</a>.
+
+<h2><a name=all>all.sh</a></h2>
+all.sh invokes the four scripts that download, build, and test the toolchain.
+It takes four options:
+<ul>
+<li>--nounpack, which means 'don't run getandbuild.sh'.  This is useful for quick reruns or when just testing.
+<li>--nobuild, which means 'don't run crosstool.sh'.  This is useful for when you just want to run regression tests.
+<li>--builduserland, which means 'run ptx.sh'.  This is useful for when you need to build busybox for some reason,
+e.g. if you want to run the regression tests, but the target's normal shell can't run against the new shared C libraries.
+<li>--notest, which means 'don't run crosstest.sh'.  This is useful for when you don't have a target to test on,
+or don't want to spend the time to test.  See <a href="crosstest-howto.html">crosstest-howto.html</a> for information about running the test suite.
+</ul>
+
+<h2><a name="buildnotes">Build Platform Notes</a></h2>
+
+<h3><a name="linux">Linux</a></h3>
+Crosstool was developed on Linux, so most of the rough edges have been polished off.  
+However, if running crosstool.sh on Linux fails with an error like
+<pre>
+"soinit.c:25: internal compiler error: in named_section_flags, at varasm.c:..."
+</pre>
+then you may be running into gcc bug <a href="http://gcc.gnu.org/PR9552">9552</a>.
+One workaround is to delete the file gcc-pr-9552-workaround.patch
+from crosstool/patches/glibc-2.3.2, and rerun.   Another is to switch
+to a different version of binutils (2.14 seems to be the dividing line).
+
+<h3><a name=netbsd>NetBSD</a></h3>
+You'll need to install GNU Diffutils or GNU Patch, since BSD's patch utility
+doesn't accept the --fuzz parameter.
+
+<h3><a name=mac>Mac OS X</a></h3>
+To build gcc and glibc on Mac OS X, you'll need to install a few gnu utilities:
+<ul>
+<li>gnu wget
+<li>gnu awk
+<li>gnu sed
+<li>gnu install (part of gnu coreutils)
+</ul>
+such that they are used instead of the native versions.  (This may involve 
+setting PATH and/or making symbolic links.)
+<p>
+The way I installed them was using <a href="http://fink.sourceforge.net/">fink</a>,
+but <a href="http://darwinports.opendarwin.org/">DarwinPorts</a> 
+or installing from tarballs would probably do as well.
+<p>
+One recurring problem is that various Gnu configure scripts assume that
+'as' and 'ld' are the Gnu versions, run them with -v to get the
+version number, and compare it with some gnu version.
+That doesn't work well on the Mac.  You can either hack the
+configure scripts to not do that, or write wrapper scripts for
+as and ld.  For instance, here's a wrapper script for as that
+blatantly lies about what version it is, just to make crosstool happy:
+<pre>
+  test "$1" = -v && echo GNU assembler 2.13 || /usr/bin/as "$@"
+</pre>
+Nikolaus Schaller tied all the above into a tidy script; see his
+<a href="http://sourceware.org/ml/crossgcc/2006-02/msg00272/build.sh">build.sh</a>
+which both downloads the needed tools and creates the wrappers for as and ld.
+
+<p>
+On some (older?) versions of Mac OS X, you'll need to raise the stack size with the command
+<pre>ulimit -s 8192</pre>
+else make may segfault.
+
+<p>
+When using 2.6 kernel headers on systems (like Mac OS X) where gcc doesn't support the
+-shared flag, you may see the error
+<pre>
+gcc: unrecognized option `-shared'
+ld: Undefined symbols:
+_main
+make[1]: *** [scripts/kconfig/libkconfig.so] Error 1
+make: *** [oldconfig] Error 2 
+</pre>
+
+This is a well-known issue (see e.g. 
+<a href="http://www.uwsg.iu.edu/hypermail/linux/kernel/0211.0/2145.html">Peter Samuelson's post of 7 Nov 2002</a>
+Bertrand Marquis a patch that might help
+<a href="http://sources.redhat.com/ml/crossgcc/2004-06/msg00282.html">on 29 June 2004</a>.
+It would be nice if someone figured out a patch
+that could go into the mainline kernel sources to deal with this issue.
+<p>
+Another problem building Linux on Mac OS X is described, together with a Mac OS X specific workaround, by
+<a href="http://sources.redhat.com/ml/crossgcc/2004-05/msg00182.html">Martin Schaffner's post of 22 May 2004</a>.
+
+<h3><a name=cygwin>Cygwin</a></h3>
+Crosstool, and probably gcc and glibc's configure scripts, assume that
+directory names <b>do not</b> contain any spaces.
+This is often violated on Windows.  Please take care to not use
+directory names with spaces in them when running crosstool.
+It might work, but if it doesn't, you've been warned.
+(Same goes for Mac OS X.)
+<p>
+crosstool creates some really deeply nested directories while building,
+so filenames are quite long.  This has two consequences:
+<p>
+First, on some versions of Windows, filenames (including directory) can't 
+be longer than 240 chars.  To avoid exceeding this limit, don't run crosstool in
+a directory with a long name. 
+<p>
+Second, the maximum length of commandlines is extremely short.
+Since crosstool uses commandlines that include multiple filenames, 
+they can exceed the limit very quickly.
+You can avoid this problem by using the "mount" command's options.
+e.g. mount /bin and /usr/bin with -X or "-o cygexec" (see <a href="http://www.cygwin.com/faq/faq-nochunks.html#faq.programming.make-execvp">the cygwin faq</a>,
+and/or mount the crosstool directory with "-o managed" (see <a href="http://www.cygwin.com/cygwin-ug-net/using-utils.html#mount">the cygwin doc for "mount"</a>).
+<p>
+Also, this isn't really a crosstool problem, but configuring linux-2.6 on cygwin may fail with the error
+<pre>
+$ make menuconfig
+ HOSTCC  scripts/basic/fixdep
+ HOSTCC  scripts/basic/split-include
+ HOSTCC  scripts/basic/docproc
+ HOSTLD  scripts/kconfig/mconf
+collect2: ld terminated with signal 11 [Segmentation fault], core dumped
+</pre>
+A possible fix described e.g.
+<a href="http://sources.redhat.com/ml/crossgcc/2004-06/msg00282.html">by Bertrand Marquis' post of 29 June 2004</a>
+is to patch linux-2.6/scripts/kconfig/Makefile to just use libkconfig.o rather than first making a .so.
+<p>
+<a href="http://www.cygwin.com/ml/cygwin/2004-03/msg01006.html">Cygwin-1.5.9-1 had a bug that prevents it from building glibc</a>.
+You can work around this by updating to Cygwin-1.5.10-2.
+
+<h3><a name=solaris>Solaris Build Considerations</a></h3>
+Crosstool ought to build on Solaris as long as it has been updated with
+the appropriate set of GNU tools, but this has not been tested.
+<p>
+binutils-2.15 may require <a href="http://sources.redhat.com/ml/binutils/2004-06/msg00114.html">this patch</a>
+to work on Solaris, else it is said to segfault when building the Linux kernel.
+<p>
+glibc documents which GNU tools it requires in <a href="http://www.gnu.org/software/libc/manual/html_node/Tools-for-Compilation.html">its INSTALL file</a>.
+The list is roughly: make 3.79, GCC 3.2, binutils 2.13, texinfo 3.12f, awk 3.0, sed 3.02, or newer.
+gcc documents a few other requirements in <a href="http://gcc.gnu.org/install/specific.html#*-*-solaris2*">gcc.gnu.org/install/specific.html</a>, which
+says that gcc won't build at all with the default solaris shell, and
+you're supposed to work around it like this:
+<pre>
+% CONFIG_SHELL=/bin/ksh
+% export CONFIG_SHELL
+</pre>
+before running crosstool.
+<p>
+That page also advises that you may need to install some Solaris patches,
+and install gcc-3.2.3 or newer before trying to build newer versions of gcc.
+
+<h2><a name="targetnotes">Target Platform Notes</a></h2>
+<h3><a name=mips>MIPS</a></h3>
+<p>Little-endian MIPS
+<p>
+To create a toolchain for the Linksys wrt54g, select glibc-2.2.3. 
+See <a href="http://seattlewireless.net/index.cgi/LinksysWrt54g">LinksysWrt54g</a>
+    <a href="http://www.batbox.org/wrt54g-linux.html">wrt54g-linux.html</a>
+<p>
+Note: recent wrt54g firmware uses uclibc, which behaves like a subsetted glibc.
+There are patches to build uclibc toolchains in the contrib directory,
+but they're not integrated yet.  However, you can still use a glibc
+toolchain; you'll either have to 
+<ul>
+     <li> not call the missing functions,</li>
+     <li> use a stub library like
+     <a href="http://www.xse.com/leres/tivo/downloads/libtivohack/">libtivohack</a></li>
+     <li> link your programs statically if you want them to run on the
+     wrt54g.</li>
+</ul>
+
+<h3><a name=sh3>SH3</a></h3>
+<p>
+SH3 support is untested... it is said to build, and "hello, world" works,
+but that's all I've heard.  
+<p>FIXME: The SH3 is supposedly the same as an SH4
+but without the floating point unit, so maybe glibc has to be built
+--without-fp.  See powerpc-405.dat and
+<a href="http://www.gnu.org/software/libc/manual/html_node/Configuring-and-compiling.html#Configuring%20and%20compiling">Configuring and compiling GNU Libc</a>
+
+<h3><a name=sh4>SH4</a></h3>
+<p>
+Note: 
+<ul>
+  <li>binutils < 2.13 doesn't know about SH4, so don't try building
+  gcc-2.95.</li>
+  <li>gcc-3.2.3 has ICE compiling glibc for SH4 (<a href="http://gcc.gnu.org/PR6954">PR6954</a>), so
+don't try building gcc-3.2.3.</li>
+</ul>
+
+<h3><a name=cris>CRIS</a></h3>
+<p>
+CRIS doesn't build with glibc-2.3.2;
+fails with "errno-loc.c:39: error: `pthread_descr' undeclared" in glibc build.
+The cris glibc maintainer is aware of the problem and hopes to fix this later
+in 2004, but we don't know if this has been done.
+
+<p>
+We removed cris support, demo-cris.sh, from crosstool. If you need it, you may find it in the
+previous version of crosstool.
+<h3><a name=arm-xscale>ARM-Xscale</a></h3>
+<p>
+gcc-3.3 doesn't support this, need gcc-3.4 or later.
+
+<h3><a name=arm-iwmmxt>ARM-iwmmxt</a></h3>
+<p>
+gcc-3.3 doesn't support this, need gcc-3.4 or later.
+
+
+
+<h2><a name="troubleshooting">Troubleshooting</a></h2>
+
+<h3>Download Problems</h3>
+all.sh calls getandpatch.sh, which looks in the directory specified by
+TARBALLS_DIR for source tarballs, and downloads them to there if not found.
+<p>
+If the download hangs, and you need to use a proxy, 
+try telling wget about your proxy before running all.sh by doing
+<pre>
+$ export http_proxy=&lt;proxy_host&gt;:&lt;port&gt;
+</pre>
+If the download still hangs, download the tarball that's causing the hang manually to 
+the directory specified by TARBALLS_DIR.
+
+
+<h2><a name=issues>Current Issues</a></h2>
+<ul>
+<li>all.sh's --builduserland seems to be broken at the moment.
+<li>NPTL is not yet supported.
+<li>These scripts, unlike Bill Gatliff's original crossgcc scripts,
+don't support bare metal newlib targets.  They should, but I needed to
+focus on targeting Linux first.  See contrib/newlib for a user-contributed fix.
+<li>These scripts don't support uClibc yet, but <a href="#uclibc">see below</a>.
+<li>The hppa target is not yet supported.
+<li>glibc-2.3.2 doesn't build for cris; <a href="http://sources.redhat.com/ml/libc-alpha/2003-01/msg00008.html">looks
+like the maintainer needs to create a sysdep-cancel.h for cris</a>.
+I no longer try cris, since it seems to be unmaintained.
+</ul>
+See the <a href="../ChangeLog">ChangeLog</a> for more issues.
+
+<h2><a name=buildlogs>Build Status</a></h2>
+The script regtest-run.sh tries to build a number of combinations of gcc, glibc, and CPU,
+and saves the last hundred or so lines of the build log in the file <a href="../buildlogs/">buildlogs</a>$cpu-$gcc-$glibc.log.txt,
+along with a summary of the build in the file <a href="../buildlogs/">buildlogs</a>$cpu-$gcc-$glibc.dat.txt.
+The script regtest-report.sh creates the file <a href="../buildlogs/index.html">buildlogs/$version/index.html</a> summarizing the results.
+Note: this reflects whether the toolchains could be <i>built</i>, not whether they <i>work</i>!
+Also note: running regtest-run.sh takes a LOT of cpu power, so 
+it uses ssh to spawn build jobs on multiple machines.  Read the script carefully before running it.
+
+<h2><a name=contrib>Contributed Patches</a></h2>
+A few users of the crosstool scripts have submitted patches.  I'm
+saving these in the 'contrib' directory until I have time to test them.
+<ul>
+<li> testsetup - my scripts which are handy when running test suite remotely
+<li> newlib, newlib2 - scripts to build newlib toolchains
+<li> crosstool-uclibc-0.28-rc5.patch to build uclibc toolchains (see <a href="#uclibc">below</a>)
+<li> contrib/xtool-ro.patch lets you run with sources in a read-only directory.
+</ul>
+
+<h2><a name=uclibc>uClibc</a></h2>
+The script contrib/demo-uclibc.sh demonstrates how to patch an older version
+of crosstool to support uclibc.  This script, with editing,
+can be used to build ARM7, PPC405, and maybe MIPS uclibc toolchains.  
+A future version of crosstool will merge the patch.
+
+<h2><a name=links>Links</a></h2>
+Patch repositories (handy if you are looking for a fix to a specific problem):
+<ul>
+<li><a href="http://ftp.jg555.com/patches/raq2/">Jim Gifford's MIPS / Raq2 patches</a>
+<li><a href="http://www.andric.com/cross/patches">Dmitry Andric's ARM / vfp patches</a>
+<li><a href="http://cvs.debian.org/glibc-package/debian/patches/?cvsroot=glibc">Debian's glibc patch repository</a>
+<li><a href="http://www.pengutronix.de/software/ptxdist/patches-0.5.2/">PTXdist-0.5.2's patch repository</a>
+<li><a href="http://cvs.mandrakesoft.com/cgi-bin/cvsweb.cgi/SPECS/gcc/">Mandrake's gcc patch archive</a>
+<li><a href="http://www.gentoo.org/cgi-bin/viewcvs.cgi/sys-devel/gcc/">gentoo's gcc build scripts</a>
+<li><a href="http://www.gentoo.org/cgi-bin/viewcvs.cgi/sys-libs/glibc/">gentoo's glibc build scripts</a>
+</ul>
+There are many good general references for people building crosscompilers.  Here is a somewhat outdated set:
+<ul>
+<li>Bill Gatliff's <a href="http://crossgcc.billgatliff.com/build-crossgcc.sh">crossgcc build script</a>
+<li>Bill's <a href="http://billgatliff.com/twiki/bin/view/Crossgcc/ToolSetup">Crossgcc Wiki</a>
+<li>Karim Yaghmour's book <a href="http://www.oreilly.com/catalog/belinuxsys/">Building Embedded Linux Systems</a>
+<li>Karim Yaghmour's web site <a href="http://www.embeddedtux.org/">embeddedtux.org</a> and his
+<a href="http://www.embeddedtux.org/gnu-tools.html">matrix of known working toolchain combinations</a>
+<li><a href="http://www.embeddedlinuxinterfacing.com/sourcecode.shtml">Scripts from "Embedded Linux: Hardware, Software and Interfacing"</a>, by Dr. Craig Hollabaugh
+<li>the <a href="http://sources.redhat.com/ml/crossgcc/">crossgcc mailing list</a>
+<li><a href="http://buildroot.uclibc.org/">buildroot</a> - a cool build-from-scratch embedded distro by Erik Andersen.
+<li><a href="http://www.pengutronix.de/software/ptxdist_en.html">PTXdist</a> - Another cool crossbuild-from-scratch embedded distro by Pengutronix/Robert Schwebel; uses a gui config menu
+<li><a href="http://lug-owl.de/~jbglaw/linux-ports/#EasilyBuildableCrossToolchains">Proposal: Merging all Outstanding Linux Ports to Linus</a>, by Jan-Benedict Glaw
+<li><a href="http://sed.inf.u-szeged.hu/gcc-arm/">GCC ARM pages at the University of Szeged</a> - very high quality resource;
+impressive <a href="http://sed.inf.u-szeged.hu/gcc-arm/gnats.php">"ARM related GCC Bugzilla Problem Reports"</a>
+and <a href="http://sed.inf.u-szeged.hu/gcc-arm/prs.php">"Results, Problem Reports and Patches"</a> pages.
+<li><a href="ftp://ftp.linuxppc64.org/pub/people/janis/">Janis Johnson's powerpc64 biarch build script</a> - based on crosstool, 
+but supports biarch for powerppc32/64!
+<li><a href="http://www.arm.linux.org.uk/developer/">ARM Linux Developer</a> pages - kernel stuff mostly
+<li><a href="http://www.ltc.com/~brad/mips/mips-cross-toolchain.html">Building a Modern MIPS Cross-Toolchain for Linux</a>, by 
+Bradley D. LaRonde
+<li><a href="http://www.develer.com/uclinux/uclinux-elf-tools.html">GCC 3.3 toolchain for uClinux ColdFire platforms</a> by  Bernardo Innocenti
+<li><a href="ftp://ftp.fairwayacademy.org/pub/armlinux/toolchain/">Jeff Sutherland's gcc-3.3 toolchain for xscale</a>
+<li><a href="http://sourceforge.net/projects/gnude">gnude - gnu development environment</a>, 
+currently an arm/newlib cross toolchain compiled for Windows, but aiming to do more
+<li>
+My <a href="http://kegel.com/xgcc3">older cross compiler stuff</a> is still
+online.  This is where I documented the patches needed to run on ppc405;
+these patches are included in my glibc-2.2.5/gcc-3.2.3 patches collection,
+and some of them have made it in to gcc-3.3.
+</ul>
+
+Here are a few posts about which combinations of versions work:
+<ul>
+<li><a href="../buildlogs/index.html">crosstool's build results</a> - yeah, I linked to them above, but they bear repeating
+<li><a href="http://sources.redhat.com/ml/crossgcc/2004-05/msg00036.html">host cygwin, target ARM</a> - scroll down to matrix at bottom
+</ul>
+
+Related Mailing lists (corrections welcome):
+<ul>
+<li>General: <a href="http://sources.redhat.com/ml/crossgcc/">crossgcc</a> (for crosstool), and
+ <a href="http://www.embeddedtux.org/mlist.html">embeddedtux</a> (for do-it-yourselfers who don't use a canned script like crosstool)
+<li>Alpha: <a href="https://www.redhat.com/mailman/listinfo/axp-list">axp-list</a>
+<li>ARM: <a href="http://lists.arm.linux.org.uk/mailman/listinfo/linux-arm-toolchain">linux-arm-toolchain</a>
+<li>HPPA: <a href="http://www.parisc-linux.org/mailing-lists/">parisc-linux</a>
+<li>MIPS: <a href="http://www.linux-mips.org/wiki/Net_Resources#Mailing_lists">linux-mips</a>
+<li>PowerPC: <a href="http://lists.linuxppc.org/linuxppc-embedded/">linuxppc-embedded</a>, 
+<a href="http://ozlabs.org/pipermail/linuxppc-dev/">linuxppc-dev</a>
+<li>PowerPC64: <a href="http://ozlabs.org/pipermail/linuxppc64-dev/">linuxppc64-dev</a>
+<li>SH: <a href="http://tsukuba.m17n.org/linux-sh/ml/linux-sh/">linux-sh</a>, <a href="http://sourceforge.net/mailarchive/forum.php?forum=linuxsh-dev">linuxsh-dev</a>
+<li>S/390: <a href="http://www2.marist.edu/htbin/wlvindex?linux-390">linux-390</a>
+<li>sparc: <a href="http://vger.kernel.org/vger-lists.html#sparclinux">sparclinux</a>
+<li>x86_64: <a href="http://www.x86-64.org/mailinglists">discuss@x86-64.org</a>
+</ul>
+
+<p>
+<hr>
+Portions copyright 2003, <a href="http://ixiacom.com">Ixia Communications</a><br>
+Portions copyright 2003, 2004, 2005 <a href="http://google.com">Google</a><br>
+Released under the GPL.<br>
+Last revision 2 Mar 2006 by dank@kegel.com
+</body>
+</html>

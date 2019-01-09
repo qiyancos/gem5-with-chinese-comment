@@ -1,0 +1,387 @@
++ rm -rf /home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.21/build/powerpc-750-linux-gnu/gcc-2.95.3-glibc-2.2.2
++ mkdir -p /home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.21
++ cd /home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.21
++ mkdir -p /home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.21/build/powerpc-750-linux-gnu/gcc-2.95.3-glibc-2.2.2
++ ln -s /build-glibc /home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.21/build/powerpc-750-linux-gnu/gcc-2.95.3-glibc-2.2.2/build-glibc
++ LD_LIBRARY_PATH=../../build-glibc/elf:../../build-glibc/dlfcn
++ export LD_LIBRARY_PATH
++ mkdir -p /glibc-2.2.2/math
++ cd /glibc-2.2.2/math
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-matherr
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-fenv
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/atest-exp
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/atest-sincos
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/atest-exp2
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/basic-test
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-misc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-fpucw
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/tst-definitions
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-tgmath
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-float
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-double
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-ifloat
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/math/test-idouble
++ mkdir -p /glibc-2.2.2/setjmp
++ cd /glibc-2.2.2/setjmp
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/setjmp/tst-setjmp
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/setjmp/jmpbug
++ mkdir -p /glibc-2.2.2/signal
++ cd /glibc-2.2.2/signal
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/signal/tst-signal
++ mkdir -p /glibc-2.2.2/stdlib
++ cd /glibc-2.2.2/stdlib
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/tst-strtol
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/testmb
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/testrand
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/testsort
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/testdiv
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/test-canon --test-dir=/build-glibc/stdlib
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/test-canon2
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/tst-strtoll
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/tst-environ
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/tst-xpg-basename
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/tst-random
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/tst-bsearch
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/tst-limits
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/tst-rand48
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdlib/bug-strtod
++ mkdir -p /glibc-2.2.2/stdio-common
++ cd /glibc-2.2.2/stdio-common
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tstscanf
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/test_rdwr
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/test-popen
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tstgetln
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/test-fseek
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/temptest
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-fileno
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/test-fwrite
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-ungetc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-ferror
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/xbug
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/errnobug
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug2
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug3
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug4
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug5
+cmp: No such file or directory
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug6
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug7
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug8
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug9
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug10
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug11
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug12
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/bug13
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tfformat
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tiformat
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tllformat
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tstdiomisc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-printfsz
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-wc-printf
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf2
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf3
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf4
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf5
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf7
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf8
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf9
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf10
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/scanf12
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-tmpnam
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-cookie
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-obprintf
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-fseek
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-fmemopen
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/stdio-common/tst-gets
++ mkdir -p /glibc-2.2.2/libio
++ cd /glibc-2.2.2/libio
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/libio/tst_swprintf
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/libio/tst_wprintf
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/libio/tst_swscanf
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/libio/tst_wscanf
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/libio/tst_getwc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/libio/tst_putwc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/libio/tst_wprintf2 Some Text
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/libio/test-fmemopen
++ mkdir -p /glibc-2.2.2/dlfcn
++ cd /glibc-2.2.2/dlfcn
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/dlfcn/glrefmain
+/build-glibc/dlfcn/glrefmain: cannot load `glreflib1.so'
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/dlfcn/failtest
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/dlfcn/tst-dladdr
+/build-glibc/dlfcn/tst-dladdr: cannot load: glreflib1.so
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/dlfcn/default
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/dlfcn/errmsg1
++ mkdir -p /glibc-2.2.2/malloc
++ cd /glibc-2.2.2/malloc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/malloc/mallocbug
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/malloc/tst-malloc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/malloc/tst-valloc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/malloc/tst-calloc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/malloc/tst-obstack
++ mkdir -p /glibc-2.2.2/string
++ cd /glibc-2.2.2/string
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C LANGUAGE=C /build-glibc/string/tester
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C LANGUAGE=C /build-glibc/string/inl-tester
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C LANGUAGE=C /build-glibc/string/noinl-tester
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/testcopy
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/test-ffs
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/tst-strlen
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/stratcliff
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/tst-inlcall
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/bug-strncat1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/bug-strspn1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/bug-strpbrk1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/string/tst-bswap
++ mkdir -p /glibc-2.2.2/wcsmbs
++ cd /glibc-2.2.2/wcsmbs
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/wcsmbs/tst-wcstof
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/wcsmbs/wcsmbs-tst1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/wcsmbs/tst-wcsnlen
++ mkdir -p /glibc-2.2.2/time
++ cd /glibc-2.2.2/time
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/time/test_time EST5EDT CST
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/time/clocktest
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/time/tst-posixtz
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/time/tst-strptime
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/time/tst_wcsftime
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C DATEMSK=datemsk /build-glibc/time/tst-getdate
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/time/tst-mktime
++ mkdir -p /glibc-2.2.2/dirent
++ cd /glibc-2.2.2/dirent
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/dirent/list
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/dirent/tst-seekdir
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/dirent/opendir-tst1 --test-dir=/build-glibc/dirent
++ mkdir -p /glibc-2.2.2/grp
++ cd /glibc-2.2.2/grp
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/grp/testgrp
++ mkdir -p /glibc-2.2.2/pwd
++ cd /glibc-2.2.2/pwd
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/pwd/tst-getpw
++ mkdir -p /glibc-2.2.2/posix
++ cd /glibc-2.2.2/posix
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tstgetopt -a -b -cfoobar --required foobar --optional=bazbug --none random --col --color --colour
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/testfnm
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/runtests
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/runptests
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-preadwrite
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-preadwrite64
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/test-vfork
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/regexbug1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-getlogin
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-mmap
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-getaddrinfo
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-truncate
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-truncate64
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-fork
++ pwd
++ cd /build-glibc/posix
++ pwd
++ cd /build-glibc
++ pwd
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-dir /glibc-2.2.2/posix /build-glibc/posix /build-glibc /build-glibc/posix/tst-dir
++ pwd
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-chmod /glibc-2.2.2/posix
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C MALLOC_TRACE=/build-glibc/posix/bug-regex2.mtrace /build-glibc/posix/bug-regex2
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/bug-regex3
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/tst-gnuglob
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/posix/wordexp-test
++ mkdir -p /glibc-2.2.2/io
++ cd /glibc-2.2.2/io
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/io/test-utime
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/io/test-stat
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/io/test-stat2 Makefile . /build-glibc/io/test-stat2
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/io/test-lfs
+/build-glibc/io/test-lfs: LFS seems not to be supported : Invalid argument
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/io/tst-getcwd
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/io/tst-fcntl
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/io/bug-ftw1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/io/bug-ftw2
++ mkdir -p /glibc-2.2.2/termios
++ cd /glibc-2.2.2/termios
++ mkdir -p /glibc-2.2.2/resource
++ cd /glibc-2.2.2/resource
++ mkdir -p /glibc-2.2.2/misc
++ cd /glibc-2.2.2/misc
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/misc/tst-dirname
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/misc/tst-tsearch
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/misc/tst-fdset
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/misc/tst-efgcvt
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/misc/tst-mntent
++ mkdir -p /glibc-2.2.2/socket
++ cd /glibc-2.2.2/socket
++ mkdir -p /glibc-2.2.2/sysvipc
++ cd /glibc-2.2.2/sysvipc
++ mkdir -p /glibc-2.2.2/gmon
++ cd /glibc-2.2.2/gmon
++ mkdir -p /glibc-2.2.2/gnulib
++ cd /glibc-2.2.2/gnulib
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/gnulib/tst-gcc
++ mkdir -p /glibc-2.2.2/wctype
++ cd /glibc-2.2.2/wctype
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/wctype/test_wctype
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/wctype/test_wcfuncs
++ mkdir -p /glibc-2.2.2/manual
++ cd /glibc-2.2.2/manual
++ mkdir -p /glibc-2.2.2/shadow
++ cd /glibc-2.2.2/shadow
++ mkdir -p /glibc-2.2.2/po
++ cd /glibc-2.2.2/po
++ mkdir -p /glibc-2.2.2/argp
++ cd /glibc-2.2.2/argp
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/argp/argp-test
++ mkdir -p /glibc-2.2.2/crypt
++ cd /glibc-2.2.2/crypt
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/crypt/cert
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/crypt/md5test
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/crypt/md5c-test
++ mkdir -p /glibc-2.2.2/linuxthreads
++ cd /glibc-2.2.2/linuxthreads
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex1
+Starting process a
+Starting process b
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex2
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex3
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex4
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex5
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex6
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex7
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex8
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex9
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex10
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex11
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex12
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex13
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/joinrace
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/tststack
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ecmutex
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex14
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex15
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/linuxthreads/ex16
++ mkdir -p /glibc-2.2.2/resolv
++ cd /glibc-2.2.2/resolv
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/resolv/tst-aton
++ mkdir -p /glibc-2.2.2/nss
++ cd /glibc-2.2.2/nss
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/nss/test-netdb
++ mkdir -p /glibc-2.2.2/rt
++ cd /glibc-2.2.2/rt
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-aio
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-aio64
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-clock
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-shm
+failed to create a shared memory object: shm_open: Function not implemented
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-timer
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-aio2
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-aio3
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-aio4
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-aio5
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/rt/tst-aio6
++ mkdir -p /glibc-2.2.2/conform
++ cd /glibc-2.2.2/conform
++ mkdir -p /glibc-2.2.2/debug
++ cd /glibc-2.2.2/debug
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/debug/backtrace-tst
++ mkdir -p /glibc-2.2.2/linuxthreads_db
++ cd /glibc-2.2.2/linuxthreads_db
++ mkdir -p /glibc-2.2.2/inet
++ cd /glibc-2.2.2/inet
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/inet/htontest
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/inet/test_ifindex
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/inet/tst-ntoa
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/inet/tst-ether_aton
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/inet/tst-network
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/inet/tst-gethnm
++ mkdir -p /glibc-2.2.2/hesiod
++ cd /glibc-2.2.2/hesiod
++ mkdir -p /glibc-2.2.2/sunrpc
++ cd /glibc-2.2.2/sunrpc
++ mkdir -p /glibc-2.2.2/nis
++ cd /glibc-2.2.2/nis
++ mkdir -p /glibc-2.2.2/nscd
++ cd /glibc-2.2.2/nscd
++ mkdir -p /glibc-2.2.2/streams
++ cd /glibc-2.2.2/streams
++ mkdir -p /glibc-2.2.2/login
++ cd /glibc-2.2.2/login
++ mkdir -p /glibc-2.2.2/soft-fp
++ cd /glibc-2.2.2/soft-fp
++ mkdir -p /glibc-2.2.2/elf
++ cd /glibc-2.2.2/elf
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/loadtest
+/build-glibc/elf/loadtest: cannot load `testobj5.so': testobj5.so: cannot open shared object file: No such file or directory
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/restest1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C LD_PRELOAD=testobj1.so:testobj2.so:testobj3.so:testobj4.so:testobj5.so /build-glibc/elf/preloadtest
+/build-glibc/elf/preloadtest: error while loading shared libraries: testobj3.so: cannot open shared object file: No such file or directory
++ echo Error 127
+Error 127
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/loadfail
+/build-glibc/elf/loadfail: failed to load shared object: testobj3.so: cannot open shared object file: No such file or directory
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/multiload
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/origtest
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/resolvfail
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/constload1
+/build-glibc/elf/constload1: cannot load module "constload2.so"
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C LD_PRELOAD=/build-glibc/elf/vismod3.so /build-glibc/elf/vismain
+/build-glibc/elf/vismain: error while loading shared libraries: /build-glibc/elf/vismod3.so: cannot open shared object file: No such file or directory
++ echo Error 127
+Error 127
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/noload
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/filter
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/unload
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/reldep
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/reldep2
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/reldep3
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/next
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/neededtest
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/neededtest2
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/neededtest3
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C LC_ALL=C LANGUAGE=C /build-glibc/elf/neededtest4
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/unload2
+/build-glibc/elf/unload2: Error 1
+cannot load "unload2mod.so"
++ echo Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/lateglobal
++ echo Error 1
+Error 1
++ GCONV_PATH=/build-glibc/iconvdata LC_ALL=C /build-glibc/elf/initfirst
++ echo Error 1
+Error 1

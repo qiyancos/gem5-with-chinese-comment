@@ -1,0 +1,79 @@
+--- ptxdist-0.3.23/rules/ncurses.make.old	Tue Aug 26 22:35:10 2003
++++ ptxdist-0.3.23/rules/ncurses.make	Wed Aug 27 01:22:38 2003
+@@ -19,19 +19,24 @@
+ #
+ # Paths and names 
+ #
+-NCURSES				= ncurses-5.2
++NCURSES				= ncurses-5.3
+ NCURSES_URL			= ftp://ftp.gnu.org/pub/gnu/ncurses/$(NCURSES).tar.gz
+ NCURSES_SOURCE			= $(SRCDIR)/$(NCURSES).tar.gz
+ NCURSES_DIR			= $(BUILDDIR)/$(NCURSES)
+ NCURSES_EXTRACT 		= gzip -dc
+ 
++# Arrgh.  Huge patch.  Required to cross-compile.
++NCURSES_PATCH			= ncurses-5.3-20030719-patch.sh.bz2
++NCURSES_PATCH_URL		= ftp://invisible-island.net/ncurses/5.3/$(NCURSES_PATCH)
++NCURSES_PATCH_SOURCE		= $(SRCDIR)/$(NCURSES_PATCH)
++
+ # ----------------------------------------------------------------------------
+ # Get
+ # ----------------------------------------------------------------------------
+ 
+ ncurses_get: $(STATEDIR)/ncurses.get
+ 
+-$(STATEDIR)/ncurses.get: $(NCURSES_SOURCE)
++$(STATEDIR)/ncurses.get: $(NCURSES_SOURCE) $(NCURSES_PATCH_SOURCE)
+ 	@$(call targetinfo, ncurses.get)
+ 	touch $@
+ 
+@@ -39,6 +44,10 @@
+ 	@$(call targetinfo, $(NCURSES_SOURCE))
+ 	wget -P $(SRCDIR) $(PASSIVEFTP) $(NCURSES_URL)
+ 
++$(NCURSES_PATCH_SOURCE):
++	@$(call targetinfo, $(NCURSES_PATCH))
++	wget -P $(SRCDIR) $(PASSIVEFTP) $(NCURSES_PATCH_URL)
++
+ # ----------------------------------------------------------------------------
+ # Extract
+ # ----------------------------------------------------------------------------
+@@ -48,6 +57,7 @@
+ $(STATEDIR)/ncurses.extract: $(STATEDIR)/ncurses.get
+ 	@$(call targetinfo, ncurses.extract)
+ 	$(NCURSES_EXTRACT) $(NCURSES_SOURCE) | $(TAR) -C $(BUILDDIR) -xf -
++	set -e; cd $(NCURSES_DIR); bzcat $(NCURSES_PATCH_SOURCE) | patch -p1
+ 	touch $@
+ 
+ # ----------------------------------------------------------------------------
+@@ -56,14 +66,15 @@
+ 
+ ncurses_prepare: $(STATEDIR)/ncurses.prepare
+ 
+-# FIXME: this has to be filled...
+ NCURSES_AUTOCONF	=  --prefix=$(PTXCONF_PREFIX)
+-NCURSES_AUTOCONF	+= --with-shared --target=$(PTXCONF_GNU_TARGET)
++NCURSES_AUTOCONF	+= --with-shared --host=$(PTXCONF_GNU_TARGET)
++NCURSES_AUTOCONF	+= BUILD_CC=gcc
++NCURSES_AUTOCONF	+= AR=$(PTXCONF_GNU_TARGET)-ar
++NCURSES_AUTOCONF	+= CC=$(PTXCONF_GNU_TARGET)-gcc
++NCURSES_AUTOCONF	+= CXX=$(PTXCONF_GNU_TARGET)-g++
++NCURSES_AUTOCONF	+= LD=$(PTXCONF_GNU_TARGET)-ld
++NCURSES_AUTOCONF	+= RANLIB=$(PTXCONF_GNU_TARGET)-ranlib
+ NCURSES_ENVIRONMENT	=  PATH=$(PTXCONF_PREFIX)/$(AUTOCONF213)/bin:$(PTXCONF_PREFIX)/bin:$$PATH
+-NCURSES_MAKEVARS	=  AR=$(PTXCONF_GNU_TARGET)-ar
+-NCURSES_MAKEVARS	+= RANLIB=$(PTXCONF_GNU_TARGET)-ranlib
+-NCURSES_MAKEVARS	+= CC=$(PTXCONF_GNU_TARGET)-gcc
+-NCURSES_MAKEVARS	+= CXX=$(PTXCONF_GNU_TARGET)-g++
+ #
+ #
+ 
+@@ -71,7 +82,7 @@
+ # FIXME: gcc stage2 is just a workaround here:
+ $(STATEDIR)/ncurses.prepare: $(STATEDIR)/xchain-gccstage2.install $(STATEDIR)/ncurses.extract
+ 	@$(call targetinfo, ncurses.prepare)
+-	cd $(NCURSES_DIR) && ./configure $(NCURSES_AUTOCONF)
++	cd $(NCURSES_DIR) && $(NCURSES_ENVIRONMENT) ./configure $(NCURSES_AUTOCONF)
+ 	touch $@
+ 
+ # ----------------------------------------------------------------------------

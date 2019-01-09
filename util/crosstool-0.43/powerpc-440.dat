@@ -1,0 +1,4 @@
+TARGET=powerpc-440-linux-gnu
+TARGET_CFLAGS="-O -mcpu=440"
+GCC_EXTRA_CONFIG="--with-cpu=440 --enable-cxx-flags=-mcpu=440"
+GLIBC_EXTRA_CONFIG="--without-fp"

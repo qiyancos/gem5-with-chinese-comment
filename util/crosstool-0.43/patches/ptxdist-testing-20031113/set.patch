@@ -1,0 +1,35 @@
+--- ptxdist-testing/scripts/settoolchain.sh	Tue Nov 11 13:29:24 2003
++++ ptxdist-testing.old4/scripts/settoolchain.sh	Tue Nov 11 22:11:12 2003
+@@ -59,20 +59,7 @@
+ 	*)             abort "unrecognized target $TARGET"
+ esac
+ 
+-# Translate to names used by, um, userspace and the kernel
+-# Not sure why we need so many identifiers for arch
+-# I'm only doing the ones I'm somewhat familiar with, others will have to be filled in later
+-case $PTXARCH in
+-	ARM)	PTXCONF_ARCH_USERSPACE=arm     ; PTXCONF_ARCH=arm ;;
+-	X86)	PTXCONF_ARCH_USERSPACE=i386    ; PTXCONF_ARCH=i386 ;;
+-	PPC)	PTXCONF_ARCH_USERSPACE=powerpc ; PTXCONF_ARCH=ppc ;;
+-	SPARC)	PTXCONF_ARCH_USERSPACE=sparc   ; PTXCONF_ARCH=sparc ;;
+-	*)	abort "unrecognized target $TARGET, please fix settoolchain.sh" ;;
+-esac
+-
+ echo PTXCONF_GNU_TARGET=\"$TARGET\" > .config.tmp
+-echo "PTXCONF_ARCH=\"$PTXCONF_ARCH\"" >> .config.tmp
+-echo "PTXCONF_ARCH_USERSPACE=\"$PTXCONF_ARCH_USERSPACE\"" >> .config.tmp
+ echo "PTXCONF_ARCH_$PTXARCH=y" >> .config.tmp
+ test x$PTXSUBARCH != x && echo "PTXCONF_$PTXSUBARCH=y" >> .config.tmp
+ echo PTXCONF_PREFIX=\"$PREFIX\" >> .config.tmp
+@@ -83,9 +70,9 @@
+ echo "PTXCONF_EXP=y" >> .config.tmp
+ echo "PTXCONF_EXP_M=y" >> .config.tmp
+ 
+-egrep -v "PTXCONF_ARCH=|PTXCONF_ARCH_|PTXCONF_ARM|PTXCONF_GNU_TARGET|PTXCONF_OPT_|PTXCONF_PREFIX|PTXCONF_ROOT" .config >> .config.tmp
++egrep -v "PTXCONF_ARCH=|PTXCONF_ARCH_|PTXCONF_ARM|PTXCONF_GNU_TARGET|PTXCONF_OPT_|PTXCONF_PREFIX|PTXCONF_ROOT=" .config >> .config.tmp
+ 
+ test -f .config && cp .config .config.bak
+ mv .config.tmp .config
+ 
+-make oldconfig
++yes "" | make oldconfig

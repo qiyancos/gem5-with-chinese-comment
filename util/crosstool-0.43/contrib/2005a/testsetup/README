@@ -1,0 +1,33 @@
+Here are the hoops I had to jump through to get the 
+gcc and glibc regression tests running on a particular
+sh4-based Linux box.
+Note that this recipe is highly specialized to the particular system I
+am using as a test host, and will need changes for other systems.
+
+1. The system didn't have a working rsh or rcp, so I 
+installed rsh and rcp as follows:
+* run 'pkg-rsh.sh' on the build system
+* copy the resulting rsh.tgz file to the target system
+* unpack it
+* run the unpacked rsh.sh on the target system
+
+2. Set up a chroot jail that can be logged into as follows:
+* run 'pkg-chrootshell.sh' on the build system
+* copy the resulting rsh.tgz file to the target system
+* unpack it
+* run the unpacked chrootlogin.sh on the target system
+
+3. Since the target system doesn't have enough disk space
+to hold the glibc regression tests, set up a directory on the
+build system it can access via NFS:
+* mkdir /jail
+* /etc/init.d/portmap start
+* /etc/init.d/nfs start
+* echo "/jail  sh4(rw,no_root_squash)" >> /etc/exports
+* /usr/sbin/exportfs -a
+
+4. Perform other little setup tasks on the target system, in
+particular, mount /jail from the build system as /jail on the target system:
+* copy 'setup.sh' to the target system
+* run it there
+

@@ -1,0 +1,101 @@
+From: Alon Ziv <alon.ziv@zoran.com>
+To: crossgcc <crossgcc@sources.redhat.com>
+Organization: Zoran Corporation, Mobile Division
+Subject: crosstool PATCH: support for building GDB together with the toolchain
+Date: Tue, 26 Oct 2004 09:52:22 +0200
+Message-Id: <200410260952.22273.alon.ziv@zoran.com>
+
+The following patch adds support for building a cross-GDB for the =
+target after 
+building its toolchain.
+
+	-Alon Ziv
+
+Index: crosstool-0.28-rc37/all.sh
+diff -u -r1.1 -r1.2
+--- crosstool-0.28-rc37/all.sh	10 Oct 2004 16:05:16 -0000	1.1
++++ crosstool-0.28-rc37/all.sh	17 Oct 2004 14:09:31 -0000	1.2
+@@ -92,6 +92,9 @@
+ 	--buildrpm|-buildrpm)
+ 	   opt_buildrpm=1
+ 	   ;;
++	--buildgdb|-buildgdb)
++	   opt_buildgdb=1
++	   ;;
+ 	*)
+ 	    abort "Usage: all.sh [--nounpack|--nobuild|--testlinux|--builduserland|--notest|--buildrpm]"
+     esac
+@@ -127,6 +130,10 @@
+ if test "$opt_testlinux" = "1"; then
+     # Build a Linux kernel to see if we can
+     sh testlinux.sh
++fi
++
++if test "$opt_buildgdb" = "1"; then
++   sh gdb.sh
+ fi
+ 
+ if test "$opt_builduserland" = "1"; then
+Index: crosstool-0.28-rc37/getandpatch.sh
+diff -u -r1.1 -r1.2
+--- crosstool-0.28-rc37/getandpatch.sh	10 Oct 2004 16:05:49 -0000	1.1
++++ crosstool-0.28-rc37/getandpatch.sh	17 Oct 2004 14:09:31 -0000	1.2
+@@ -156,6 +156,11 @@
+ 
+ # Download, unpack, and patch all the needed source tarballs,
+ 
++# PATCH: gdb
++if test -n "$GDB_DIR" ; then
++   getUnpackAndPatch ftp://sources.redhat.com/pub/gdb/releases/$GDB_DIR.tar.bz2 ftp://sources.redhat.com/pub/gdb/old-releases/$GDB_DIR.tar.bz2
++fi
++
+ # Grab it if we want to build userland...
+ if test -n "$PTXDIST_DIR" ; then
+    getUnpackAndPatch =
+http://www.kegel.com/crosstool/$PTXDIST_DIR.tar.gz
+Index: crosstool-0.28-rc37/gdb.sh
+--- /dev/null	2004-02-23 23:02:56.000000000 +0200
++++ crosstool-0.28-rc37/gdb.sh	2004-10-20 12:27:57.000000000 +0200
+@@ -0,0 +1,35 @@
++#! /bin/sh
++
++abort() {
++	echo $@
++	exec false
++}
++
++test -z "$GDB_DIR" && abort "Please set GDB_DIR"
++
++set -ex
++
++rm -rf $BUILD_DIR/build-gdb
++mkdir $BUILD_DIR/build-gdb
++cd $BUILD_DIR/build-gdb
++../$GDB_DIR/configure --prefix=$PREFIX --target=$TARGET --srcdir=$BUILD_DIR/$GDB_DIR
++make $PARALLELMFLAGS all
++make install
++
++if test -z "$USE_SYSROOT"; then
++	SYSROOT=$PREFIX/$TARGET
++else
++	SYSROOT=$PREFIX/target
++fi
++
++rm -rf $BUILD_DIR/build-gdbserver
++mkdir $BUILD_DIR/build-gdbserver
++cd $BUILD_DIR/build-gdbserver
++../$GDB_DIR/gdb/gdbserver/configure --prefix=$SYSROOT --host=$TARGET --srcdir=$BUILD_DIR/$GDB_DIR/gdb/gdbserver
++make $PARALLELMFLAGS all
++make install
++
++# GDB install leaves some cruft...
++rm $PREFIX/lib/libiberty.a
++rm $PREFIX/lib/libmmalloc.a
++rm $PREFIX/lib/lib${TARGET}-sim.a
+
+------
+Want more information?  See the CrossGCC FAQ, http://www.objsw.com/CrossGCC/
+Want to unsubscribe? Send a note to crossgcc-unsubscribe@sources.redhat.com
+
+
+

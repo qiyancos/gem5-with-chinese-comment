@@ -1,0 +1,75 @@
+X-UIDL: 6becb9a77e027232
+X-Mozilla-Status: 0001
+X-Mozilla-Status2: 00000000
+Return-Path: <crossgcc-return-11005-dank=kegel.com@sources.redhat.com>
+Delivered-To: dank-kegel:com-dank04@kegel.com
+X-Envelope-To: dank04@kegel.com
+Received: (qmail 35358 invoked by uid 3177); 2 May 2005 18:21:06 -0000
+Delivered-To: dank-kegel:com-dank@kegel.com
+Received: (qmail 35354 invoked from network); 2 May 2005 18:21:06 -0000
+Received: from sourceware.org (12.107.209.250)
+  by vroo.pair.com with SMTP; 2 May 2005 18:21:06 -0000
+Received: (qmail 22184 invoked by alias); 2 May 2005 18:21:04 -0000
+Mailing-List: contact crossgcc-help@sources.redhat.com; run by ezmlm
+Precedence: bulk
+List-Unsubscribe: <mailto:crossgcc-unsubscribe-dank=kegel.com@sources.redhat.com>
+List-Subscribe: <mailto:crossgcc-subscribe@sources.redhat.com>
+List-Archive: <http://sources.redhat.com/ml/crossgcc/>
+List-Post: <mailto:crossgcc@sources.redhat.com>
+List-Help: <mailto:crossgcc-help@sources.redhat.com>, <http://sources.redhat.com/ml/#faqs>
+Sender: crossgcc-owner@sources.redhat.com
+Delivered-To: mailing list crossgcc@sources.redhat.com
+Received: (qmail 21834 invoked from network); 2 May 2005 18:20:57 -0000
+Received: from unknown (HELO mailhost.rdmcorp.com) (204.225.180.10)
+  by sourceware.org with SMTP; 2 May 2005 18:20:57 -0000
+Received: from [10.1.1.138] (10.1.2.1) by mailhost.rdmcorp.com (Worldmail 1.3.167) for crossgcc@sources.redhat.com; 2 May 2005 14:20:57 -0400
+Date: Mon, 2 May 2005 14:18:04 -0400 (EDT)
+From: "Robert P. J. Day" <rpjday@mindspring.com>
+X-X-Sender: rpjday@localhost.localdomain
+To: crossgcc list <crossgcc@sources.redhat.com>
+Subject: [PATCH] to accommodate recent gcc and binutils snapshots
+Message-ID: <Pine.LNX.4.61.0505021415010.6070@localhost.localdomain>
+MIME-Version: 1.0
+Content-Type: TEXT/PLAIN; charset=US-ASCII
+X-Spam-Filtered: 099ee077f4e150b408c7ad97010bdf39
+X-Spam-Status: No, hits=-4.9 required=5.0 tests=BAYES_00
+X-Spam-Flag: NO
+X-Spam-Level: 
+
+
+  feel free to hack to make more aesthetically palatable:
+
+--- getandpatch.sh.orig	2005-05-02 14:13:18.000000000 -0400
++++ getandpatch.sh	2005-05-02 14:05:02.000000000 -0400
+@@ -199,9 +199,12 @@
+
+ if test x"$BINUTILS_URL" = x; then
+    case $BINUTILS_DIR in
+-      binutils-2.*.9*.0*) BINUTILS_URL=http://www.kernel.org/pub/linux/devel/binutils ;;   # H.J.Lu's branch
+-      binutils-2.*.9*)    BINUTILS_URL=ftp://gcc.gnu.org/pub/binutils/snapshots ;;
+-      *)                  BINUTILS_URL=ftp://gcc.gnu.org/pub/binutils/releases ;;
++      binutils-2.*.9*.0*)
++		BINUTILS_URL=http://www.kernel.org/pub/linux/devel/binutils ;;   # H.J.Lu's branch
++      binutils-2.*.9*|binutils-05*)
++		BINUTILS_URL=ftp://gcc.gnu.org/pub/binutils/snapshots ;;
++      *)
++		BINUTILS_URL=ftp://gcc.gnu.org/pub/binutils/releases ;;
+    esac
+ fi
+ getUnpackAndPatch $BINUTILS_URL/$BINUTILS_DIR.tar.bz2 $BINUTILS_URL/$BINUTILS_DIR.tar.gz
+@@ -216,7 +219,7 @@
+    gcc-4.0.[012345]-200*)
+       dir=`echo $GCC_DIR | sed s/gcc-/prerelease-/`
+       getUnpackAndPatch ftp://gcc.gnu.org/pub/gcc/$dir/$GCC_DIR.tar.gz ;;
+-   gcc-3.[345]-200*|gcc-4.0-200*)
++   gcc-3.[345]-200*|gcc-4.0-200*|gcc-4.1-2005*)
+       dir=`echo $GCC_DIR | sed 's/gcc-//'`
+       getUnpackAndPatch ftp://gcc.gnu.org/pub/gcc/snapshots/$dir/$GCC_DIR.tar.bz2 ;;
+    *)
+
+------
+Want more information?  See the CrossGCC FAQ, http://www.objsw.com/CrossGCC/
+Want to unsubscribe? Send a note to crossgcc-unsubscribe@sources.redhat.com
+
+
+

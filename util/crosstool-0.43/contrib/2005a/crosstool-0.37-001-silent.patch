@@ -1,0 +1,623 @@
+From: "Yann E. MORIN" <yann.morin.1998@anciens.enib.fr>
+To: crossgcc@sources.redhat.com
+Subject: Patch - 001 - silent crosstool execution
+Date: Mon, 11 Jul 2005 23:01:32 +0200
+Cc: Dan Kegel <dank@kegel.com>
+
+Hello all!
+
+Here is the first in a set of patches againt crosstool-0.37.
+
+...
+
+YEM-20050711
+
+COPYRIGHT: GNU GPLv2 or later, if that matters. See: 
+    http://www.fsf.org/licensing/licenses/gpl.txt
+
+It allows one to define a SILENT var in the environment so that crosstool
+does not spit out all the commands it executes. Output of these commands is
+preserved, of course.
+
+diff -dur crosstool-0.37.orig/all.sh crosstool-0.37.silent/all.sh
+--- crosstool-0.37.orig/all.sh	2005-07-07 23:18:01.000000000 +0200
++++ crosstool-0.37.silent/all.sh	2005-07-11 21:33:47.000000000 +0200
+@@ -36,7 +36,8 @@
+ 
+ test -z "${KERNELCONFIG}" || test -r "${KERNELCONFIG}"  || abort  "Can't read file KERNELCONFIG = $KERNELCONFIG, please fix."
+ 
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ TOOLCOMBO=$GCC_DIR-$GLIBC_DIR
+ BUILD_DIR=`pwd`/build/$TARGET/$TOOLCOMBO
+diff -dur crosstool-0.37.orig/buildrpms.sh crosstool-0.37.silent/buildrpms.sh
+--- crosstool-0.37.orig/buildrpms.sh	2005-07-04 20:07:30.000000000 +0200
++++ crosstool-0.37.silent/buildrpms.sh	2005-07-11 21:34:09.000000000 +0200
+@@ -10,7 +10,9 @@
+ # (http://www.fedoraproject.org/wiki/fedora_2drpmdevtools)
+ # and use fedora-buildrpmtree to set up your ~/.rpmrc and rpmbuild directory
+ 
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
++
+ #tar -xzvf crosstool-0.37.tar.gz
+ TOOLCOMBOS="gcc-3.4.3-glibc-2.2.2" 
+ export TOOLCOMBOS
+diff -dur crosstool-0.37.orig/buildsrpms.sh crosstool-0.37.silent/buildsrpms.sh
+--- crosstool-0.37.orig/buildsrpms.sh	2005-07-10 22:24:07.000000000 +0200
++++ crosstool-0.37.silent/buildsrpms.sh	2005-07-11 21:34:32.000000000 +0200
+@@ -12,7 +12,8 @@
+     exec false
+ }
+ 
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ # User must have created ~/.rpmmacros containing at least a line like
+ # %_topdir      %(echo $HOME)/rpmbuild
+diff -dur crosstool-0.37.orig/clean.sh crosstool-0.37.silent/clean.sh
+--- crosstool-0.37.orig/clean.sh	2005-07-10 23:09:11.000000000 +0200
++++ crosstool-0.37.silent/clean.sh	2005-07-11 21:07:57.000000000 +0200
+@@ -1,6 +1,6 @@
+ #!/bin/sh
+ # Prepare a copy for distribution
+-set -x
++[ -z "${SILENT}" ] && set -x
+ rm -rf log log[0-9] *.log boards build dejagnu-1.4.3 dejagnu-1.4.3.tar.gz result tarballs jail.tar.gz *.sum2
+ find . -type f | xargs chmod 644
+ find . -type d | xargs chmod 755
+diff -dur crosstool-0.37.orig/crosstest.sh crosstool-0.37.silent/crosstest.sh
+--- crosstool-0.37.orig/crosstest.sh	2005-05-20 07:54:43.000000000 +0200
++++ crosstool-0.37.silent/crosstest.sh	2005-07-11 21:39:36.000000000 +0200
+@@ -1,5 +1,6 @@
+ #!/bin/sh
+-set -x -e
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ abort() {
+     echo $@
+@@ -145,7 +146,7 @@
+     > ../tests.out
+ 
+ echo "#!/bin/sh" > ../glibctest.sh
+-echo "set -x" >> ../glibctest.sh
++echo '[ -z "${SILENT}" ] && set -x' >> ../glibctest.sh
+ # be nice to the tests in dlfcn and elf, which contain hardcoded paths
+ echo "rm -rf $BUILD_DIR || true" >> ../glibctest.sh
+ 
+diff -dur crosstool-0.37.orig/crosstool-cygwin.sh crosstool-0.37.silent/crosstool-cygwin.sh
+--- crosstool-0.37.orig/crosstool-cygwin.sh	2005-03-08 01:34:34.000000000 +0100
++++ crosstool-0.37.silent/crosstool-cygwin.sh	2005-07-11 21:34:49.000000000 +0200
+@@ -73,7 +73,8 @@
+ # you can't find a host compiler by appending -gcc to our whacky $GCC_HOST
+ GCC_HOST=`echo $GCC_HOST | sed s/-/-host_/`
+ 
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ # map TARGET to Linux equivalent
+ case $TARGET in
+diff -dur crosstool-0.37.orig/crosstool.sh crosstool-0.37.silent/crosstool.sh
+--- crosstool-0.37.orig/crosstool.sh	2005-07-10 02:47:29.000000000 +0200
++++ crosstool-0.37.silent/crosstool.sh	2005-07-11 22:05:27.000000000 +0200
+@@ -14,6 +14,18 @@
+     fi
+ }
+ 
++# Makes a path absolute.
++# $1: the name of variable to make absolute
++# Ex: absolute PREFIX
++absolute () {
++    eval tmp="\$$1"
++    case "${tmp}" in
++        /*) RES="${tmp}" ;;
++        *) RES="`pwd`/${tmp}" ;;
++    esac
++    eval $1=$RES
++}
++
+ #
+ # crosstool.sh
+ # Build a GNU/Linux toolchain
+@@ -106,51 +118,52 @@
+ # by hand, some of these might be misleading.
+ # NOTE: surround with "Begin/end" and echo to stdout so we can grep out of the log later.
+ 
+-echo "Begin saving environment"
+-> $PREFIX/$TARGET.crosstoolconfig.txt
+++doPrintConfig () {
++    echo "Begin saving environment"
++    for var in \
++        AR \
++        BINUTILS_DIR \
++        BINUTILS_EXTRA_CONFIG \
++        BUILD \
++        BUILD_DIR \
++        CC \
++        DEJAGNU \
++        EXTRA_TARGET_CFLAGS \
++        GCC_BUILD \
++        GCC_CORE_DIR \
++        GCC_CORE_EXTRA_CONFIG \
++        GCC_DIR \
++        GCC_EXTRA_CONFIG \
++        GCC_HOST \
++        GCC_LANGUAGES \
++        GDB_DIR \
++        GLIBC_ADDON_OPTIONS \
++        GLIBC_DIR \
++        GLIBC_EXTRA_CC_ARGS \
++        GLIBC_EXTRA_CONFIG \
++        GLIBC_EXTRA_ENV \
++        JUST_DOWNLOAD \
++        KERNELCONFIG \
++        LINUX_DIR \
++        LINUX_SANITIZED_HEADER_DIR \
++        NO_DOWNLOAD  \
++        PREFIX \
++        PTXDIST_DIR \
++        SHARED_MODE \
++        SRC_DIR \
++        TARBALLS_DIR \
++        TARGET \
++        TARGET_CFLAGS \
++        TOP_DIR \
++        USE_SYSROOT \
++        ; do
++            eval echo $var=\$$var
++    done
++    echo "End saving environment"
++}
+ 
+-set -x
+-for var in \
+-AR \
+-BINUTILS_DIR \
+-BINUTILS_EXTRA_CONFIG \
+-BUILD \
+-BUILD_DIR \
+-CC \
+-DEJAGNU \
+-EXTRA_TARGET_CFLAGS \
+-GCC_BUILD \
+-GCC_CORE_DIR \
+-GCC_DIR \
+-GCC_EXTRA_CONFIG \
+-GCC_HOST \
+-GCC_LANGUAGES \
+-GDB_DIR \
+-GLIBC_ADDON_OPTIONS \
+-GLIBC_DIR \
+-GLIBC_EXTRA_CC_ARGS \
+-GLIBC_EXTRA_CONFIG \
+-GLIBC_EXTRA_ENV \
+-JUST_DOWNLOAD \
+-KERNELCONFIG \
+-LINUX_DIR \
+-LINUX_SANITIZED_HEADER_DIR \
+-NO_DOWNLOAD  \
+-PREFIX \
+-PTXDIST_DIR \
+-SHARED_MODE \
+-SRC_DIR \
+-TARBALLS_DIR \
+-TARGET \
+-TARGET_CFLAGS \
+-TOP_DIR \
+-USE_SYSROOT \
+-; do 
+-  eval echo $var=\$$var
+-  eval echo $var=\$$var >> $PREFIX/$TARGET.crosstoolconfig.txt
+-done
+-set +x
+-echo "End saving environment"
++doPrintConfig
++doPrintConfig > $PREFIX/$TARGET.crosstoolconfig.txt
+ 
+ #---------------------------------------------------------
+ 
+@@ -195,7 +208,8 @@
+ *)        EXEEXT="" ;;
+ esac
+ 
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ # map TARGET to Linux equivalent
+ case $TARGET in
+@@ -222,14 +236,15 @@
+ 
+ # Make all paths absolute (it's so confusing otherwise)
+ # FIXME: this doesn't work well with some automounters
+-PREFIX=`cd $PREFIX; pwd`
+-BUILD_DIR=`cd $BUILD_DIR; pwd`
+-SRC_DIR=`cd $SRC_DIR; pwd`
+-BINUTILS_DIR=`cd ${SRC_DIR}/${BINUTILS_DIR}; pwd`
+-GCC_DIR=`cd ${SRC_DIR}/${GCC_DIR}; pwd`
+-GCC_CORE_DIR=`cd ${SRC_DIR}/${GCC_CORE_DIR}; pwd`
+-LINUX_HEADER_DIR=`cd ${SRC_DIR}/${LINUX_HEADER_DIR}; pwd`
+-GLIBC_DIR=`cd ${SRC_DIR}/${GLIBC_DIR}; pwd`
++absolute PREFIX
++absolute BUILD_DIR
++absolute SRC_DIR
++absolute BINUTILS_DIR
++absolute GCC_DIR
++absolute GCC_CORE_DIR
++absolute LINUX_DIR
++absolute LINUX_HEADER_DIR
++absolute LIBC_DIR
+ 
+ # Always install the bootstrap gcc (used to build glibc)
+ # somewhere it can't interfere with the final gcc.
+@@ -347,11 +362,18 @@
+ mkdir -p build-binutils; cd build-binutils
+ 
+ if test '!' -f Makefile; then
+-    ${BINUTILS_DIR}/configure $CANADIAN_BUILD --target=$TARGET --host=$GCC_HOST --prefix=$PREFIX --disable-nls ${BINUTILS_EXTRA_CONFIG} $BINUTILS_SYSROOT_ARG
++    ${BINUTILS_DIR}/configure \
++        $CANADIAN_BUILD \
++        --target=$TARGET \
++        --host=$GCC_HOST \
++        --prefix=$PREFIX \
++        --disable-nls \
++        ${BINUTILS_EXTRA_CONFIG} \
++        $BINUTILS_SYSROOT_ARG  || abort "Build failed during binutils configure."
+ fi
+ 
+-make $PARALLELMFLAGS all 
+-make install 
++make $PARALLELMFLAGS all || abort "Build failed during binutils build."
++make install || abort "Build failed during binutils install."
+ 
+ if test x"$CORE_PREFIX" != x"$PREFIX"; then
+     # if we're using a different core compiler, make binutils available to it
+@@ -398,7 +420,7 @@
+             ${GLIBC_DIR}/configure --prefix=/usr \
+             --build=$BUILD --host=$TARGET \
+             --without-cvs --disable-sanity-checks --with-headers=$HEADERDIR \
+-            --enable-hacker-mode
++            --enable-hacker-mode || abort "Build failed during glibc headers configure."
+     fi
+ 
+     if grep -q GLIBC_2.3 ${GLIBC_DIR}/ChangeLog; then
+@@ -409,7 +431,7 @@
+         # The real fix would be to get install-headers to not generate errlist-compat.c.
+         # Note: BOOTSTRAP_GCC is used by patches/glibc-2.3.5/glibc-mips-bootstrap-gcc-header-install.patch
+         libc_cv_ppc_machine=yes \
+-                make CFLAGS=-DBOOTSTRAP_GCC sysdeps/gnu/errlist.c
++                make CFLAGS=-DBOOTSTRAP_GCC sysdeps/gnu/errlist.c || abort "Build failed during glibc headers preparation (errlist.c)."
+         mkdir -p stdio-common
+         # sleep for 2 seconds for benefit of filesystems with lousy time resolution, like FAT,
+         # so make knows for sure errlist-compat.c doesn't need generating
+@@ -418,7 +440,7 @@
+     fi
+     # Note: BOOTSTRAP_GCC is used by patches/glibc-2.3.5/glibc-mips-bootstrap-gcc-header-install.patch
+     libc_cv_ppc_machine=yes \
+-    make cross-compiling=yes install_root=${SYSROOT} CFLAGS=-DBOOTSTRAP_GCC $GLIBC_SYSROOT_ARG install-headers
++    make cross-compiling=yes install_root=${SYSROOT} CFLAGS=-DBOOTSTRAP_GCC $GLIBC_SYSROOT_ARG install-headers || abort "Build failed during glibc headers install."
+ 
+     # Two headers -- stubs.h and features.h -- aren't installed by install-headers,
+     # so do them by hand.  We can tolerate an empty stubs.h for the moment.
+@@ -464,12 +486,14 @@
+         --enable-symvers=gnu \
+         --enable-__cxa_atexit \
+         --enable-languages=c \
+-        --disable-shared
++        --disable-shared || abort "Build failed during gcc-core configure."
+ fi
+ 
++# YEM-FIXME: I guess it is not usefull to catch errors there
+ test "$CANADIAN_BUILD" = "" || make $PARALLELMFLAGS all-build-libiberty || true
+-make $PARALLELMFLAGS all-gcc 
+-make install-gcc
++
++make $PARALLELMFLAGS all-gcc || abort "Build failed during core gcc build."
++make install-gcc || abort "Build failed during core gcc install."
+ 
+ cd ..
+ 
+@@ -506,7 +530,7 @@
+         --without-cvs --disable-profile --disable-debug --without-gd \
+         --without-tls --without-__thread \
+         $SHARED_MODE \
+-        --enable-add-ons${GLIBC_ADDON_OPTIONS} --with-headers=$HEADERDIR
++        --enable-add-ons${GLIBC_ADDON_OPTIONS} --with-headers=$HEADERDIR || abort "Build failed during glibc configure."
+ fi
+ 
+ if grep -l '^install-lib-all:' ${GLIBC_DIR}/Makerules > /dev/null; then
+@@ -530,8 +554,8 @@
+ # The following architectures are known to need kernel .config: alpha, arm, ia64, s390, sh, sparc
+ # Note: LD and RANLIB needed by glibc-2.1.3's c_stub directory, at least on macosx
+ # No need for PARALLELMFLAGS here, Makefile already reads this environment variable
+-make LD=${TARGET}-ld RANLIB=${TARGET}-ranlib $GLIBC_INITIAL_BUILD_RULE
+-make install_root=${SYSROOT} $GLIBC_SYSROOT_ARG $GLIBC_INITIAL_INSTALL_RULE
++make LD=${TARGET}-ld RANLIB=${TARGET}-ranlib $GLIBC_INITIAL_BUILD_RULE || abort "Build failed during glibc build."
++make install_root=${SYSROOT} $GLIBC_SYSROOT_ARG $GLIBC_INITIAL_INSTALL_RULE || abort "Build failed during glibc install."
+ 
+ # This doesn't seem to work when building a crosscompiler,
+ # as it tries to execute localedef using the just-built ld.so!?
+@@ -564,7 +588,7 @@
+ done
+ cd ..
+ 
+-test -f ${SYSROOT}/lib/libc.a || test -f ${SYSROOT}/lib64/libc.a || test -f ${SYSROOT}/usr/lib/libc.a || test -f ${SYSROOT}/usr/lib64/libc.a || abort Building libc failed
++test -f ${SYSROOT}/lib/libc.a || test -f ${SYSROOT}/lib64/libc.a || test -f ${SYSROOT}/usr/lib/libc.a || test -f ${SYSROOT}/usr/lib64/libc.a || abort "Building failed somewhere in glibc."
+ 
+ #---------------------------------------------------------
+ echo Build final gcc
+@@ -587,9 +611,10 @@
+         --enable-languages="$GCC_LANGUAGES" \
+          $SHARED_MODE \
+         --enable-c99 \
+-        --enable-long-long
++        --enable-long-long || abort "Build failed during final gcc configure."
+ fi
+ 
++# YEM-FIXME: I guess it is not essential that we catch failures there
+ test "$CANADIAN_BUILD" = "" || make $PARALLELMFLAGS all-build-libiberty || true
+ 
+ # Idea from <cort.dougan at gmail.com>:
+@@ -618,8 +643,8 @@
+     ;;
+ esac
+ 
+-make $PARALLELMFLAGS all 
+-make install 
++make $PARALLELMFLAGS all || abort "Build failed during final gcc build."
++make install || abort "Build failed during final gcc install."
+ 
+ # FIXME: shouldn't people who want this just --disable-multilib in final gcc and be done with it?
+ # This code should probably be deleted, it was written long ago and hasn't been tested in ages.
+diff -dur crosstool-0.37.orig/gdb.sh crosstool-0.37.silent/gdb.sh
+--- crosstool-0.37.orig/gdb.sh	2005-07-10 22:40:38.000000000 +0200
++++ crosstool-0.37.silent/gdb.sh	2005-07-11 21:35:38.000000000 +0200
+@@ -3,7 +3,8 @@
+ # Dan Kegel
+ # Copyright 2004, Andre Ancelin (andrea@adtecinc.com)
+ # Copyright 2005, Google
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ abort() {
+     echo crosstool: $@
+diff -dur crosstool-0.37.orig/getandpatch.sh crosstool-0.37.silent/getandpatch.sh
+--- crosstool-0.37.orig/getandpatch.sh	2005-07-06 00:37:25.000000000 +0200
++++ crosstool-0.37.silent/getandpatch.sh	2005-07-11 21:40:13.000000000 +0200
+@@ -3,7 +3,8 @@
+ # Local patches are found in subdirectories of patches/ with the same name as the tarball but without .tar.gz
+ # Copyright 2003 Ixia Communications
+ # Licensed under the GPL
+-set -xe
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ abort() {
+ 	echo $@
+@@ -38,6 +39,9 @@
+ 
+ test -z "${TARBALLS_DIR}"     && abort "Please set TARBALLS_DIR to the directory to download tarballs to."
+ 
++# YEM: One need the directory to exist before cd'ing into
++mkdir -p "${SRC_DIR}"
++
+ # Make all paths absolute (it's so confusing otherwise)
+ # FIXME: this doesn't work well with some automounters
+ test -z "$JUST_DOWNLOAD" || SRC_DIR=`cd $SRC_DIR; pwd`
+@@ -83,7 +87,6 @@
+ # Assumes that the tarball unpacks to a name guessable from its url,
+ # and that patches already exist locally in a directory named after the tarball.
+ getUnpackAndPatch() {
+-    set -x
+     # Check to see if the tarball already exists
+     exists=""
+     for arg; do
+@@ -128,7 +131,6 @@
+     glibc-[a-z]*-2*) echo "It's a glibc addon, so cd into glibc"; cd $GLIBC_DIR ;;
+     *) ;;
+     esac
+-    set +x
+ 
+     case $ARCHIVE_NAME in
+     *.gz|*.tgz)
+diff -dur crosstool-0.37.orig/glibc-get.sh crosstool-0.37.silent/glibc-get.sh
+--- crosstool-0.37.orig/glibc-get.sh	2005-03-08 01:34:34.000000000 +0100
++++ crosstool-0.37.silent/glibc-get.sh	2005-07-11 21:35:52.000000000 +0200
+@@ -8,7 +8,8 @@
+   exit 1
+ fi
+ 
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ mkdir -p temp.$$
+ cd temp.$$
+diff -dur crosstool-0.37.orig/initjail.sh crosstool-0.37.silent/initjail.sh
+--- crosstool-0.37.orig/initjail.sh	2005-03-08 01:34:34.000000000 +0100
++++ crosstool-0.37.silent/initjail.sh	2005-07-11 21:40:50.000000000 +0200
+@@ -8,7 +8,8 @@
+     exit 1
+ fi
+ 
+-set -x -e
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ case $1 in
+ *jail*) echo "jaildir is $1";;
+diff -dur crosstool-0.37.orig/install-shared-lib.sh crosstool-0.37.silent/install-shared-lib.sh
+--- crosstool-0.37.orig/install-shared-lib.sh	2005-03-08 01:34:34.000000000 +0100
++++ crosstool-0.37.silent/install-shared-lib.sh	2005-07-11 21:29:21.000000000 +0200
+@@ -10,7 +10,7 @@
+   exec false
+ }
+ 
+-#set -x
++[ -z "${SILENT}" ] && set -x
+ 
+ FILE=/etc/ld.so.conf
+ BAK=$FILE.bak
+diff -dur crosstool-0.37.orig/mkdejagnu.sh crosstool-0.37.silent/mkdejagnu.sh
+--- crosstool-0.37.orig/mkdejagnu.sh	2005-03-08 01:34:32.000000000 +0100
++++ crosstool-0.37.silent/mkdejagnu.sh	2005-07-11 21:40:26.000000000 +0200
+@@ -1,5 +1,7 @@
+ #!/bin/sh
+-set -xe
++[ -z "${SILENT}" ] && set -x
++set -e
++
+ mkdir -p result/dejagnu
+ PREFIX=`pwd`/result/dejagnu
+ 
+diff -dur crosstool-0.37.orig/mkjail.sh crosstool-0.37.silent/mkjail.sh
+--- crosstool-0.37.orig/mkjail.sh	2005-03-08 01:34:34.000000000 +0100
++++ crosstool-0.37.silent/mkjail.sh	2005-07-11 21:42:36.000000000 +0200
+@@ -9,7 +9,9 @@
+     echo $@
+     exec false
+ }
+-set -x
++[ -z "${SILENT}" ] && set -x
++set -e
++
+ test $# -ge 2 || abort "Usage: $0 PREFIX ETCPASSWD [PREFIX2], where PREFIX/lib/libc.so.* is the C library to grab, ETCPASSWD is the passwd file to use in the jail, and PREFIX2/bin contains busybox"
+ test -d "$1" || abort "Error: $1 is not a directory"
+ test -f "$2" || abort "Error: $2 is not a file"
+@@ -26,7 +28,6 @@
+ done
+ test -s "$STRIP" || abort "Error: strip not found"
+ test -x "$STRIP" || abort "Error: $STRIP not executable"
+-set -e -x
+ 
+ ORIGDIR=`pwd`
+ WORKDIR=/tmp/mkjail.$$.tmp
+diff -dur crosstool-0.37.orig/mkoverride.sh crosstool-0.37.silent/mkoverride.sh
+--- crosstool-0.37.orig/mkoverride.sh	2005-03-08 01:34:34.000000000 +0100
++++ crosstool-0.37.silent/mkoverride.sh	2005-07-11 21:36:08.000000000 +0200
+@@ -15,7 +15,8 @@
+ test -z "${TARGET}" && abort "Please set TARGET to the Gnu target identifier (e.g. pentium-linux)"
+ test -z "${PREFIX}" && abort "Please set PREFIX to where you want the toolchain installed."
+ 
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ installOneLib() {
+   # Make a unique directory for each shared library named after the file,
+diff -dur crosstool-0.37.orig/ptx.sh crosstool-0.37.silent/ptx.sh
+--- crosstool-0.37.orig/ptx.sh	2005-05-08 07:51:51.000000000 +0200
++++ crosstool-0.37.silent/ptx.sh	2005-07-11 21:36:24.000000000 +0200
+@@ -1,5 +1,6 @@
+ #!/bin/sh
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ # Build userspace stuff with ptxdist (http://www.pengutronix.de/software/ptxdist_en.html)
+ # but use existing toolchain
+diff -dur crosstool-0.37.orig/regtest-kill.sh crosstool-0.37.silent/regtest-kill.sh
+--- crosstool-0.37.orig/regtest-kill.sh	2005-07-07 18:22:34.000000000 +0200
++++ crosstool-0.37.silent/regtest-kill.sh	2005-07-11 21:30:38.000000000 +0200
+@@ -1,5 +1,5 @@
+ #!/bin/sh
+-set -x
++[ -z "${SILENT}" ] && set -x
+ #ALLNODES="k8 fast fast2 dual2"
+ 
+ dn0=`dirname $0`
+diff -dur crosstool-0.37.orig/regtest-kill1.sh crosstool-0.37.silent/regtest-kill1.sh
+--- crosstool-0.37.orig/regtest-kill1.sh	2005-07-07 18:23:59.000000000 +0200
++++ crosstool-0.37.silent/regtest-kill1.sh	2005-07-11 21:30:29.000000000 +0200
+@@ -1,5 +1,5 @@
+ #!/bin/sh
+-set -x
++[ -z "${SILENT}" ] && set -x
+ cd /tmp
+ 
+ ps augxw | grep $USER | egrep 'jobdir|gcc.*glibc.*running|crosstool.sh|make' | grep -v grep | awk '{print $2}' > procs
+diff -dur crosstool-0.37.orig/regtest-run.sh crosstool-0.37.silent/regtest-run.sh
+--- crosstool-0.37.orig/regtest-run.sh	2005-07-10 02:47:01.000000000 +0200
++++ crosstool-0.37.silent/regtest-run.sh	2005-07-11 21:38:03.000000000 +0200
+@@ -11,7 +11,7 @@
+ # Accumulates results in directory 'jobdir' on current machine
+ # Run regtest-report.sh afterwards to generate nice HTML matrix of build results
+ 
+-set -x
++[ -z "${SILENT}" ] && set -x
+ 
+ # Run this command as 'nohup ssh-agent sh crosstool-0.37/regtest-run.sh'
+ #ssh-add
+@@ -110,7 +110,6 @@
+ for cpu in $CPUS; do
+    for toolcombo in $TOOLS; do
+        cat > jobdir/$cpu-$toolcombo.sh <<_EOF_
+-set -x
+ cd $CROSSTOOL
+ TARBALLS_DIR=$HOME/downloads
+ export TARBALLS_DIR
+diff -dur crosstool-0.37.orig/rerpm.sh crosstool-0.37.silent/rerpm.sh
+--- crosstool-0.37.orig/rerpm.sh	2005-07-04 20:07:21.000000000 +0200
++++ crosstool-0.37.silent/rerpm.sh	2005-07-11 21:37:04.000000000 +0200
+@@ -2,7 +2,8 @@
+ # Script to demonstrate building srpms and rpms from scratch
+ # Useful for testing changes to crosstool.spec.in
+ # Uses old syntax for --with and --without so they can be used on red hat 7.1
+-set -x
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ TOOLCOMBOS="\
+ gcc-2.95.3-glibc-2.2.2 \
+@@ -17,7 +18,6 @@
+ #x86_64 \
+ export WANT_CPUS
+ 
+-set -ex
+ tar -czvf crosstool-0.37.tar.gz crosstool-0.37
+ 
+ sh crosstool-0.37/buildsrpms.sh 
+diff -dur crosstool-0.37.orig/testhello.sh crosstool-0.37.silent/testhello.sh
+--- crosstool-0.37.orig/testhello.sh	2005-05-01 00:06:20.000000000 +0200
++++ crosstool-0.37.silent/testhello.sh	2005-07-11 21:37:20.000000000 +0200
+@@ -1,5 +1,6 @@
+ #!/bin/sh
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ cd $PREFIX
+ if test '!' -d tmp; then
+diff -dur crosstool-0.37.orig/testjail.sh crosstool-0.37.silent/testjail.sh
+--- crosstool-0.37.orig/testjail.sh	2005-05-08 07:52:15.000000000 +0200
++++ crosstool-0.37.silent/testjail.sh	2005-07-11 21:39:51.000000000 +0200
+@@ -3,7 +3,8 @@
+ # Example use:
+ #  TARGET=sh4-unknown-linux-gnu PREFIX=result/gcc-3.3-glibc-2.2.5/sh4-unknown-linux-gnu sh testjail.sh
+ 
+-set -x -e
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ # Assume there's an entry in /etc/hosts for the target to run on
+ REMOTE=$TARGET
+diff -dur crosstool-0.37.orig/testlinux.sh crosstool-0.37.silent/testlinux.sh
+--- crosstool-0.37.orig/testlinux.sh	2005-05-15 19:04:50.000000000 +0200
++++ crosstool-0.37.silent/testlinux.sh	2005-07-11 21:37:31.000000000 +0200
+@@ -5,7 +5,8 @@
+ # For questions, comments or improvements see the crossgcc mailing
+ # list at http://sources.redhat.com/ml/crossgcc, but please do your homework first.
+ 
+-set -ex
++[ -z "${SILENT}" ] && set -x
++set -e
+ 
+ #env | sort
+ 

@@ -1,0 +1,6 @@
+BINUTILS_DIR=binutils-2.15
+GCC_DIR=gcc-2.95.3
+GLIBC_DIR=glibc-2.2.5
+LINUX_DIR=linux-2.4.26
+GLIBCTHREADS_FILENAME=glibc-linuxthreads-2.2.5
+GDB_DIR=gdb-6.5

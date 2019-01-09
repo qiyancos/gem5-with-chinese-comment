@@ -1,0 +1,169 @@
+LAST_UPDATED: gcc-3.3.2
+
+Target is sh4-unknown-linux-gnu
+Host   is i686-host_pc-linux-gnu
+
+		=== gcc tests ===
+
+
+Running target sh4-unknown-linux-gnu
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O1 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O1 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O2 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O2 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O3 -fomit-frame-pointer 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O3 -fomit-frame-pointer 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O3 -g 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O3 -g 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -Os 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -Os 
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/20021014-1.c execution test
+FAIL: gcc.dg/duff-2.c (test for excess errors)
+FAIL: gcc.dg/nest.c execution test
+FAIL: gcc.dg/pack-test-1.c (test for excess errors)
+FAIL: gcc.dg/pack-test-2.c  (test for errors, line 7)
+FAIL: gcc.dg/pack-test-2.c  (test for errors, line 14)
+FAIL: gcc.dg/pack-test-2.c  (test for errors, line 19)
+FAIL: gcc.dg/pack-test-2.c (test for excess errors)
+FAIL: gcc.dg/pr10392-1.c execution test
+FAIL: gcc.dg/pr10589-1.c (test for excess errors)
+FAIL: gcc.dg/pr11587-1.c (test for excess errors)
+FAIL: gcc.dg/pr11736-1.c execution test
+FAIL: gcc.dg/pr11864-1.c execution test
+FAIL: gcc.dg/pr9365-1.c (test for excess errors)
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.da does not exist,  -g  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -g  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -g  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.da does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O0  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.da does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O1  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.da does not exist,  -O2 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O2 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O2 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.da does not exist,  -O3 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O3 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O3 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.da does not exist,  -O3 -g -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O3 -g -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O3 -g -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.da does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -Os  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.da does not exist,  -g  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -g  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -g  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.da does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O0  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.da does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O1  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.da does not exist,  -O2 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O2 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O2 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.da does not exist,  -O3 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O3 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O3 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.da does not exist,  -O3 -g -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O3 -g -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O3 -g -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.da does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -Os  -fbranch-probabilities
+
+		=== gcc Summary ===
+
+# of expected passes		21284
+# of unexpected failures	51
+# of expected failures		67
+# of unresolved testcases	33
+# of unsupported tests		190
+/home/dank/crosstool-cur/build/sh4-unknown-linux-gnu/gcc-3.3.2-glibc-2.3.2/build-gcc/gcc/xgcc version 3.3.2
+
+Host   is i686-host_pc-linux-gnu
+
+		=== g++ tests ===
+
+
+Running target sh4-unknown-linux-gnu
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.da does not exist,  -g  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -g  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -g  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.da does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O0  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.da does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O1  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.da does not exist,  -O2  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O2  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O2  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.da does not exist,  -O3  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O3  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O3  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.da does not exist,  -O3 -g  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O3 -g  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O3 -g  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.da does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -Os  -fbranch-probabilities
+FAIL: g++.dg/abi/empty6.C  (test for warnings, line 6)
+FAIL: g++.jason/thunk3.C (test for excess errors)
+XPASS: g++.other/init5.C  Execution test
+
+		=== g++ Summary ===
+
+# of expected passes		8042
+# of unexpected failures	9
+# of unexpected successes	1
+# of expected failures		95
+# of unresolved testcases	14
+# of untested testcases		29
+# of unsupported tests		32
+/home/dank/crosstool-cur/build/sh4-unknown-linux-gnu/gcc-3.3.2-glibc-2.3.2/build-gcc/gcc/testsuite/../g++ version 3.3.2
+
+Host   is sh4-unknown-linux-gnu
+
+		=== libstdc++-v3 tests ===
+
+
+Running target sh4-unknown-linux-gnu
+FAIL: 22_locale/ctype_scan_wchar_t.cc execution test
+FAIL: 27_io/filebuf_members.cc execution test
+FAIL: 27_io/filebuf_virtuals.cc execution test
+FAIL: 27_io/ifstream_members.cc execution test
+FAIL: 27_io/istream_extractor_other.cc execution test
+FAIL: 27_io/istream_seeks.cc execution test
+FAIL: 27_io/istream_unformatted.cc execution test
+FAIL: 27_io/ostream_inserter_other.cc execution test
+
+		=== libstdc++-v3 Summary ===
+
+# of expected passes		445
+# of unexpected failures	8
+# of expected failures		28
+
+Compiler version: 3.3.2 
+Platform: sh4-unknown-linux-gnu
+configure flags: --target=sh4-unknown-linux-gnu --host=i686-host_pc-linux-gnu --prefix=/opt/crosstool/sh4-unknown-linux-gnu/gcc-3.3.2-glibc-2.3.2 --with-headers=/opt/crosstool/sh4-unknown-linux-gnu/gcc-3.3.2-glibc-2.3.2/sh4-unknown-linux-gnu/include --disable-nls --enable-threads=posix --enable-symvers=gnu --enable-__cxa_atexit --enable-languages=c,c++ --enable-shared --enable-c99 --enable-long-long

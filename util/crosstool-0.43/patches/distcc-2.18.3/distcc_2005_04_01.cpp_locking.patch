@@ -1,0 +1,262 @@
+Date: Fri, 1 Apr 2005 12:01:50 -0700
+Message-ID: <BE2C77780CB47E40BA12908B51727C3A0454D384@DEN-EXM-01.corp.ebay.com>
+Thread-Topic: [Patch] Preprocessing is not free!
+Thread-Index: AcU27UJCPpxRcL/DSha3cXaVRNmwFw==
+From: "Donohue, Michael" <mdonohue@paypal.com>
+To: <distcc@lists.samba.org>
+Subject: [distcc] [Patch] Preprocessing is not free!
+
+This is the preprocessing patch I submitted in a big patch earlier, but
+now it is separated out.  It assumes you have already applied the
+randomization patch I submitted a couple of days ago.
+
+
+The main notion here is that preprocessing is not free.  The current
+code assumes that preprocessing is free, and this is why we see worse
+performance when using very high parallel makes.   I believe this is a
+sign that something is wrong.  We should be seeing at worst, equal
+behavior, but we are actually seeing a performance decrease when going
+too parallel.  The current code causes highly variable load on the
+master.  I was reading the distcc archive last night, and saw at least
+one thread where a user was complaining of the system load spiking up to
+11 on the master, while not going above 1 on the slave compiler boxes.
+Also, tuning the parallel factor on make now is something that is
+tightly bound to the code you are compiling.  We have one library that
+does no better after -j15.   We have another library that still shows
+compile time improvement all the way up to -j40.     When both libraries
+are built because of one make command, it's hard to get the right
+parallelization. 
+
+Having locking for preprocessing fixes all of the above problems. 
+
+After applying this patch, for our 4 processor master compile machine,
+using a cpp limit of 8 results in the load staying even at around 4.
+This is considerably better than the load numbers you see when using the
+"-l" option to make.  Make gets very bursty when using the load limiting
+code, at least for our old GNU make 3.78.1.
+
+Also, you can throw a moderately high -j, and it does some degree of
+self tuning.  For a -j40, distcc no longer tries to hold 40 slave locks.
+Instead, it makes sure it has a preprocessing lock before trying to get
+the slave lock.   This means you get the benefit of extra slave boxes
+when the compile jobs take a long time, and for shorter compile jobs,
+you don't hold 40 slave locks while waiting for 40 cpp0 processes to
+finish.  Instead you hold 8 slave locks, while waiting for 8 cpp0
+processes to finish.  They're much faster when not competing with 32
+other preprocessors.  :-)
+
+The other change here is that the number of fallback slots is now
+configurable as well.   We have found that 3 is a good number for us
+here, even though we are running on a 4 processor box, because running 4
+simultaneous links occasionally consumes all available memory, and then
+the box becomes unusable until the 'out of memory' killer cleans
+something up for us.    Other users probably would want to be able to
+tune that as well, without having to recompile.
+
+
+--- distcc-2.18.3/man/distcc.1	Tue Mar 29 11:10:52 2005
++++ distcc-2.18.3-mine/man/distcc.1	Mon Mar 28 14:21:49 2005
+@@ -237,7 +237,25 @@
+ client is less than one fifth of the total, then the client should be
+ left out of the list.
+ .PP
+-There is a special host entry
++There are two special host names 
++.B --localslots
++and
++.B --localslots_cpp
++which are useful for adjusting load on the local machine.  The 
++.B --localslots
++host specifies how many jobs that cannot be run remotely that can be run concurrently 
++on the local machine, while 
++.B --localslots_cpp
++controls how many preprocessors will run in parallel on the local machine.  Tuning
++these values can improve performance.  Linking on large projects
++can take large amounts of memory.  Running parallel linkers, which cannot be 
++executed remotely,  may
++force the machine to swap, which reduces performance over just running the
++jobs in sequence without swapping.   Getting the number of parallel preprocessors just
++right allows you to use larger parallel factors with make, since the local machine
++now has some machanism for measuring local resource usage.     
++.PP
++Finally there is the host entry
+ .B --randomize
+ which chooses a remote host randomly in the domain of slots, instead of preferring
+ hosts earlier in the list.   As it is in the domain of slots, a machine with 4 execution
+@@ -255,6 +273,8 @@
+   HOSTSPEC = LOCAL_HOST | SSH_HOST | TCP_HOST | OLDSTYLE_TCP_HOST 
+            | GLOBAL_OPTION
+   LOCAL_HOST = localhost[/LIMIT]
++             | --localslots=<int>
++             | --localslots_cpp=<int>
+   SSH_HOST = [USER]@HOSTID[/LIMIT][:COMMAND][OPTIONS]
+   TCP_HOST = HOSTID[:PORT][/LIMIT][OPTIONS]
+   OLDSTYLE_TCP_HOST = HOSTID[/LIMIT][:PORT][OPTIONS]
+diff -u -r distcc-2.18.3/src/compile.c distcc-2.18.3-mine/src/compile.c
+--- distcc-2.18.3/src/compile.c	Fri Oct  1 17:47:07 2004
++++ distcc-2.18.3-mine/src/compile.c	Mon Mar 28 10:41:18 2005
+@@ -115,7 +115,7 @@
+     char *input_fname = NULL, *output_fname, *cpp_fname;
+     char **argv_stripped;
+     pid_t cpp_pid = 0;
+-    int cpu_lock_fd;
++    int cpu_lock_fd, local_cpu_lock_fd;
+     int ret;
+     struct dcc_hostdef *host = NULL;
+ 
+@@ -134,7 +134,10 @@
+     /* turned off because we never spend long in this state. */
+     dcc_note_state(DCC_PHASE_STARTUP, input_fname, NULL);
+ #endif
+-
++    if ((ret = dcc_lock_local_cpp(&local_cpu_lock_fd)) != 0) {
++        goto fallback;
++    }
++    
+     if ((ret = dcc_pick_host_from_list(&host, &cpu_lock_fd)) != 0) {
+         /* Doesn't happen at the moment: all failures are masked by
+            returning localhost. */
+@@ -158,7 +161,8 @@
+                                   input_fname,
+                                   cpp_fname,
+                                   output_fname,
+-                                  cpp_pid, host, status)) != 0) {
++                                  cpp_pid, local_cpu_lock_fd, 
++                                  host, status)) != 0) {
+         /* Returns zero if we successfully ran the compiler, even if
+          * the compiler itself bombed out. */
+         goto fallback;
+diff -u -r distcc-2.18.3/src/compile.h distcc-2.18.3-mine/src/compile.h
+--- distcc-2.18.3/src/compile.h	Thu Jul 29 18:12:13 2004
++++ distcc-2.18.3-mine/src/compile.h	Mon Mar 28 10:41:59 2005
+@@ -26,6 +26,7 @@
+                        char *cpp_fname,
+                        char *output_fname,
+                        pid_t cpp_pid,
++                       int local_cpu_lock_fd,
+                        struct dcc_hostdef *host,
+                        int *status);
+ 
+diff -u -r distcc-2.18.3/src/hosts.c distcc-2.18.3-mine/src/hosts.c
+--- distcc-2.18.3/src/hosts.c	Tue Mar 29 11:10:52 2005
++++ distcc-2.18.3-mine/src/hosts.c	Mon Mar 28 17:22:31 2005
+@@ -185,7 +185,7 @@
+ {
+     const char *token = *psrc;
+ 
+-    if ((*psrc)[0] == '/') {
++    if ((*psrc)[0] == '/' || (*psrc)[0] == '=') {
+         int val;
+         (*psrc)++;
+         val = atoi(*psrc);
+@@ -390,6 +390,24 @@
+ 
+         token_start = where;
+         token_len = strcspn(where, " #\t\n\f\r");
++
++	if(!strncmp(token_start, "--localslots_cpp", 16)) {
++            const char *ptr;
++            ptr = token_start + 16;
++	    if(dcc_parse_multiplier(&ptr, dcc_hostdef_local_cpp) == 0) {
++                where = token_start + token_len;
++                continue;
++            }
++	}
++
++	if(!strncmp(token_start, "--localslots", 12)) {
++            const char *ptr;
++            ptr = token_start + 12; 
++	    if(dcc_parse_multiplier(&ptr, dcc_hostdef_local) == 0) {
++                where = token_start + token_len;
++                continue;
++            }
++	}
+ 
+ 	if(!strncmp(token_start, "--randomize", 11)) {
+             dcc_randomize = 1;
+diff -u -r distcc-2.18.3/src/hosts.h distcc-2.18.3-mine/src/hosts.h
+--- distcc-2.18.3/src/hosts.h	Tue Mar 29 11:10:52 2005
++++ distcc-2.18.3-mine/src/hosts.h	Mon Mar 28 14:24:00 2005
+@@ -57,6 +57,7 @@
+ 
+ /** Static definition of localhost **/
+ extern struct dcc_hostdef *dcc_hostdef_local;
++extern struct dcc_hostdef *dcc_hostdef_local_cpp;
+ extern struct dcc_hostdef *dcc_hostdef_remote;
+ 
+ 
+diff -u -r distcc-2.18.3/src/lock.c distcc-2.18.3-mine/src/lock.c
+--- distcc-2.18.3/src/lock.c	Tue Mar 29 11:10:52 2005
++++ distcc-2.18.3-mine/src/lock.c	Mon Mar 28 13:50:50 2005
+@@ -86,6 +86,21 @@
+ 
+ struct dcc_hostdef *dcc_hostdef_local = &_dcc_local;
+ 
++struct dcc_hostdef _dcc_local_cpp = {
++    DCC_MODE_LOCAL,
++    NULL,
++    (char *) "localhost",
++    0,
++    NULL,
++    8,                          /* number of tasks */
++    (char *)"localhost",        /* verbatim string */
++    DCC_VER_1,                  /* protocol (ignored) */
++    DCC_COMPRESS_NONE,          /* compression (ignored) */
++    NULL
++};
++
++struct dcc_hostdef *dcc_hostdef_local_cpp = &_dcc_local_cpp;
++
+ struct dcc_hostdef *dcc_hostdef_remote = NULL;
+ 
+ /**
+diff -u -r distcc-2.18.3/src/remote.c distcc-2.18.3-mine/src/remote.c
+--- distcc-2.18.3/src/remote.c	Sat Oct 23 22:05:49 2004
++++ distcc-2.18.3-mine/src/remote.c	Mon Mar 28 10:42:32 2005
+@@ -174,6 +174,7 @@
+                        char *cpp_fname,
+                        char *output_fname,
+                        pid_t cpp_pid,
++                       int local_cpu_lock_fd,
+                        struct dcc_hostdef *host,
+                        int *status)
+ {
+@@ -207,7 +208,10 @@
+ 
+     if ((ret = dcc_wait_for_cpp(cpp_pid, status, input_fname)))
+         goto out;
+-    
++  
++    /* We are done preprocessing.  Unlock to allow someone else to start preprocessing */ 
++    if(local_cpu_lock_fd) { dcc_unlock(local_cpu_lock_fd); }
++
+     if ((ret = dcc_x_file(to_net_fd, cpp_fname, "DOTI", host->compr, &doti_size)))
+         goto out;
+ 
+diff -u -r distcc-2.18.3/src/where.c distcc-2.18.3-mine/src/where.c
+--- distcc-2.18.3/src/where.c	Tue Mar 29 11:10:52 2005
++++ distcc-2.18.3-mine/src/where.c	Mon Mar 28 23:33:46 2005
+@@ -259,3 +259,13 @@
+     
+     return dcc_lock_one(dcc_hostdef_local, &chosen, cpu_lock_fd);
+ }
++
++int dcc_lock_local_cpp(int *cpu_lock_fd)
++{
++    int ret;
++    struct dcc_hostdef *chosen;
++    ret = dcc_lock_one(dcc_hostdef_local_cpp, &chosen, cpu_lock_fd); 
++    dcc_note_state(DCC_PHASE_CPP, NULL, chosen->hostname); 
++    return ret;
++}
++
+diff -u -r distcc-2.18.3/src/where.h distcc-2.18.3-mine/src/where.h
+--- distcc-2.18.3/src/where.h	Thu Jul 29 18:12:14 2004
++++ distcc-2.18.3-mine/src/where.h	Mon Mar 28 10:40:14 2005
+@@ -25,3 +25,5 @@
+                             int *cpu_lock_fd);
+ 
+ int dcc_lock_local(int *cpu_lock_fd);
++
++int dcc_lock_local_cpp(int *cpu_lock_fd);
+

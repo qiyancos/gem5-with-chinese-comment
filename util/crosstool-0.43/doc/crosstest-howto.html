@@ -1,0 +1,159 @@
+<html>
+<head>
+<title>crosstest-howto</title>
+</head>
+<body>
+<h1>crosstest-howto</h1>
+If you're using a new or uncommon CPU type, or an unreleased version
+of gcc or glibc, and want some assurance that you have built a working
+compiler and C library, you should run the gcc and glibc test suites.
+<p>
+The gcc test suite is based on DejaGnu, a test framework written
+in Tcl and Expect which allows testing of remote systems.  DejaGnu
+works best with remote systems that support remote login via rsh.
+See <a href="dejagnu-remote-howto.html">dejagnu-remote-howto.html</a>
+for how one uses Dejagnu with remote targets,
+and <a href="chroot-login-howto.html">chroot-login-howto.html</a>
+for how one sets up a chroot jail that allows remote login via rsh.
+<p>
+The glibc testsuite is *not* based on DejaGnu.  Instead, it uses
+Makefiles. 
+<p>
+Because it is somewhat difficult to directly invoke the test suites,
+I've written a shell script 'crosstest.sh' which attempts to automate
+the process.
+(Because I did not want to assume that the target system
+has Make available, crosstest.sh constructs a shell script that
+runs the tests.  This is a bit of a kludge, and the output is not
+as nice as the gcc test suite output yet.)
+<p>
+See also contrib/testsetup, which contains a couple scripts which
+I used when doing remote testing of an SH4 system, and demo-runtest.sh,
+which demonstrates how to repeat just one gcc testcase.
+<p>
+Before you use all.sh (or crosstest.sh) to test the toolchain, you need
+to do six things:
+<ol>
+<li>add an entry in /etc/hosts for each target you want to test.  
+e.g. if you want to test sh4-unknown-linux-gnu,
+you must have an sh4 system running linux online somewhere, and
+'ping sh4-unknown-linux-gnu' must be able to get packets to it.
+This is not normal dejagnu practice, but it made it much easier to
+write this doc and the example scripts.  (It also restricts you to
+just one remote target of each type, but if that limitation ever
+bothers you, you can probably afford to set up your own dejagnu configuration
+and not use these scripts.)
+<li>set up rsh/rlogin/rcp client and server apps on your workstation and on each target system,
+and make sure they work.  (<a href="chroot-login-howto.html">chroot-login-howto.html</a> should be helpful here.)
+(Note: if you run into a strange "Unable to allocate memory" error when using rcp to retrieve files
+from an sh4 system, you may need to apply the patch inetutils-1.4.2/sh4-div.patch.)
+<li>The rsh / rcp protocol only has 512 IP ports available, so if you launch more
+than 512 rsh or rcp commands during a 2MSL (120 second) period,
+the resulting zombie TCP connections hanging around in TIME_WAIT state (you can observe this with netstat -pant)
+will cause rsh or rcp to fail with error "rcmd: socket: All ports in use".  
+<p>
+To prevent this, issue the following command both locally and on the target
+(only works on Linux):
+<pre>
+# echo 1 > /proc/sys/net/ipv4/tcp_tw_recycle
+</pre>
+This is completely illegal with respect to the Internet RFCs, but it does prevent
+the rsh and rcp connections from stacking up in state TIME_WAIT.  
+(crosstest.sh checks to make sure you've done this locally, but doesn't check that you've done it on the target.)
+
+<li>Following the instructions in <a href="chroot-login-howto.html">chroot-login-howto.html</a>,
+set up and test a chroot jail in /jail for user root-jail on each target system you want to test on,
+and make sure you can use rsh and rcp into the jail remotely as user root-jail.
+<li>Make sure you can re-initialize the chroot jails remotely; see testjail.sh for an example of how to test this.
+<li>Run mkdejagnu.sh to compile a known good copy of dejagnu.
+</ol>
+Once all the above are working, you should be able to run all.sh without the --notest argument.
+For instance, to test a gcc-3.3/glibc-2.2.5 toolchain you already built for sh4-unknown-linux-gnu:
+<pre>
+eval `cat sh4.dat` `cat gcc-3.3-glibc-2.2.5.dat`    sh all.sh --nounpack --nobuild > x.log 2>&1 &
+</pre>
+Keep an eye on the log file; after twenty seconds or so, you should check
+that dejagnu is able to download and run test apps.  Easiest way to check is to use grep
+to look for passed tests.  For example:
+<pre>
+$ egrep 'PASS|FAIL|UNRESOLVED' x.log
+PASS: gcc.c-torture/execute/20000112-1.c compilation,  -O0 
+PASS: gcc.c-torture/execute/20000112-1.c execution,  -O0 
+PASS: gcc.c-torture/execute/20000112-1.c compilation,  -O1 
+PASS: gcc.c-torture/execute/20000112-1.c execution,  -O1 
+...
+</pre>
+If you see lots of FAILed or UNRESOLVED tests, something's wrong, and you'll have to start digging.
+For instance, make sure there's enough free RAM and disk space on the target system.
+<p>
+The test will take some time to run.  When it's done, it will create
+$TOP_DIR/$TARGET-$TOOLCOMBO-{gcc,binutil}.sum (e.g. sh4-unknown-linux-gnu-gcc-3.3-glibc-2.2.5-gcc.sum)
+which will tell how many tests failed unexpectedly.  Interpreting these results is tricky;
+see <a href="http://gcc.gnu.org/install/test.html">Installing GCC: Testing</a> at the GCC home page,
+and /or <a href="http://gcc.gnu.org/ml/gcc-testresults/">the gcc-testresults mailing list</a>
+for what kind of results other people are getting.
+<p>
+If you use these scripts to test your toolchain, please send
+the test results to the 
+<a href="http://sources.redhat.com/ml/crossgcc/">crossgcc mailing list</a>
+and the <a href="http://gcc.gnu.org/ml/gcc-testresults/">gcc-testresults</a>
+mailing list.  Be sure to mention which release of the crosstool scripts you used.
+
+<h3>Notes on testing</h3>
+If testing a small (&lt; 64 MB RAM) target with no swap space, you probably want to reboot the target before starting each run.
+<p>
+The glibc tests probably require about 16MB RAM free on the target system (before setting up the jail)
+and about 16MB of free disk space.  On systems with less than 128MB of physical RAM and no swap,
+you may want to mount /jail via NFS from some Linux box with a bit of free disk space.
+<p>
+I have seen the testcases forget to delete files on the target after trying
+to run them.  (Possibly this is normal in the case of failed tests?)
+On small targets, you should run cleantmp.sh in the background
+before starting the first test to prevent /tmp from filling up.
+<p>
+If your toolchain is missing some crucial patches or is misconfigured, you might
+not be able to get a chroot jail working.  In that case, try linking the
+gcc regression tests statically, and running them without the jail;
+edit crosstest.sh where it's creating boards/$TARGET.exp, and
+uncomment the lines that set cflags to -static and username to root.
+That should get you to a point where you can at least run the gcc and glibc tests and see what's screwing up!
+<p>
+You can rerun an individual gcc test by hand with a command like
+<pre>
+$ cd ~/crosstool-0.25/build/powerpc-405-linux-gnu/gcc-3.3-glibc-2.2.5/build-gcc
+$ DEJAGNU=~/crosstool-0.25/boards/master.exp PATH=~/crosstool-0.25/result/dejagnu/bin:$PATH RUNTESTFLAGS="--target=powerpc-405-linux-gnu -v -v -v -v -a execute.exp=20000731-1.c" make check-gcc
+</pre>
+(Be sure to edit that command to match your paths and target!)  
+That tells runtest to run just testcase gcc/testsuite/gcc.c-torture/execute/20000731-1.c.
+It may be easier to run runtest directly, rather than through make.  The same command above can be run as
+<pre>
+$ cd ~/crosstool-0.25/build/powerpc-405-linux-gnu/gcc-3.3-glibc-2.2.5/build-gcc/testsuite
+$ DEJAGNU=~/crosstool-0.25/boards/master.exp PATH=~/crosstool-0.25/result/dejagnu/bin:$PATH runtest --tool=gcc --target=powerpc-405-linux-gnu -v -v -v -v -a execute.exp=20000731-1.c
+</pre>
+(See also demo-runtest.sh.)
+
+<p>
+You can also rerun individual tests by just compiling them by hand,
+transferring them to the target, and running them.  Dejagnu is just
+a fancy way of doing that automatically.
+<p>
+When running gcc execution tests with whatever glibc is laying about,
+you may get the error "error in loading shared libraries: undefined symbol: __register_frame_info"
+To work around this, see register_frame_info_fix.{sh,c}
+The right fix is probably to use a chroot environment and test with your 
+newly built glibc, as documented above.
+<p>
+The dejagnu in debian is old, and will fail on c-torture's first test (20000112-1.c)
+unless you copy share/dejagnu/standard.exp to share/dejagnu/baseboards/
+That one reason I tell you to compile dejagnu-1.4.3 fresh instead of using the system's copy of dejagnu.
+<p>
+If you're testing on a busybox-0.65 system, sometimes tar -z fails.  Using uncompressed tar archives is safer.
+<p>
+
+<hr>
+Portions copyright 2003, <a href="http://ixiacom.com">Ixia Communications</a><br>
+Portions copyright 2003, 2004, <a href="http://google.com">Google</a><br>
+Released under the GPL.<br>
+Last revision 28 March 2003 by dank@kegel.com
+</body>
+</html>

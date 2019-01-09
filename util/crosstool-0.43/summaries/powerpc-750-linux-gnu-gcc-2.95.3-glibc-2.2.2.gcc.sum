@@ -1,0 +1,35 @@
+Target is powerpc-750-linux-gnu
+Host   is powerpc-750-linux-gnu
+
+		=== libstdc++ tests ===
+
+
+Running target powerpc-750-linux-gnu
+
+		=== libstdc++ Summary ===
+
+# of expected passes		10
+# of expected failures		10
+# of unresolved testcases	10
+Host   is i686-host_pc-linux-gnu
+
+		=== gcc tests ===
+
+
+Running target powerpc-750-linux-gnu
+
+		=== gcc Summary ===
+
+Host   is i686-host_pc-linux-gnu
+
+		=== g++ tests ===
+
+
+Running target powerpc-750-linux-gnu
+
+		=== g++ Summary ===
+
+
+Compiler version: gcc 
+Platform: powerpc-750-linux-gnu
+configure flags: --with-gcc-version-trigger=/home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.21/build/powerpc-750-linux-gnu/gcc-2.95.3-glibc-2.2.2/gcc-2.95.3/gcc/version.c --target=powerpc-750-linux-gnu --host=i686-host_pc-linux-gnu --prefix=/opt/cegl-2.0/powerpc-750-linux-gnu/gcc-2.95.3-glibc-2.2.2 --with-cpu=750 --with-headers=/opt/cegl-2.0/powerpc-750-linux-gnu/gcc-2.95.3-glibc-2.2.2/powerpc-750-linux-gnu/include --disable-nls --enable-threads=posix --enable-symvers=gnu --enable-__cxa_atexit --enable-languages=c,c++ --enable-shared --enable-c99 --enable-long-long --norecursion

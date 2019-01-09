@@ -1,0 +1,138 @@
+Message-ID: <4282FCBA.3040000@unicontrols.cz>
+Date: Thu, 12 May 2005 08:50:34 +0200
+From: Petr Cvachoucek <cvachoucek@unicontrols.cz>
+To: Dan Kegel <dank@kegel.com>
+CC:  crossgcc@sources.redhat.com
+Subject: Patches to build gcc 3.4.3 / glibc 2.3.5 on cygwin
+
+Hi Dan,
+following patches are needed to build gcc-3.4.3/glibc-2.3.5 toolchain
+on cygwin. Tested to build toolchains for powerpc 604 and 750 targets.
+
+[Without this,] the build fails when building final gcc.
+The basename gets called without arguments, due to $(STAGE_PREFIX)
+being empty. Hope this patch doesn't broke something other. 
+
+[Here is the error message:]
+
+basename: missing operand
+Try `basename --help' for more information.
+mv: `libgcc_s_nof.so.1' and `libgcc_s_nof.so.1.' are the same file
+make[2]: *** [nof/libgcc_s_nof.so] Error 1
+make[2]: Leaving directory `/home/cvachoucek/crosstool-0.32/build/powerpc-750-linux-gnu/gcc-3.4.3-glibc-2.3.5/build-gcc/gcc'
+
+
+-- 
+                     Petr Cvachoucek
+                     Unicontrols a.s.
+                     http://www.unicontrols.cz
+
+
+diff -aur gcc-3.4.3-cygwin/gcc/config/alpha/t-osf4 gcc-3.4.3/gcc/config/alpha/t-osf4
+--- gcc-3.4.3-cygwin/gcc/config/alpha/t-osf4	2004-10-18 18:00:48.000000000 +0200
++++ gcc-3.4.3/gcc/config/alpha/t-osf4	2005-05-11 14:45:33.875000000 +0200
+@@ -19,7 +19,7 @@
+ 	-o $(SHLIB_NAME).tmp @multilib_flags@ $(SHLIB_OBJS) -lc && \
+ 	rm -f $(SHLIB_SONAME) && \
+ 	if [ -f $(SHLIB_NAME) ]; then \
+-	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).`basename $(STAGE_PREFIX)`; \
++	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIB_NAME).tmp $(SHLIB_NAME) && \
+ 	$(LN_S) $(SHLIB_NAME) $(SHLIB_SONAME)
+diff -aur gcc-3.4.3-cygwin/gcc/config/arm/t-netbsd gcc-3.4.3/gcc/config/arm/t-netbsd
+--- gcc-3.4.3-cygwin/gcc/config/arm/t-netbsd	2004-10-18 18:00:49.000000000 +0200
++++ gcc-3.4.3/gcc/config/arm/t-netbsd	2005-05-11 14:45:52.312500000 +0200
+@@ -14,7 +14,7 @@
+ 	-o $(SHLIB_NAME).tmp @multilib_flags@ $(SHLIB_OBJS) -lc && \
+ 	rm -f $(SHLIB_SONAME) && \
+ 	if [ -f $(SHLIB_NAME) ]; then \
+-	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).`basename $(STAGE_PREFIX)`; \
++	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIB_NAME).tmp $(SHLIB_NAME) && \
+ 	$(LN_S) $(SHLIB_NAME) $(SHLIB_SONAME)
+diff -aur gcc-3.4.3-cygwin/gcc/config/mips/t-iris5-6 gcc-3.4.3/gcc/config/mips/t-iris5-6
+--- gcc-3.4.3-cygwin/gcc/config/mips/t-iris5-6	2004-10-18 18:00:51.000000000 +0200
++++ gcc-3.4.3/gcc/config/mips/t-iris5-6	2005-05-11 14:46:10.328125000 +0200
+@@ -12,7 +12,7 @@
+ 	-o $(SHLIB_NAME).tmp @multilib_flags@ $(SHLIB_OBJS) -lc && \
+ 	rm -f $(SHLIB_SOLINK) && \
+ 	if [ -f $(SHLIB_NAME) ]; then \
+-	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).`basename $(STAGE_PREFIX)`; \
++	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIB_NAME).tmp $(SHLIB_NAME) && \
+ 	$(LN_S) $(SHLIB_NAME) $(SHLIB_SOLINK)
+diff -aur gcc-3.4.3-cygwin/gcc/config/pa/t-hpux-shlib gcc-3.4.3/gcc/config/pa/t-hpux-shlib
+--- gcc-3.4.3-cygwin/gcc/config/pa/t-hpux-shlib	2004-10-18 18:00:51.000000000 +0200
++++ gcc-3.4.3/gcc/config/pa/t-hpux-shlib	2005-05-11 14:46:33.531250000 +0200
+@@ -8,7 +8,7 @@
+ 	-o $(SHLIB_NAME).tmp @multilib_flags@ $(SHLIB_OBJS) -lc && \
+         rm -f $(SHLIB_SONAME) && \
+ 	if [ -f $(SHLIB_NAME) ]; then \
+-	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).`basename $(STAGE_PREFIX)`; \
++	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIB_NAME).tmp $(SHLIB_NAME) && \
+         $(LN_S) $(SHLIB_NAME) $(SHLIB_SONAME)
+diff -aur gcc-3.4.3-cygwin/gcc/config/sh/t-linux gcc-3.4.3/gcc/config/sh/t-linux
+--- gcc-3.4.3-cygwin/gcc/config/sh/t-linux	2004-10-18 18:00:52.000000000 +0200
++++ gcc-3.4.3/gcc/config/sh/t-linux	2005-05-11 14:46:49.765625000 +0200
+@@ -25,7 +25,7 @@
+ 	-o $(SHLIB_NAME).tmp @multilib_flags@ $(SHLIB_OBJS) $(SHLIB_LC) && \
+ 	rm -f $(SHLIB_SOLINK) && \
+ 	if [ -f $(SHLIB_NAME) ]; then \
+-	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).`basename $(STAGE_PREFIX)`; \
++	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIB_NAME).tmp $(SHLIB_NAME) && \
+ 	(echo "/* GNU ld script"; \
+diff -aur gcc-3.4.3-cygwin/gcc/config/t-libunwind-elf gcc-3.4.3/gcc/config/t-libunwind-elf
+--- gcc-3.4.3-cygwin/gcc/config/t-libunwind-elf	2004-10-18 18:00:47.000000000 +0200
++++ gcc-3.4.3/gcc/config/t-libunwind-elf	2005-05-11 14:47:10.109375000 +0200
+@@ -15,7 +15,7 @@
+ 	rm -f $(SHLIB_SOLINK) && \
+ 	if [ -f $(SHLIBUNWIND_NAME) ]; then \
+ 	  mv -f $(SHLIBUNWIND_NAME) \
+-	     $(SHLIBUNWIND_NAME).`basename $(STAGE_PREFIX)`; \
++	     $(SHLIBUNWIND_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIBUNWIND_NAME).tmp $(SHLIBUNWIND_NAME) && \
+ 	$(LN_S) $(SHLIBUNWIND_NAME) $(SHLIB_SOLINK)
+diff -aur gcc-3.4.3-cygwin/gcc/config/t-slibgcc-darwin gcc-3.4.3/gcc/config/t-slibgcc-darwin
+--- gcc-3.4.3-cygwin/gcc/config/t-slibgcc-darwin	2004-10-18 18:00:47.000000000 +0200
++++ gcc-3.4.3/gcc/config/t-slibgcc-darwin	2005-05-11 14:47:34.265625000 +0200
+@@ -17,7 +17,7 @@
+ 	@multilib_flags@ $(SHLIB_OBJS) -lc && \
+ 	rm -f $(SHLIB_SOLINK) && \
+ 	if [ -f $(SHLIB_NAME) ]; then \
+-	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).`basename $(STAGE_PREFIX)`; \
++	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIB_NAME).tmp $(SHLIB_NAME) && \
+ 	$(LN_S) $(SHLIB_NAME) $(SHLIB_SOLINK)
+diff -aur gcc-3.4.3-cygwin/gcc/config/t-slibgcc-elf-ver gcc-3.4.3/gcc/config/t-slibgcc-elf-ver
+--- gcc-3.4.3-cygwin/gcc/config/t-slibgcc-elf-ver	2004-10-18 18:00:47.000000000 +0200
++++ gcc-3.4.3/gcc/config/t-slibgcc-elf-ver	2005-05-11 14:47:59.359375000 +0200
+@@ -17,7 +17,7 @@
+ 	-o $(SHLIB_NAME).tmp @multilib_flags@ $(SHLIB_OBJS) $(SHLIB_LC) && \
+ 	rm -f $(SHLIB_SOLINK) && \
+ 	if [ -f $(SHLIB_NAME) ]; then \
+-	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).`basename $(STAGE_PREFIX)`; \
++	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIB_NAME).tmp $(SHLIB_NAME) && \
+ 	$(LN_S) $(SHLIB_NAME) $(SHLIB_SOLINK)
+diff -aur gcc-3.4.3-cygwin/gcc/config/t-slibgcc-sld gcc-3.4.3/gcc/config/t-slibgcc-sld
+--- gcc-3.4.3-cygwin/gcc/config/t-slibgcc-sld	2004-10-18 18:00:47.000000000 +0200
++++ gcc-3.4.3/gcc/config/t-slibgcc-sld	2005-05-11 14:48:25.968750000 +0200
+@@ -14,7 +14,7 @@
+ 	@multilib_flags@ $(SHLIB_OBJS) -lc && \
+ 	rm -f $(SHLIB_SOLINK) && \
+ 	if [ -f $(SHLIB_NAME) ]; then \
+-	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).`basename $(STAGE_PREFIX)`; \
++	  mv -f $(SHLIB_NAME) $(SHLIB_NAME).backup; \
+ 	else true; fi && \
+ 	mv $(SHLIB_NAME).tmp $(SHLIB_NAME) && \
+ 	$(LN_S) $(SHLIB_NAME) $(SHLIB_SOLINK)

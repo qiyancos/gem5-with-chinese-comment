@@ -1,0 +1,19 @@
+*** crosstool-0.31-srpm/crosstool.spec.in	2005-04-22 11:35:28.000000000 +0800
+--- crosstool-0.31/crosstool.spec.in	2005-04-25 16:52:12.000000000 +0800
+***************
+*** 125,131 ****
+      find $PREFIX/$foo -type f -not -name '*.o' -print
+    done | xargs file | grep 'ELF.*, dynamically linked.*not stripped' | sed 's/: .*//' | xargs --no-run-if-empty strip
+  
+!   EXCEPTIONS="ar as gcc ld nm ranlib strip"
+    for file in $EXCEPTIONS; do
+      file $PREFIX/$TARGET/bin/$file
+    done | grep 'ELF.*, dynamically linked.*not stripped' | sed 's/: .*//' | xargs --no-run-if-empty strip
+--- 133,139 ----
+      find $PREFIX/$foo -type f -not -name '*.o' -print
+    done | xargs file | grep 'ELF.*, dynamically linked.*not stripped' | sed 's/: .*//' | xargs --no-run-if-empty strip
+  
+!   EXCEPTIONS="ar as c++ gcc ld nm ranlib strip"
+    for file in $EXCEPTIONS; do
+      file $PREFIX/$TARGET/bin/$file
+    done | grep 'ELF.*, dynamically linked.*not stripped' | sed 's/: .*//' | xargs --no-run-if-empty strip

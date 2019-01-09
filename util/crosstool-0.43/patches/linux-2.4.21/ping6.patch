@@ -1,0 +1,36 @@
+--- linux-2.4.21/include/linux/ipv6.h.old	Thu Nov 22 11:47:11 2001
++++ linux-2.4.21/include/linux/ipv6.h	Thu Oct 16 16:26:15 2003
+@@ -14,12 +14,12 @@
+  *	*under construction*
+  */
+ 
+-
++#ifdef __KERNEL__	/* already defined by netinet/in.h for userspace */
+ struct in6_pktinfo {
+ 	struct in6_addr	ipi6_addr;
+ 	int		ipi6_ifindex;
+ };
+-
++#endif
+ 
+ struct in6_ifreq {
+ 	struct in6_addr	ifr6_addr;
+--- linux-2.4.21/include/linux/in6.h.old	Fri Jun 13 07:51:38 2003
++++ linux-2.4.21/include/linux/in6.h	Thu Oct 16 16:27:24 2003
+@@ -26,7 +26,7 @@
+ /*
+  *	IPv6 address structure
+  */
+-
++#ifdef __KERNEL__	/* already defined by netinet/in.h for userspace */
+ struct in6_addr
+ {
+ 	union 
+@@ -64,6 +64,7 @@
+ 	/* local IPv6 address of interface */
+ 	int		ipv6mr_ifindex;
+ };
++#endif
+ 
+ #define ipv6mr_acaddr	ipv6mr_multiaddr
+ 

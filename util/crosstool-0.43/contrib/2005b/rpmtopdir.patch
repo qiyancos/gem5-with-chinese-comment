@@ -1,0 +1,102 @@
+diff -uNr crosstool-0.38-orig/buildrpms.sh crosstool-0.38/buildrpms.sh
+--- crosstool-0.38-orig/buildrpms.sh	2005-07-13 02:21:40.000000000 +0800
++++ crosstool-0.38/buildrpms.sh	2005-08-08 18:19:25.000000000 +0800
+@@ -10,6 +10,8 @@
+ # (http://www.fedoraproject.org/wiki/fedora_2drpmdevtools)
+ # and use fedora-buildrpmtree to set up your ~/.rpmrc and rpmbuild directory
+ 
++RPM_TOPDIR=`rpm --showrc|awk '/_topdir/ {if ($2 == "_topdir") print $3}'`
++
+ set -ex
+ #tar -xzvf crosstool-0.38.tar.gz
+ TOOLCOMBOS="gcc-3.4.3-glibc-2.2.2" 
+@@ -17,8 +19,8 @@
+ sh crosstool-0.38/buildsrpms.sh 
+ mkdir -p result
+ for toolcombo in $TOOLCOMBOS; do
+-   cp rpmbuild/SRPMS/crosstool-$toolcombo*.src.rpm result
++   cp $RPM_TOPDIR/SRPMS/crosstool-$toolcombo*.src.rpm result
+    rpm -i result/crosstool-$toolcombo*.src.rpm
+-   rpmbuild -bb  rpmbuild/SPECS/crosstool-$toolcombo*.spec --without all --with i686 
+-   cp rpmbuild/RPMS/*/crosstool-$toolcombo*.rpm result
++   rpmbuild -bb  $RPM_TOPDIR/SPECS/crosstool-$toolcombo*.spec --without all --with i686 
++   cp $RPM_TOPDIR/RPMS/*/crosstool-$toolcombo*.rpm result
+ done
+diff -uNr crosstool-0.38-orig/buildsrpms.sh crosstool-0.38/buildsrpms.sh
+--- crosstool-0.38-orig/buildsrpms.sh	2005-07-14 04:12:27.000000000 +0800
++++ crosstool-0.38/buildsrpms.sh	2005-08-08 18:22:41.000000000 +0800
+@@ -21,6 +21,8 @@
+ #FIXME: CROSSTOOLVERSION needs to be updated every time crosstool's version changes, ewww
+ CROSSTOOLVERSION=0.38
+ 
++RPM_TOPDIR=`rpm --showrc|awk '/_topdir/ {if ($2 == "_topdir") print $3}'`
++
+ # Edit this line to specify which toolchain combos to build specfiles for
+ # Or override the environment variable (see rerpm.sh for example)
+ TOOLCOMBOS=${TOOLCOMBOS-"\
+@@ -42,10 +44,10 @@
+ test -f crosstool-$CROSSTOOLVERSION.tar.gz || abort "Can't find crosstool-$CROSSTOOLVERSION.tar.gz"
+ test -f crosstool-$CROSSTOOLVERSION/crosstool.sh || abort "Can't find crosstool-$CROSSTOOLVERSION/crosstool.sh; please unpack crosstool-$CROSSTOOLVERSION.tar.gz"
+ 
+-rm -rf rpmbuild
+-mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS,tmp}
++# make any RPM directories that might be missing; uses install rather than "mkdir -p" due to my personal preference.
++for i in $RPM_TOPDIR/{BUILD,RPMS,SOURCES,SPECS,SRPMS,tmp}; do test -d $i || install -dm 0755 $i; done
+ 
+-cp crosstool-$CROSSTOOLVERSION.tar.gz rpmbuild/SOURCES/
++cp crosstool-$CROSSTOOLVERSION.tar.gz $RPM_TOPDIR/SOURCES/
+ rm -rf crosstool-$CROSSTOOLVERSION/specs
+ mkdir crosstool-$CROSSTOOLVERSION/specs
+ 
+@@ -99,20 +101,20 @@
+    sed "/__SOURCES__/c\\
+ $SOURCES
+ " | 
+-    perl crosstool-$CROSSTOOLVERSION/expandForLoop.pl crosstool-$CROSSTOOLVERSION > rpmbuild/SPECS/crosstool-$TOOLCOMBO.spec
++    perl crosstool-$CROSSTOOLVERSION/expandForLoop.pl crosstool-$CROSSTOOLVERSION > $RPM_TOPDIR/SPECS/crosstool-$TOOLCOMBO.spec
+ 
+   # Save the specfile in the crosstool directory for posterity
+   # (not directly useful, since it's hard to build without the tarballs,
+   # but the curious may find them interesting)
+-  cp rpmbuild/SPECS/crosstool-$TOOLCOMBO.spec crosstool-$CROSSTOOLVERSION/specs
++  cp $RPM_TOPDIR/SPECS/crosstool-$TOOLCOMBO.spec crosstool-$CROSSTOOLVERSION/specs
+ 
+   # Build the .srpm 
+   # Specify --without all so none of the subpackages are built
+-  cp build/tarballs-$TOOLCOMBO/* rpmbuild/SOURCES
++  cp build/tarballs-$TOOLCOMBO/* $RPM_TOPDIR/SOURCES
+   #rpmbuild -ba rpmbuild/SPECS/crosstool-$TOOLCOMBO.spec --without all
+-  rpmbuild -ba rpmbuild/SPECS/crosstool-$TOOLCOMBO.spec --define "_without_all --without-all"
++  rpmbuild -ba $RPM_TOPDIR/SPECS/crosstool-$TOOLCOMBO.spec --define "_without_all --without-all"
+ done
+ 
+-echo SRPMS are in rpmbuild/SRPMS:
+-ls -l rpmbuild/SRPMS
++echo SRPMS are in $RPM_TOPDIR/SRPMS:
++ls -l $RPM_TOPDIR/SRPMS
+ 
+diff -uNr crosstool-0.38-orig/rerpm.sh crosstool-0.38/rerpm.sh
+--- crosstool-0.38-orig/rerpm.sh	2005-07-13 02:21:40.000000000 +0800
++++ crosstool-0.38/rerpm.sh	2005-08-08 18:23:15.000000000 +0800
+@@ -11,6 +11,8 @@
+ #gcc-3.4.3-glibc-2.2.2 \
+ export TOOLCOMBOS
+ 
++RPM_TOPDIR=`rpm --showrc|awk '/_topdir/ {if ($2 == "_topdir") print $3}'`
++
+ WANT_CPUS="\
+ i686 \
+ "
+@@ -23,10 +25,10 @@
+ sh crosstool-0.38/buildsrpms.sh 
+ 
+ for TOOLCOMBO in $TOOLCOMBOS; do
+-  cp rpmbuild/SRPMS/crosstool-$TOOLCOMBO-0.38-1.src.rpm .
++  cp $RPM_TOPDIR/SRPMS/crosstool-$TOOLCOMBO-0.38-1.src.rpm .
+   rpm -i crosstool-$TOOLCOMBO-0.38-1.src.rpm 
+ 
+-  rpmbuild -bb rpmbuild/SPECS/crosstool-$TOOLCOMBO.spec
++  rpmbuild -bb $RPM_TOPDIR/SPECS/crosstool-$TOOLCOMBO.spec
+ done
+ 
+ # Oh, yeah: crosstool-common.  The runt.  Only there so

@@ -1,0 +1,34 @@
+--- include/asm-ppc64/paca.h.orig	2005-04-04 03:39:48.576951465 +0200
++++ include/asm-ppc64/paca.h	2005-04-04 03:42:17.970090549 +0200
+@@ -22,7 +22,6 @@
+ #include	<asm/iSeries/ItLpRegSave.h>
+ #include	<asm/mmu.h>
+ 
+-extern struct paca_struct paca[];
+ register struct paca_struct *local_paca asm("r13");
+ #define get_paca()	local_paca
+ 
+@@ -115,4 +114,6 @@
+ #endif
+ };
+ 
++extern struct paca_struct paca[];
++
+ #endif /* _PPC64_PACA_H */
+--- include/asm-m68k/setup.h.orig	2005-04-04 03:38:34.249350160 +0200
++++ include/asm-m68k/setup.h	2005-04-04 03:39:33.945211078 +0200
+@@ -362,12 +362,13 @@
+ #ifndef __ASSEMBLY__
+ extern int m68k_num_memory;		/* # of memory blocks found (and used) */
+ extern int m68k_realnum_memory;		/* real # of memory blocks found */
+-extern struct mem_info m68k_memory[NUM_MEMINFO];/* memory description */
+ 
+ struct mem_info {
+ 	unsigned long addr;		/* physical address of memory chunk */
+ 	unsigned long size;		/* length of memory chunk (in bytes) */
+ };
++
++extern struct mem_info m68k_memory[NUM_MEMINFO]; /* memory description */
+ #endif
+ 
+ #endif /* __KERNEL__ */

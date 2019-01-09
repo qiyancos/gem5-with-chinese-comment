@@ -1,0 +1,245 @@
+LAST_UPDATED: gcc-3.4-20030813
+
+Target is sh4-unknown-linux-gnu
+Host   is i686-host_pc-linux-gnu
+
+		=== g++ tests ===
+
+
+Running target sh4-unknown-linux-gnu
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -g  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -g  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -g  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O0  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O1  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O2  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O2  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O2  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O3  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O3  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O3  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -O3 -g  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -O3 -g  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -O3 -g  -fbranch-probabilities
+FAIL: g++.dg/bprob/g++-bprob-1.C execution: file g++-bprob-1.gcda does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: g++.dg/bprob/g++-bprob-1.C execution,    -Os  -fbranch-probabilities
+FAIL: g++.dg/ext/pretty1.C scan-assembler top level
+FAIL: g++.dg/ext/pretty2.C (test for excess errors)
+WARNING: g++.dg/ext/pretty2.C compilation failed to produce executable
+FAIL: g++.dg/ext/stmtexpr1.C (test for excess errors)
+WARNING: g++.dg/ext/stmtexpr1.C compilation failed to produce executable
+FAIL: g++.dg/init/array10.C (test for excess errors)
+WARNING: g++.old-deja/g++.mike/p10769a.C compilation failed to produce executable
+WARNING: g++.old-deja/g++.other/enum5.C compilation failed to produce executable
+XPASS: g++.old-deja/g++.other/init5.C execution test
+WARNING: g++.old-deja/g++.pt/friend44.C compilation failed to produce executable
+
+		=== g++ Summary ===
+
+# of expected passes		8785
+# of unexpected failures	11
+# of unexpected successes	1
+# of expected failures		64
+# of unresolved testcases	14
+# of unsupported tests		66
+/home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.21/build/sh4-unknown-linux-gnu/gcc-3.4-20030813-glibc-2.3.2/build-gcc/gcc/testsuite/../g++ version 3.4 20030813 (experimental)
+
+Host   is i686-host_pc-linux-gnu
+
+		=== gcc tests ===
+
+
+Running target sh4-unknown-linux-gnu
+WARNING: program timed out.
+FAIL: gcc.c-torture/compile/20001226-1.c (test for excess errors)
+WARNING: program timed out.
+FAIL: gcc.c-torture/compile/20001226-1.c (test for excess errors)
+WARNING: program timed out.
+FAIL: gcc.c-torture/compile/20001226-1.c (test for excess errors)
+WARNING: program timed out.
+FAIL: gcc.c-torture/compile/20001226-1.c (test for excess errors)
+WARNING: program timed out.
+FAIL: gcc.c-torture/compile/20001226-1.c (test for excess errors)
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O1 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O1 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O2 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O2 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O3 -fomit-frame-pointer 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O3 -fomit-frame-pointer 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -O3 -g 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -O3 -g 
+FAIL: gcc.c-torture/execute/20020720-1.c compilation,  -Os 
+UNRESOLVED: gcc.c-torture/execute/20020720-1.c execution,  -Os 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -O1 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -O2 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -O3 -fomit-frame-pointer 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -O3 -g 
+FAIL: gcc.c-torture/execute/20030125-1.c execution,  -Os 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O1 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O2 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O3 -fomit-frame-pointer 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O3 -fomit-frame-pointer -funroll-loops 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O3 -fomit-frame-pointer -funroll-all-loops -finline-functions 
+FAIL: gcc.c-torture/execute/string-opt-9.c execution,  -O3 -g 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O0 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O1 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O2 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O3 -fomit-frame-pointer 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -O3 -g 
+UNRESOLVED: gcc.c-torture/execute/wchar_t-1.c execution,  -Os 
+FAIL: gcc.dg/compat/vector-2 c_compat_x_tst.o compile
+FAIL: gcc.dg/compat/vector-2 c_compat_y_tst.o compile
+UNRESOLVED: gcc.dg/compat/vector-2 c_compat_x_tst.o-c_compat_y_tst.o link 
+UNRESOLVED: gcc.dg/compat/vector-2 c_compat_x_tst.o-c_compat_y_tst.o execute 
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/debug/20020327-1.c (test for excess errors)
+FAIL: gcc.dg/builtins-20.c (test for excess errors)
+XPASS: gcc.dg/uninit-4.c uninitialized variable warning (test for bogus messages, line 26)
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -g  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -g  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -g  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O0  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O1  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O2 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O2 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O2 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O3 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O3 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O3 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -O3 -g -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -O3 -g -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -O3 -g -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-1.c execution: file bprob-1.gcda does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-1.c compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-1.c execution,    -Os  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -g  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -g  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -g  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O0  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O0  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O0  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O1  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O1  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O1  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O2 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O2 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O2 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O3 -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O3 -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O3 -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -O3 -g -DPERFTIME  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -O3 -g -DPERFTIME  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -O3 -g -DPERFTIME  -fbranch-probabilities
+FAIL: gcc.misc-tests/bprob-2.c execution: file bprob-2.gcda does not exist,  -Os  -fprofile-arcs
+UNRESOLVED: gcc.misc-tests/bprob-2.c compilation,  -Os  -fbranch-probabilities
+UNRESOLVED: gcc.misc-tests/bprob-2.c execution,    -Os  -fbranch-probabilities
+
+		=== gcc Summary ===
+
+# of expected passes		23601
+# of unexpected failures	56
+# of unexpected successes	1
+# of expected failures		78
+# of unresolved testcases	41
+# of unsupported tests		277
+/home3/dank/wk/ixos/dap_interim/linux/3rdParty/crosstool/crosstool-0.21/build/sh4-unknown-linux-gnu/gcc-3.4-20030813-glibc-2.3.2/build-gcc/gcc/xgcc version 3.4 20030813 (experimental)
+
+Host   is sh4-unknown-linux-gnu
+
+		=== libstdc++ tests ===
+
+
+Running target sh4-unknown-linux-gnu
+FAIL: 27_io/basic_filebuf/close/char/1.cc execution test
+FAIL: 27_io/basic_filebuf/close/char/2.cc execution test
+FAIL: 27_io/basic_filebuf/close/char/4.cc execution test
+FAIL: 27_io/basic_filebuf/imbue/char/2.cc execution test
+FAIL: 27_io/basic_filebuf/imbue/wchar_t/2.cc execution test
+FAIL: 27_io/basic_filebuf/in_avail/char/1.cc execution test
+FAIL: 27_io/basic_filebuf/is_open/char/1.cc execution test
+FAIL: 27_io/basic_filebuf/open/char/1.cc execution test
+FAIL: 27_io/basic_filebuf/open/char/2.cc execution test
+FAIL: 27_io/basic_filebuf/pbackfail/char/9761.cc execution test
+FAIL: 27_io/basic_filebuf/sbumpc/char/1-in.cc execution test
+FAIL: 27_io/basic_filebuf/sbumpc/char/1-io.cc execution test
+FAIL: 27_io/basic_filebuf/sbumpc/char/2-in.cc execution test
+FAIL: 27_io/basic_filebuf/sbumpc/char/2-io.cc execution test
+FAIL: 27_io/basic_filebuf/seekoff/char/1-in.cc execution test
+FAIL: 27_io/basic_filebuf/seekoff/char/1-io.cc execution test
+FAIL: 27_io/basic_filebuf/seekoff/char/2-in.cc execution test
+FAIL: 27_io/basic_filebuf/seekoff/char/2-io.cc execution test
+FAIL: 27_io/basic_filebuf/seekoff/char/3-in.cc execution test
+FAIL: 27_io/basic_filebuf/seekoff/char/3-io.cc execution test
+FAIL: 27_io/basic_filebuf/seekpos/char/1-in.cc execution test
+FAIL: 27_io/basic_filebuf/seekpos/char/1-io.cc execution test
+FAIL: 27_io/basic_filebuf/seekpos/char/2-in.cc execution test
+FAIL: 27_io/basic_filebuf/seekpos/char/2-io.cc execution test
+FAIL: 27_io/basic_filebuf/setbuf/char/1.cc execution test
+FAIL: 27_io/basic_filebuf/setbuf/char/3.cc execution test
+FAIL: 27_io/basic_filebuf/sgetc/char/1-in.cc execution test
+FAIL: 27_io/basic_filebuf/sgetc/char/1-io.cc execution test
+FAIL: 27_io/basic_filebuf/sgetc/char/2-in.cc execution test
+FAIL: 27_io/basic_filebuf/sgetc/char/2-io.cc execution test
+FAIL: 27_io/basic_filebuf/sgetn/char/1-in.cc execution test
+FAIL: 27_io/basic_filebuf/sgetn/char/1-io.cc execution test
+FAIL: 27_io/basic_filebuf/sgetn/char/2-in.cc execution test
+FAIL: 27_io/basic_filebuf/sgetn/char/2-io.cc execution test
+FAIL: 27_io/basic_filebuf/sgetn/char/3.cc execution test
+FAIL: 27_io/basic_filebuf/snextc/char/1-in.cc execution test
+FAIL: 27_io/basic_filebuf/snextc/char/1-io.cc execution test
+FAIL: 27_io/basic_filebuf/snextc/char/2-in.cc execution test
+FAIL: 27_io/basic_filebuf/snextc/char/2-io.cc execution test
+FAIL: 27_io/basic_filebuf/sputbackc/char/1-in.cc execution test
+FAIL: 27_io/basic_filebuf/sputbackc/char/2-in.cc execution test
+FAIL: 27_io/basic_filebuf/sungetc/char/1-in.cc execution test
+FAIL: 27_io/basic_filebuf/sungetc/char/2-in.cc execution test
+FAIL: 27_io/basic_filebuf/underflow/10096.cc execution test
+FAIL: 27_io/basic_ifstream/cons/char/1.cc execution test
+FAIL: 27_io/basic_ifstream/open/char/1.cc execution test
+FAIL: 27_io/basic_istream/extractors_other/char/2.cc execution test
+FAIL: 27_io/basic_istream/get/char/2.cc execution test
+FAIL: 27_io/basic_istream/readsome/char/6746-2.cc execution test
+FAIL: 27_io/basic_istream/seekg/char/fstream.cc execution test
+FAIL: 27_io/basic_istream/seekg/char/sstream.cc execution test
+FAIL: 27_io/basic_istream/tellg/char/1.cc execution test
+FAIL: 27_io/basic_istream/tellg/char/fstream.cc execution test
+FAIL: 27_io/basic_istream/tellg/char/sstream.cc execution test
+FAIL: 27_io/basic_ostream/inserters_other/char/1.cc execution test
+FAIL: 27_io/objects/char/10.cc execution test
+FAIL: 27_io/objects/char/9.cc execution test
+FAIL: thread/pthread6.cc execution test
+
+		=== libstdc++ Summary ===
+
+# of expected passes		2029
+# of unexpected failures	58
+# of expected failures		10
+
+Compiler version: 3.4 20030813 (experimental) 
+Platform: sh4-unknown-linux-gnu
+configure flags: --target=sh4-unknown-linux-gnu --host=i686-host_pc-linux-gnu --prefix=/opt/cegl-2.0/sh4-unknown-linux-gnu/gcc-3.4-20030813-glibc-2.3.2 --with-headers=/opt/cegl-2.0/sh4-unknown-linux-gnu/gcc-3.4-20030813-glibc-2.3.2/sh4-unknown-linux-gnu/include --disable-nls --enable-threads=posix --enable-symvers=gnu --enable-__cxa_atexit --enable-languages=c,c++ --enable-shared --enable-c99 --enable-long-long

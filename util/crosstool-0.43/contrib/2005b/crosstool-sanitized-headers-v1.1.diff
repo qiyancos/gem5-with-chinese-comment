@@ -1,0 +1,142 @@
+diff -uNr crosstool-0.30.orig/all.sh crosstool-0.30/all.sh
+--- crosstool-0.30.orig/all.sh	2005-03-08 00:34:32.000000000 +0000
++++ crosstool-0.30/all.sh	2005-04-26 15:40:12.000000000 +0100
+@@ -19,7 +19,11 @@
+ 
+ # When building a cygwin target LINUX_DIR and GLIBC_DIR are not needed.
+ if test "${CYGWIN_DIR}" = ""; then
+-  test -z "${LINUX_DIR}"        && abort "Please set LINUX_DIR to the bare filename of the kernel tarball or directory"
++  if test -z "${LINUX_SANITIZED_HEADER_DIR}" ; then
++	test -z "${LINUX_DIR}"        && abort "Please set either LINUX_DIR or LINUX_SANITIZED_HEADER_DIR to the bare filename of the tarball or directory containing the kernel headers"
++  else
++	test -n "${LINUX_DIR}"        && echo "You set both LINUX_DIR and LINUX_SANITIZED_HEADER_DIR - ignoring LINUX_DIR for the build"
++  fi
+   test -z "${GLIBC_DIR}"        && abort "Please set GLIBC_DIR to the bare filename of the glibc tarball or directory"
+ fi
+ 
+@@ -65,10 +69,10 @@
+ PREFIX=${PREFIX-$RESULT_TOP/$TARGET/$TOOLCOMBO}
+ 
+ export TOOLCOMBO
+-export PREFIX
++export PREFIX=`cd ${PREFIX};pwd`
+ export BUILD_DIR
+-export SRC_DIR
+-export TARBALLS_DIR
++export SRC_DIR=`cd ${SRC_DIR};pwd`
++export TARBALLS_DIR=`cd ${TARBALLS_DIR};pwd`
+ export TOP_DIR
+ 
+ # Download/unpack/patch tarballs, if desired
+diff -uNr crosstool-0.30.orig/crosstool.sh crosstool-0.30/crosstool.sh
+--- crosstool-0.30.orig/crosstool.sh	2005-03-24 07:13:14.000000000 +0000
++++ crosstool-0.30/crosstool.sh	2005-04-26 15:40:56.000000000 +0100
+@@ -25,9 +25,16 @@
+ test -z "${BINUTILS_DIR}"     && abort "Please set BINUTILS_DIR to the bare filename of the binutils tarball or directory"
+ test -z "${GCC_DIR}"          && abort "Please set GCC_DIR to the bare filename of the gcc tarball or directory"
+ test -z "${GLIBC_DIR}"        && abort "Please set GLIBC_DIR to the bare filename of the glibc tarball or directory"
+-test -z "${LINUX_DIR}"        && abort "Please set LINUX_DIR to the bare filename of the kernel tarball or directory"
+ test -z "${TARGET}"           && abort "Please set TARGET to the Gnu target identifier (e.g. pentium-linux)"
+ test -z "${TARGET_CFLAGS}"    && abort "Please set TARGET_CFLAGS to any compiler flags needed when building glibc (-O recommended)"
++if test -z "${LINUX_SANITIZED_HEADER_DIR}" ; then
++	test -z "${LINUX_DIR}"        && abort "Please set either LINUX_DIR or LINUX_SANITIZED_HEADER_DIR to the bare filename of the tarball or directory containing the kernel headers"
++	LINUX_HEADER_DIR="${LINUX_DIR}"
++else
++	test -n "${LINUX_DIR}"        && echo "You set both LINUX_DIR and LINUX_SANITIZED_HEADER_DIR - ignoring LINUX_DIR"
++	LINUX_HEADER_DIR="${LINUX_SANITIZED_HEADER_DIR}"
++fi
++
+ 
+ # Seventeen or so are optional
+ test -z "${BINUTILS_EXTRA_CONFIG}" && echo "BINUTILS_EXTRA_CONFIG not set, so not passing any extra options to binutils' configure script"
+@@ -142,7 +149,7 @@
+ SRC_DIR=`cd $SRC_DIR; pwd`
+ BINUTILS_DIR=`cd ${SRC_DIR}/${BINUTILS_DIR}; pwd`
+ GCC_DIR=`cd ${SRC_DIR}/${GCC_DIR}; pwd`
+-LINUX_DIR=`cd ${SRC_DIR}/${LINUX_DIR}; pwd`
++LINUX_HEADER_DIR=`cd ${SRC_DIR}/${LINUX_HEADER_DIR}; pwd`
+ GLIBC_DIR=`cd ${SRC_DIR}/${GLIBC_DIR}; pwd`
+ 
+ # If user isn't doing a canadian cross, add the target compiler's bin to
+@@ -194,9 +201,18 @@
+ echo "Building for --target=$TARGET, --prefix=$PREFIX"
+ 
+ #---------------------------------------------------------
+-echo Prepare kernel headers
++# Use sanitized headers, if available
++if test -z "$LINUX_SANITIZED_HEADER_DIR" ; then
++	echo Prepare kernel headers
++else
++	echo Copy sanitized headers
++fi
+ 
+-cd $LINUX_DIR
++cd $LINUX_HEADER_DIR
++mkdir -p $HEADERDIR
++
++# no indentation for now because indentation levels are rising too high
++if test -z "$LINUX_SANITIZED_HEADER_DIR" ; then
+ 
+ if test -f "$KERNELCONFIG" ; then
+     cp $KERNELCONFIG .config
+@@ -206,8 +222,8 @@
+ fi
+ 
+ # autodetect kernel version from contents of Makefile
+-KERNEL_VERSION=`awk '/^VERSION =/ { print $3 }' $LINUX_DIR/Makefile`
+-KERNEL_PATCHLEVEL=`awk '/^PATCHLEVEL =/ { print $3 }' $LINUX_DIR/Makefile`
++KERNEL_VERSION=`awk '/^VERSION =/ { print $3 }' $LINUX_HEADER_DIR/Makefile`
++KERNEL_PATCHLEVEL=`awk '/^PATCHLEVEL =/ { print $3 }' $LINUX_HEADER_DIR/Makefile`
+ 
+ case "$KERNEL_VERSION.$KERNEL_PATCHLEVEL.x" in
+ 2.2.x|2.4.x) make ARCH=$ARCH symlinks    include/linux/version.h
+@@ -225,7 +241,7 @@
+                          # Note that glibc ignores all -I flags passed in CFLAGS,
+                          # so you have to use -isystem.
+                          make ARCH=$ARCH include/asm include/linux/version.h
+-                         TARGET_CFLAGS="$TARGET_CFLAGS -isystem $LINUX_DIR/include/asm-mips/mach-generic"
++                         TARGET_CFLAGS="$TARGET_CFLAGS -isystem $LINUX_HEADER_DIR/include/asm-mips/mach-generic"
+                          ;;
+              *)          make ARCH=$ARCH include/asm include/linux/version.h
+                          ;;
+@@ -233,11 +249,12 @@
+              ;;
+ *)           abort "Unsupported kernel version $KERNEL_VERSION.$KERNEL_PATCHLEVEL"
+ esac
++cp -r include/asm-generic $HEADERDIR/asm-generic
++
++fi # test -z "$LINUX_SANITIZED_HEADER_DIR"
+ 
+-mkdir -p $HEADERDIR
+ cp -r include/linux $HEADERDIR
+ cp -r include/asm-${ARCH} $HEADERDIR/asm
+-cp -r include/asm-generic $HEADERDIR/asm-generic
+ 
+ cd $BUILD_DIR
+ 
+diff -uNr crosstool-0.30.orig/getandpatch.sh crosstool-0.30/getandpatch.sh
+--- crosstool-0.30.orig/getandpatch.sh	2005-03-20 07:43:59.000000000 +0000
++++ crosstool-0.30/getandpatch.sh	2005-04-26 15:40:12.000000000 +0100
+@@ -19,7 +19,8 @@
+ # When building a cygwin target the following are not needed.
+ if test "${CYGWIN_DIR}" = ""; then
+   test -z "${GLIBC_DIR}"        && abort "Please set GLIBC_DIR to the bare filename of the glibc tarball or directory"
+-  test -z "${LINUX_DIR}"        && abort "Please set LINUX_DIR to the bare filename of the kernel tarball or directory"
++  test -z "${LINUX_SANITIZED_HEADER_DIR}" && echo "Not downloading linux-libc-headers. Set LINUX_SANITIZED_HEADER_DIR to do so"
++  test -z "${LINUX_DIR}"        && echo "Not downloading kernel sources. Set LINUX_DIR if you want to do so"
+   # And one is derived.
+   GLIBCTHREADS_FILENAME=`echo $GLIBC_DIR | sed 's/glibc-/glibc-linuxthreads-/'`
+ fi
+@@ -201,8 +202,11 @@
+   case $LINUX_DIR in
+     *2.4*) getUnpackAndPatch http://www.kernel.org/pub/linux/kernel/v2.4/$LINUX_DIR.tar.bz2 http://www.kernel.org/pub/linux/kernel/v2.4/$LINUX_DIR.tar.gz ;;
+     *2.6*) getUnpackAndPatch http://www.kernel.org/pub/linux/kernel/v2.6/$LINUX_DIR.tar.bz2 http://www.kernel.org/pub/linux/kernel/v2.6/$LINUX_DIR.tar.gz ;;
++    "") ;;
+     *) abort "unknown version $LINUX_DIR of linux, expected 2.4 or 2.6 in name?" ;;
+   esac
++  # Fetch linux-libc-headers, if requested
++  test -n "${LINUX_SANITIZED_HEADER_DIR}" && getUnpackAndPatch    http://ep09.pld-linux.org/~mmazur/linux-libc-headers/${LINUX_SANITIZED_HEADER_DIR}.tar.bz2
+   # Glibc addons must come after glibc
+   getUnpackAndPatch     ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCTHREADS_FILENAME.tar.bz2 ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCTHREADS_FILENAME.tar.gz
+   test x$GLIBCCRYPT_FILENAME = x || getUnpackAndPatch     ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCCRYPT_FILENAME.tar.gz ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCCRYPT_FILENAME.tar.bz2
+

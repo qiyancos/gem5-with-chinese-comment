@@ -1,0 +1,783 @@
+I've converted the glibc-2.3.5 patches to work against 2.3.6.
+Here are how the individual 2.3.5 patches fared:
+Legend:
+ y = applied cleanly
+ FAIL = all hunks failed - patch NOT brought forward by me.
+ REV = patch reported as a reverse patch, so it must have gone upstream
+ y/offs = applied with an offset
+ 1/6 = one hunk out of 6 succeeded (the rest have been fixed upstream)
+
+y	arm-ctl_bus_isa.patch
+y	glibc-20040822-s390-sysdep_inc.patch
+1/6 	glibc-2.3.4-allow-gcc-4.0-arm.patch
+FAIL	glibc-2.3.4-allow-gcc-4.0-elf.patch
+REV	glibc-2.3.4-allow-gcc-4.0-iconvdata.patch
+FAIL	glibc-2.3.4-allow-gcc-4.0-powerpc32.patch
+FAIL	glibc-2.3.4-allow-gcc-4.0-powerpc64.patch
+REV	glibc-2.3.4-allow-gcc-4.0-powerpc-procfs.patch
+y	glibc-2.3.5-allow-gcc-4.0-wordexp.patch
+REV	glibc-2.3.5-allow-gcc4-string.patch
+REV	glibc-2.3.5-allow-gcc4-symbols.patch
+y	glibc-2.3.5-allow-gcc4-wcstol_l.patch
+y	glibc-2.3.5-cygwin.patch
+y/offs	glibc-2.3.5-fix-pr631.patch
+y/offs	glibc-configure-apple-as.patch
+y	glibc-fp-byteorder.patch
+y	glibc-mips-bootstrap-gcc-header-install.patch
+y	make-install-lib-all.patch
+REV	pr758.patch
+
+   Martin Guy <martinwguy A yahoo.it>, 18 feb 2006
+
+diff -urN crosstool-0.38/patches/glibc-2.3.6/arm-ctl_bus_isa.patch crosstool-0.38-mg1/patches/glibc-2.3.6/arm-ctl_bus_isa.patch
+--- crosstool-0.38/patches/glibc-2.3.6/arm-ctl_bus_isa.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/arm-ctl_bus_isa.patch	2005-04-27 19:40:19.000000000 +0100
+@@ -0,0 +1,51 @@
++Applies to both glibc-2.2.5 and glibc-2.3.2, and probably glibc cvs as of Aug 2004.
++Needed to build glibc with linux kernels 2.4.23 or higher on ARM, 
++Fixes following error:
++
++../sysdeps/unix/sysv/linux/arm/ioperm.c: In function `init_iosys':
++../sysdeps/unix/sysv/linux/arm/ioperm.c:103: error: `BUS_ISA' undeclared (first use in this function)
++../sysdeps/unix/sysv/linux/arm/ioperm.c:103: error: (Each undeclared identifier is reported only once
++../sysdeps/unix/sysv/linux/arm/ioperm.c:103: error: for each function it appears in.)
++../sysdeps/unix/sysv/linux/arm/ioperm.c:103: error: initializer element is not constant
++../sysdeps/unix/sysv/linux/arm/ioperm.c:103: error: (near initialization for `iobase_name[1]')
++../sysdeps/unix/sysv/linux/arm/ioperm.c:104: error: initializer element is not constant
++../sysdeps/unix/sysv/linux/arm/ioperm.c:104: error: (near initialization for `ioshift_name[1]')
++make[2]: *** [/home/dank/crosstool-0.28/build/arm-softfloat-linux-gnu/gcc-3.3.4-glibc-2.2.5/build-glibc/misc/ioperm.o] Error 1
++
++cf. "[SYSCTL] BUS_ISA -> CTL_BUS_ISA",  http://www.ussg.iu.edu/hypermail/linux/kernel/0311.0/0529.html
++
++--- glibc-2.3.2/sysdeps/unix/sysv/linux/arm/ioperm.c.old	2003-02-20 14:22:24.000000000 -0800
+++++ glibc-2.3.2/sysdeps/unix/sysv/linux/arm/ioperm.c	2004-01-31 16:01:50.000000000 -0800
++@@ -47,6 +47,12 @@
++ #include <asm/page.h>
++ #include <sys/sysctl.h>
++ 
+++/* see http://www.ussg.iu.edu/hypermail/linux/kernel/0311.0/0529.html */
+++#include <linux/version.h>
+++#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,23))
+++#define CTL_BUS_ISA BUS_ISA	/* and hope it's not the one from linux/input.h */
+++#endif
+++
++ #define PATH_ARM_SYSTYPE	"/etc/arm_systype"
++ #define PATH_CPUINFO		"/proc/cpuinfo"
++ 
++@@ -80,7 +86,7 @@
++  * Initialize I/O system.  There are several ways to get the information
++  * we need.  Each is tried in turn until one succeeds.
++  *
++- * 1. Sysctl (CTL_BUS, BUS_ISA, ISA_*).  This is the preferred method
+++ * 1. Sysctl (CTL_BUS, CTL_BUS_ISA, ISA_*).  This is the preferred method
++  *    but not all kernels support it.
++  *
++  * 2. Read the value (not the contents) of symlink PATH_ARM_SYSTYPE.
++@@ -100,8 +106,8 @@
++ {
++   char systype[256];
++   int i, n;
++-  static int iobase_name[] = { CTL_BUS, BUS_ISA, BUS_ISA_PORT_BASE };
++-  static int ioshift_name[] = { CTL_BUS, BUS_ISA, BUS_ISA_PORT_SHIFT };
+++  static int iobase_name[] = { CTL_BUS, CTL_BUS_ISA, BUS_ISA_PORT_BASE };
+++  static int ioshift_name[] = { CTL_BUS, CTL_BUS_ISA, BUS_ISA_PORT_SHIFT };
++   size_t len = sizeof(io.base);
++ 
++   if (! sysctl (iobase_name, 3, &io.io_base, &len, NULL, 0)
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-20040822-s390-sysdep_inc.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-20040822-s390-sysdep_inc.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-20040822-s390-sysdep_inc.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-20040822-s390-sysdep_inc.patch	2005-04-29 20:29:50.000000000 +0100
+@@ -0,0 +1,37 @@
++Fixes error
++
++dl-runtime.c:222: error: parse error before "CFI_STARTPROC"
++make[2]: *** [crosstool-0.28-rc35/build/s390-unknown-linux-gnu/gcc-3.4.1-glibc-20040822/build-glibc/elf/dl-runtime.o] Error 1
++make[2]: Leaving directory `crosstool-0.28-rc35/build/s390-unknown-linux-gnu/gcc-3.4.1-glibc-20040822/glibc-20040822/elf'
++make[1]: *** [elf/subdir_lib] Error 2
++make[1]: Leaving directory `crosstool-0.28-rc35/build/s390-unknown-linux-gnu/gcc-3.4.1-glibc-20040822/glibc-20040822'
++make: *** [all] Error 2
++-----------------
++In-Reply-To: <412CB003.1030009@kegel.com>
++Subject: Re: glibc cvs problem on s390
++To: Dan Kegel <dank@kegel.com>
++X-Mailer: Lotus Notes Build V651_12042003 December 04, 2003
++Message-ID: <OF88608D8D.CA3C948A-ON42256EFB.005D57B6-42256EFB.005D60AC@de.ibm.com>
++From: Martin Schwidefsky <schwidefsky@de.ibm.com>
++Date: Wed, 25 Aug 2004 18:59:55 +0200
++
++Hi Dan,
++add a "#include <sysdep.h>" to dl-runtime.c and it should compile.
++
++blue skies,
++   Martin
++Linux/390 Design & Development, IBM Deutschland Entwicklung GmbH
++Schönaicherstr. 220, D-71032 Böblingen, Telefon: 49 - (0)7031 - 16-2247
++E-Mail: schwidefsky@de.ibm.com
++-----------------
++
++--- glibc-20040822/elf/dl-runtime.c.old	2004-08-25 21:53:40.000000000 -0700
+++++ glibc-20040822/elf/dl-runtime.c	2004-08-25 21:54:05.000000000 -0700
++@@ -23,6 +23,7 @@
++ #include <stdlib.h>
++ #include <unistd.h>
++ #include <ldsodefs.h>
+++#include <sysdep.h>
++ #include "dynamic-link.h"
++ 
++ #if (!defined ELF_MACHINE_NO_RELA && !defined ELF_MACHINE_PLT_REL) \
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.5-allow-gcc-4.0-wordexp.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.5-allow-gcc-4.0-wordexp.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.5-allow-gcc-4.0-wordexp.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.5-allow-gcc-4.0-wordexp.patch	2005-04-29 05:50:59.000000000 +0100
+@@ -0,0 +1,19 @@
++../sysdeps/generic/wordexp.c: In function 'exec_comm':
++../sysdeps/generic/wordexp.c:815: sorry, unimplemented: inlining failed in call to 'exec_comm_child': function body not available
++../sysdeps/generic/wordexp.c:900: sorry, unimplemented: called from here
++make[2]: *** [/home/dank/queue/jobdir.fast2/crosstool-dev/build/i686-unknown-linux-gnu/gcc-4.0-20050305-glibc-2.3-20050307/build-glibc/posix/wordexp.o] Error
++
++I had to add the keyword 'inline' to get it to compile:
++
++--- glibc-2.3-20050307/sysdeps/generic/wordexp.c.old	2005-03-12 08:54:15.709253928 -0800
+++++ glibc-2.3-20050307/sysdeps/generic/wordexp.c	2005-03-12 08:54:51.242852000 -0800
++@@ -809,7 +809,7 @@
++ }
++
++ /* Function called by child process in exec_comm() */
++-static void
+++static inline void
++ internal_function __attribute__ ((always_inline))
++ exec_comm_child (char *comm, int *fildes, int showerr, int noexec)
++ {
++
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.5-allow-gcc4-wcstol_l.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.5-allow-gcc4-wcstol_l.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.5-allow-gcc4-wcstol_l.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.5-allow-gcc4-wcstol_l.patch	2005-04-27 05:56:36.000000000 +0100
+@@ -0,0 +1,57 @@
++Fixes
++../sysdeps/wordsize-64/wcstol_l.c:11: error: '____wcstoll_l_internal' aliased to undefined symbol '____wcstol_l_internal'
++../sysdeps/wordsize-64/wcstol_l.c:12: error: '__wcstoll_l' aliased to undefined symbol '__wcstol_l'
++../sysdeps/wordsize-64/wcstol_l.c:13: error: 'wcstoll_l' aliased to undefined symbol '__wcstol_l'
++make[2]: *** [/home/dkegel/queue/jobdir.produser_cpsm10/crosstool-0.32/build/x86_64-unknown-linux-gnu/gcc-4.0.0-20050410-glibc-2.3.4/build-glibc/wcsmbs/wcstoul_l.o] Error 1
++
++https://www.redhat.com/archives/fedora-cvs-commits/2005-March/msg00408.html
++%changelog
+++* Fri Mar 25 2005 Jakub Jelinek <jakub redhat com> 2.3.4-18
+++- fix build on 64-bit arches with new GCC
++
++Revision 1.4.2.1, Fri Mar 25 11:59:01 2005 UTC (3 weeks, 4 days ago) by jakub
++Branch: fedora-branch
++CVS Tags: fedora-glibc-2_3_4-18
++Changes since 1.4: +2 -0 lines
++Diff to previous 1.4 (colored)
++
++	* sysdeps/wordsize-64/strtol_l.c: Don't add aliases if UNSIGNED.
++	* sysdeps/wordsize-64/wcstol_l.c: Likewise.
++
++
++http://sourceware.org/cgi-bin/cvsweb.cgi/libc/sysdeps/wordsize-64/strtol_l.c.diff?r1=1.4&r2=1.4.2.1&cvsroot=glibc
++http://sourceware.org/cgi-bin/cvsweb.cgi/libc/sysdeps/wordsize-64/wcstol_l.c.diff?r1=1.4&r2=1.4.2.1&cvsroot=glibc
++
++===================================================================
++RCS file: /cvs/glibc/libc/sysdeps/wordsize-64/strtol_l.c,v
++retrieving revision 1.4
++retrieving revision 1.4.2.1
++diff -u -r1.4 -r1.4.2.1
++--- libc/sysdeps/wordsize-64/strtol_l.c	2003/03/03 09:45:12	1.4
+++++ libc/sysdeps/wordsize-64/strtol_l.c	2005/03/25 11:59:01	1.4.2.1
++@@ -8,7 +8,9 @@
++ #undef ____strtoll_l_internal
++ #undef __strtoll_l
++ #undef strtoll_l
+++#if !UNSIGNED
++ strong_alias (____strtol_l_internal, ____strtoll_l_internal)
++ libc_hidden_ver (____strtol_l_internal, ____strtoll_l_internal)
++ weak_alias (__strtol_l, __strtoll_l)
++ weak_alias (__strtol_l, strtoll_l)
+++#endif
++===================================================================
++RCS file: /cvs/glibc/libc/sysdeps/wordsize-64/wcstol_l.c,v
++retrieving revision 1.4
++retrieving revision 1.4.2.1
++diff -u -r1.4 -r1.4.2.1
++--- libc/sysdeps/wordsize-64/wcstol_l.c	2002/08/08 11:44:51	1.4
+++++ libc/sysdeps/wordsize-64/wcstol_l.c	2005/03/25 11:59:01	1.4.2.1
++@@ -8,6 +8,8 @@
++ #undef ____wcstoll_l_internal
++ #undef __wcstoll_l
++ #undef wcstoll_l
+++#if !UNSIGNED
++ strong_alias (____wcstol_l_internal, ____wcstoll_l_internal)
++ weak_alias (__wcstol_l, __wcstoll_l)
++ weak_alias (__wcstol_l, wcstoll_l)
+++#endif
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.5-cygwin.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.5-cygwin.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.5-cygwin.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.5-cygwin.patch	2005-05-14 17:25:54.000000000 +0100
+@@ -0,0 +1,185 @@
++Fixes
++elf/librtld.os: In function `process_envvars': : undefined reference to `__access'
++...
++when building glibc-2.3.x on cygwin
++
++Idea from
++http://sources.redhat.com/ml/bug-glibc/2002-01/msg00071/glibc-2.2-cygin-shared.patch
++Basically, make glibc use .oST as suffix for 'object static'
++instead of .oS, since cygwin has trouble distinguishing .os from .oS
++(Original patch had .on, but .oST is more mnemonic for 'object static')
++
++glibc-linuxthreads-2.3.5 also requires a patch, see 
++../glibc-linuxthreads-2.3.5/glibc-linuxthreads-2.3.5-cygwin.patch
++
++[ forward ported to glibc-2.3.5 by Petr Cvachoucek:
++
++Message-ID: <4282FCBA.3040000@unicontrols.cz>
++Date: Thu, 12 May 2005 08:50:34 +0200
++From: Petr Cvachoucek <cvachoucek@unicontrols.cz>
++To: Dan Kegel <dank@kegel.com>
++CC:  crossgcc@sources.redhat.com
++Subject: Patches to build gcc 3.4.3 / glibc 2.3.5 on cygwin
++
++Hi Dan,
++following patches are needed to build gcc-3.4.3/glibc-2.3.5 toolchain
++on cygwin. Tested to build toolchains for powerpc 604 and 750 targets.
++
++-- 
++                     Petr Cvachoucek
++                     Unicontrols a.s.
++                     http://www.unicontrols.cz
++]
++
++diff -aur glibc-2.3.5/Makeconfig glibc-2.3.5-cygwin/Makeconfig
++--- glibc-2.3.5/Makeconfig	2005-02-16 11:50:19.000000000 +0100
+++++ glibc-2.3.5-cygwin/Makeconfig	2005-05-11 08:24:51.046875000 +0200
++@@ -449,7 +449,7 @@
++ # run the linked programs.
++ link-libc = -Wl,-rpath-link=$(rpath-link) \
++ 	    $(common-objpfx)libc.so$(libc.so-version) \
++-	    $(common-objpfx)$(patsubst %,$(libtype.oS),c) $(gnulib)
+++	    $(common-objpfx)$(patsubst %,$(libtype.oST),c) $(gnulib)
++ # This is how to find at build-time things that will be installed there.
++ rpath-dirs = math elf dlfcn nss nis rt resolv crypt
++ endif
++@@ -656,7 +656,7 @@
++ # The compilation rules use $(CPPFLAGS-${SUFFIX}) and $(CFLAGS-${SUFFIX})
++ # to pass different flags for each flavor.
++ libtypes = $(foreach o,$(object-suffixes-for-libc),$(libtype$o))
++-all-object-suffixes := .o .os .op .og .ob .oS
+++all-object-suffixes := .o .os .op .og .ob .oST
++ object-suffixes :=
++ CPPFLAGS-.o = $(pic-default)
++ CFLAGS-.o = $(filter %frame-pointer,$(+cflags))
++@@ -712,14 +712,14 @@
++ 
++ ifeq (yes,$(build-shared))
++ # Build special library that contains the static-only routines for libc.
++-object-suffixes-for-libc += .oS
+++object-suffixes-for-libc += .oST
++ 
++ # Must build the routines as PIC, though, because they can end up in (users')
++ # shared objects.  We don't want to use CFLAGS-os because users may, for
++ # example, make that processor-specific.
++-CFLAGS-.oS = $(CFLAGS-.o) $(PIC-ccflag)
++-CPPFLAGS-.oS = $(CPPFLAGS-.o) -DPIC -DLIBC_NONSHARED=1
++-libtype.oS = lib%_nonshared.a
+++CFLAGS-.oST = $(CFLAGS-.o) $(PIC-ccflag)
+++CPPFLAGS-.oST = $(CPPFLAGS-.o) -DPIC -DLIBC_NONSHARED=1
+++libtype.oST = lib%_nonshared.a
++ endif
++ 
++ # The assembler can generate debug information too.
++diff -aur glibc-2.3.5/Makerules glibc-2.3.5-cygwin/Makerules
++--- glibc-2.3.5/Makerules	2004-12-15 19:52:39.000000000 +0100
+++++ glibc-2.3.5-cygwin/Makerules	2005-05-11 08:25:33.578125000 +0200
++@@ -416,7 +416,7 @@
++ # Bounded pointer thunks are only built for *.ob
++ elide-bp-thunks = $(addprefix $(bppfx),$(bp-thunks))
++ 
++-elide-routines.oS += $(filter-out $(static-only-routines),\
+++elide-routines.oST += $(filter-out $(static-only-routines),\
++ 				  $(routines) $(aux) $(sysdep_routines)) \
++ 		     $(elide-bp-thunks)
++ elide-routines.os += $(static-only-routines) $(elide-bp-thunks)
++@@ -961,7 +961,7 @@
++ install: $(inst_libdir)/libc.so
++ $(inst_libdir)/libc.so: $(common-objpfx)format.lds \
++ 			$(common-objpfx)libc.so$(libc.so-version) \
++-			$(inst_libdir)/$(patsubst %,$(libtype.oS),\
+++			$(inst_libdir)/$(patsubst %,$(libtype.oST),\
++ 						  $(libprefix)$(libc-name)) \
++ 			$(+force)
++ 	(echo '/* GNU ld script';\
++@@ -969,7 +969,7 @@
++ 	 echo '   the static library, so try that secondarily.  */';\
++ 	 cat $<; \
++ 	 echo 'GROUP ( $(slibdir)/libc.so$(libc.so-version)' \
++-	      '$(libdir)/$(patsubst %,$(libtype.oS),$(libprefix)$(libc-name))'\
+++	      '$(libdir)/$(patsubst %,$(libtype.oST),$(libprefix)$(libc-name))'\
++ 	      ')' \
++ 	) > $@.new
++ 	mv -f $@.new $@
++diff -aur glibc-2.3.5/extra-lib.mk glibc-2.3.5-cygwin/extra-lib.mk
++--- glibc-2.3.5/extra-lib.mk	2004-12-02 23:54:47.000000000 +0100
+++++ glibc-2.3.5-cygwin/extra-lib.mk	2005-05-11 08:27:28.156250000 +0200
++@@ -13,7 +13,7 @@
++ 
++ ifneq (,$($(lib)-static-only-routines))
++ ifneq (,$(filter yesyes%,$(build-shared)$(elf)$($(lib).so-version)))
++-object-suffixes-$(lib) += $(filter-out $($(lib)-inhibit-o),.oS)
+++object-suffixes-$(lib) += $(filter-out $($(lib)-inhibit-o),.oST)
++ endif
++ endif
++ 
++@@ -29,7 +29,7 @@
++ 
++ # Add each flavor of library to the lists of things to build and install.
++ install-lib += $(foreach o,$(object-suffixes-$(lib)),$(lib:lib%=$(libtype$o)))
++-extra-objs += $(foreach o,$(filter-out .os .oS,$(object-suffixes-$(lib))),\
+++extra-objs += $(foreach o,$(filter-out .os .oST,$(object-suffixes-$(lib))),\
++ 			$(patsubst %,%$o,$(filter-out \
++ 					   $($(lib)-shared-only-routines),\
++ 					   $(all-$(lib)-routines))))
++@@ -57,7 +57,7 @@
++ 
++ 
++ # Use o-iterator.mk to generate a rule for each flavor of library.
++-ifneq (,$(filter-out .os .oS,$(object-suffixes-$(lib))))
+++ifneq (,$(filter-out .os .oST,$(object-suffixes-$(lib))))
++ define o-iterator-doit
++ $(objpfx)$(patsubst %,$(libtype$o),$(lib:lib%=%)): \
++   $(patsubst %,$(objpfx)%$o,\
++@@ -65,7 +65,7 @@
++ 			  $(all-$(lib)-routines))); \
++ 	$$(build-extra-lib)
++ endef
++-object-suffixes-left = $(filter-out .os .oS,$(object-suffixes-$(lib)))
+++object-suffixes-left = $(filter-out .os .oST,$(object-suffixes-$(lib)))
++ include $(patsubst %,$(..)o-iterator.mk,$(object-suffixes-left))
++ endif
++ 
++@@ -77,9 +77,9 @@
++ 	$(build-extra-lib)
++ endif
++ 
++-ifneq (,$(filter .oS,$(object-suffixes-$(lib))))
++-$(objpfx)$(patsubst %,$(libtype.oS),$(lib:lib%=%)): \
++-  $(patsubst %,$(objpfx)%.oS,\
+++ifneq (,$(filter .oST,$(object-suffixes-$(lib))))
+++$(objpfx)$(patsubst %,$(libtype.oST),$(lib:lib%=%)): \
+++  $(patsubst %,$(objpfx)%.oST,\
++ 	     $(filter $($(lib)-static-only-routines),\
++ 		      $(all-$(lib)-routines)))
++ 	$(build-extra-lib)
++diff -aur glibc-2.3.5/nptl/Makefile glibc-2.3.5-cygwin/nptl/Makefile
++--- glibc-2.3.5/nptl/Makefile	2005-02-16 09:45:56.000000000 +0100
+++++ glibc-2.3.5-cygwin/nptl/Makefile	2005-05-11 08:26:01.812500000 +0200
++@@ -360,7 +360,7 @@
++ 
++ $(inst_libdir)/libpthread.so: $(common-objpfx)format.lds \
++ 			      $(objpfx)libpthread.so$(libpthread.so-version) \
++-			      $(inst_libdir)/$(patsubst %,$(libtype.oS),\
+++			      $(inst_libdir)/$(patsubst %,$(libtype.oST),\
++ 							$(libprefix)pthread) \
++ 			      $(+force)
++ 	(echo '/* GNU ld script';\
++@@ -368,7 +368,7 @@
++ 	 echo '   the static library, so try that secondarily.  */';\
++ 	 cat $<; \
++ 	 echo 'GROUP ( $(slibdir)/libpthread.so$(libpthread.so-version)' \
++-	      '$(libdir)/$(patsubst %,$(libtype.oS),$(libprefix)pthread)'\
+++	      '$(libdir)/$(patsubst %,$(libtype.oST),$(libprefix)pthread)'\
++ 	      ')' \
++ 	) > $@.new
++ 	mv -f $@.new $@
++diff -aur glibc-2.3.5/sysdeps/sparc/sparc32/sparcv9/Makefile glibc-2.3.5-cygwin/sysdeps/sparc/sparc32/sparcv9/Makefile
++--- glibc-2.3.5/sysdeps/sparc/sparc32/sparcv9/Makefile	2004-08-16 08:46:14.000000000 +0200
+++++ glibc-2.3.5-cygwin/sysdeps/sparc/sparc32/sparcv9/Makefile	2005-05-11 08:26:25.937500000 +0200
++@@ -10,4 +10,4 @@
++ ASFLAGS-.op += -Wa,-Av9a
++ ASFLAGS-.og += -Wa,-Av9a
++ ASFLAGS-.ob += -Wa,-Av9a
++-ASFLAGS-.oS += -Wa,-Av9a
+++ASFLAGS-.oST += -Wa,-Av9a
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.5-fix-pr631.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.5-fix-pr631.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.5-fix-pr631.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.5-fix-pr631.patch	2005-06-15 17:12:47.000000000 +0100
+@@ -0,0 +1,43 @@
++From dank@kegel.com
++Wed Jun 15 09:12:43 PDT 2005
++
++Fixes
++
++build-glibc/libc.a(nsswitch.o)(.data+0x64): undefined reference to `_nss_files_getaliasent_r'
++build-glibc/libc.a(nsswitch.o)(.data+0x6c): undefined reference to `_nss_files_endaliasent'
++... 53 lines deleted ...
++build-glibc/libc.a(nsswitch.o)(.data+0x21c): undefined reference to `_nss_files_getspnam_r'
++collect2: ld returned 1 exit status
++make[2]: *** [/build/gcc-3.4.3-glibc-2.3.5-hdrs-2.6.11.2/i686-unknown-linux-gnu/build-glibc/elf/ldconfig] Error 1
++
++when building glibc with --enable-static-nss.
++
++See http://sources.redhat.com/bugzilla/show_bug.cgi?id=631
++
++--- glibc-2.3.5/Makeconfig.old	Wed Jun 15 08:13:12 2005
+++++ glibc-2.3.5/Makeconfig	Wed Jun 15 08:13:14 2005
++@@ -487,7 +487,7 @@
++ 
++ # The static libraries.
++ ifeq (yes,$(build-static))
++-link-libc-static = $(common-objpfx)libc.a $(static-gnulib) $(common-objpfx)libc.a
+++link-libc-static = $(common-objpfx)libc.a $(static-gnulib) $(otherlibs) $(common-objpfx)libc.a
++ else
++ ifeq (yes,$(build-shared))
++ # We can try to link the programs with lib*_pic.a...
++--- glibc-2.3.5/elf/Makefile.old	Wed Jun 15 07:46:49 2005
+++++ glibc-2.3.5/elf/Makefile	Wed Jun 15 08:14:00 2005
++@@ -114,6 +114,13 @@
++ install-bin-script = ldd
++ endif
++ 
+++ifeq (yes,$(build-static-nss))
+++nssobjdir := $(patsubst ../$(subdir),.,$(common-objpfx)nss)
+++resolvobjdir := $(patsubst ../$(subdir),.,$(common-objpfx)resolv)
+++otherlibs += $(nssobjdir)/libnss_files.a $(resolvobjdir)/libnss_dns.a \
+++	     $(resolvobjdir)/libresolv.a
+++endif
+++
++ others		= sprof sln
++ install-bin	= sprof
++ others-static   = sln
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.6-allow-gcc-4.0-arm.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.6-allow-gcc-4.0-arm.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-2.3.6-allow-gcc-4.0-arm.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-2.3.6-allow-gcc-4.0-arm.patch	2006-02-18 18:11:13.000000000 +0000
+@@ -0,0 +1,31 @@
++Fixes
++In file included from dynamic-link.h:63,
++                 from dl-reloc.c:269:
++../sysdeps/arm/dl-machine.h: In function '_dl_relocate_object':
++../sysdeps/arm/dl-machine.h:362: error: invalid storage class for function 'fix_bad_pc24'
++
++when building glibc-2.3.[34] with gcc-4.0
++
++Like
++http://sources.redhat.com/cgi-bin/cvsweb.cgi/libc/sysdeps/arm/dl-machine.h.diff?r1=1.51&r2=1.52&cvsroot=glibc
++but works with older compilers, and fixes fix_bad_pc24.
++
++
++--- glibc-2.3.6/sysdeps/arm/dl-machine.h.old	2005-10-17 05:52:36.000000000 +0100
+++++ glibc-2.3.6/sysdeps/arm/dl-machine.h	2006-02-18 17:53:46.300600576 +0000
++@@ -357,7 +357,14 @@
++ #ifdef RESOLVE
++ 
++ /* Deal with an out-of-range PC24 reloc.  */
++-static Elf32_Addr
+++#if __GNUC__ >= 4
+++  auto inline Elf32_Addr
+++#else
+++  static inline Elf32_Addr
+++#endif
+++#if __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 2)
+++  __attribute ((always_inline))
+++#endif
++ fix_bad_pc24 (Elf32_Addr *const reloc_addr, Elf32_Addr value)
++ {
++   static void *fix_page;
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-configure-apple-as.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-configure-apple-as.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-configure-apple-as.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-configure-apple-as.patch	2005-05-04 23:31:12.000000000 +0100
+@@ -0,0 +1,23 @@
++http://in3www.epfl.ch/~schaffne/glibc-configure-apple-as.patch
++http://sources.redhat.com/ml/crossgcc/2004-02/msg00151.html
++
++The following makes it possible to configure glibc-2.3.2 on Mac OS X,
++where the assembler but doesn't understand the --version flag.
++
++Fixes the symptom
++checking whether ld is GNU ld... no
++checking for /usr/libexec/gcc/darwin/ppc/as... /usr/libexec/gcc/darwin/ppc/as
++checking version of /usr/libexec/gcc/darwin/ppc/as... 
++<PAUSES HERE AND JUST SITS THERE DOING NOTHING>
++
++--- glibc-2.3.2/configure~	Wed Feb 26 09:20:48 2003
+++++ glibc-2.3.2/configure	Fri Feb 27 13:12:53 2004
++@@ -3789,7 +3789,7 @@
++   # Found it, now check the version.
++   echo "$as_me:$LINENO: checking version of $AS" >&5
++ echo $ECHO_N "checking version of $AS... $ECHO_C" >&6
++-  ac_prog_version=`$AS --version 2>&1 | sed -n 's/^.*GNU assembler.* \([0-9]*\.[0-9.]*\).*$/\1/p'`
+++  ac_prog_version=`$AS -v </dev/null 2>&1 | sed -n 's/^.*GNU assembler.* \([0-9]*\.[0-9.]*\).*$/\1/p'`
++   case $ac_prog_version in
++     '') ac_prog_version="v. ?.??, bad"; ac_verc_fail=yes;;
++     2.1[3-9]*)
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-fp-byteorder.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-fp-byteorder.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-fp-byteorder.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-fp-byteorder.patch	2005-05-08 20:10:03.000000000 +0100
+@@ -0,0 +1,203 @@
++Taken from http://sources.redhat.com/ml/crossgcc/2004-02/msg00104.html
++Author: addsub@eyou.com
++Target: ARM
++
++Fixes http://gcc.gnu.org/cgi-bin/cvsweb.cgi/gcc/gcc/testsuite/gcc.c-torture/execute/920501-8.c
++and makes printf("%f", 1.0) work.
++
++Lennert Buytenhek wrote in http://sources.redhat.com/ml/crossgcc/2004-09/msg00115.html :
++ It ... fixes the 'printf("%f\n", 0.5); prints 0.000000' and general 'floating point
++ is broken' on my big-endian hardfloat FPA ARM platform. ...
++ It's definitely needed for hardfloat.  So I'd think it's needed for
++ big-endian systems in any case, and for VFP on little-endian systems
++ too.  Someone would have to verify that though.
++
++Lennert Buytenhek wrote in http://sources.redhat.com/ml/crossgcc/2004-09/msg00123.html
++ I just had a look at glibc-20040830, and [this patch] is still needed and useful
++ for this version.  glibc-20040830 out-of-the-box still contains the
++ following wrong assumptions:
++ - sysdeps/arm/bits/endian.h: float word order is big endian (which it is
++   not on vfp systems)
++ - sysdeps/arm/gmp-mparam.h: IEEE doubles are mixed endian (which they
++   are not on big endian systems, neither on vfp systems)
++ - sysdeps/arm/ieee754.h: IEEE doubles are in little endian byte order
++   (which they are not on big endian systems)
++ [This patch] seems the right solution for all of these issues.
++
++Dimitry Andric wrote in http://sources.redhat.com/ml/crossgcc/2004-09/msg00132.html :
++ It's even needed for glibc CVS, AFAICS.
++ The patch hunk which modifies glibc.new/sysdeps/arm/bits/endian.h
++ (currently at version 1.4) is only needed for proper VFP operation.
++ But the hunk which modifies sysdeps/arm/gmp-mparam.h, and the hunk
++ that deletes sysdeps/arm/ieee754.h (yes, this IS correct), are needed
++ for proper operation of *any* FP model on big endian ARM.
++
++See also discussion in followups to
++http://sources.redhat.com/ml/crossgcc/2004-05/msg00245.html)
++
++Message-ID: <276985760.37584@eyou.com>
++Received: from unknown (HELO eyou.com) (172.16.2.2)
++ by 0.0.0.0 with SMTP; Tue, 17 Feb 2004 10:42:40 +0800
++Received: (qmail 8238 invoked by uid 65534); 17 Feb 2004 10:42:38 +0800
++Date: 17 Feb 2004 10:42:38 +0800
++Message-ID: <20040217104238.8237.qmail@eyou.com>
++From: "add" <addsub@eyou.com>
++To: dank@kegel.com
++Reply-To: "add" <addsub@eyou.com>
++Subject: Re:&nbsp;&nbsp;&nbsp;problem&nbsp;while&nbsp;building&nbsp;arm&nbsp;vfp&nbsp;softfloat&nbsp;gcc&nbsp;`
++
++Hi, Dan, This is a patch I applied to my glibc-2.3.2, then my softfloat
++toolchain can printf("%f\n",1.0). So you may have a try of this
++
++
++diff -uNrp glibc.old/sysdeps/arm/bits/endian.h glibc.new/sysdeps/arm/bits/endian.h
++--- glibc.old/sysdeps/arm/bits/endian.h	1999-04-12 11:59:13.000000000 -0400
+++++ glibc.new/sysdeps/arm/bits/endian.h	2004-02-12 09:15:13.000000000 -0500
++@@ -9,4 +9,9 @@
++ #else
++ #define __BYTE_ORDER __LITTLE_ENDIAN
++ #endif
+++
+++#ifdef __VFP_FP__
+++#define __FLOAT_WORD_ORDER __BYTE_ORDER
+++#else
++ #define __FLOAT_WORD_ORDER __BIG_ENDIAN
+++#endif
++diff -uNrp glibc.old/sysdeps/arm/gmp-mparam.h glibc.new/sysdeps/arm/gmp-mparam.h
++--- glibc.old/sysdeps/arm/gmp-mparam.h	2001-07-07 15:21:19.000000000 -0400
+++++ glibc.new/sysdeps/arm/gmp-mparam.h	2004-02-12 09:15:13.000000000 -0500
++@@ -26,5 +26,13 @@ MA 02111-1307, USA. */
++ #define BITS_PER_SHORTINT 16
++ #define BITS_PER_CHAR 8
++ 
++-#define IEEE_DOUBLE_BIG_ENDIAN 0
++-#define IEEE_DOUBLE_MIXED_ENDIAN 1
+++#if defined(__ARMEB__)
+++# define IEEE_DOUBLE_MIXED_ENDIAN 0
+++# define IEEE_DOUBLE_BIG_ENDIAN 1
+++#elif defined(__VFP_FP__)
+++# define IEEE_DOUBLE_MIXED_ENDIAN 0
+++# define IEEE_DOUBLE_BIG_ENDIAN 0
+++#else
+++# define IEEE_DOUBLE_BIG_ENDIAN 0
+++# define IEEE_DOUBLE_MIXED_ENDIAN 1
+++#endif
++diff -uNrp glibc.old/sysdeps/arm/ieee754.h glibc.new/sysdeps/arm/ieee754.h
++--- glibc.old/sysdeps/arm/ieee754.h	2001-07-07 15:21:19.000000000 -0400
+++++ glibc.new/sysdeps/arm/ieee754.h	1969-12-31 19:00:00.000000000 -0500
++@@ -1,115 +0,0 @@
++-/* Copyright (C) 1992, 1995, 1996, 1998 Free Software Foundation, Inc.
++-   This file is part of the GNU C Library.
++-
++-   The GNU C Library is free software; you can redistribute it and/or
++-   modify it under the terms of the GNU Lesser General Public
++-   License as published by the Free Software Foundation; either
++-   version 2.1 of the License, or (at your option) any later version.
++-
++-   The GNU C Library is distributed in the hope that it will be useful,
++-   but WITHOUT ANY WARRANTY; without even the implied warranty of
++-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++-   Lesser General Public License for more details.
++-
++-   You should have received a copy of the GNU Lesser General Public
++-   License along with the GNU C Library; if not, write to the Free
++-   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
++-   02111-1307 USA.  */
++-
++-#ifndef _IEEE754_H
++-
++-#define _IEEE754_H 1
++-#include <features.h>
++-
++-#include <endian.h>
++-
++-__BEGIN_DECLS
++-
++-union ieee754_float
++-  {
++-    float f;
++-
++-    /* This is the IEEE 754 single-precision format.  */
++-    struct
++-      {
++-	unsigned int mantissa:23;
++-	unsigned int exponent:8;
++-	unsigned int negative:1;
++-      } ieee;
++-
++-    /* This format makes it easier to see if a NaN is a signalling NaN.  */
++-    struct
++-      {
++-	unsigned int mantissa:22;
++-	unsigned int quiet_nan:1;
++-	unsigned int exponent:8;
++-	unsigned int negative:1;
++-      } ieee_nan;
++-  };
++-
++-#define IEEE754_FLOAT_BIAS	0x7f /* Added to exponent.  */
++-
++-
++-union ieee754_double
++-  {
++-    double d;
++-
++-    /* This is the IEEE 754 double-precision format.  */
++-    struct
++-      {
++-	unsigned int mantissa0:20;
++-	unsigned int exponent:11;
++-	unsigned int negative:1;
++-	unsigned int mantissa1:32;
++-      } ieee;
++-
++-    /* This format makes it easier to see if a NaN is a signalling NaN.  */
++-    struct
++-      {
++-	unsigned int mantissa0:19;
++-	unsigned int quiet_nan:1;
++-	unsigned int exponent:11;
++-	unsigned int negative:1;
++-	unsigned int mantissa1:32;
++-      } ieee_nan;
++-  };
++-
++-#define IEEE754_DOUBLE_BIAS	0x3ff /* Added to exponent.  */
++-
++-
++-/* The following two structures are correct for `new' floating point systems but
++-   wrong for the old FPPC.  The only solution seems to be to avoid their use on
++-   old hardware.  */
++-
++-union ieee854_long_double
++-  {
++-    long double d;
++-
++-    /* This is the IEEE 854 double-extended-precision format.  */
++-    struct
++-      {
++-	unsigned int exponent:15;
++-	unsigned int empty:16;
++-	unsigned int negative:1;
++-	unsigned int mantissa1:32;
++-	unsigned int mantissa0:32;
++-      } ieee;
++-
++-    /* This is for NaNs in the IEEE 854 double-extended-precision format.  */
++-    struct
++-      {
++-	unsigned int exponent:15;
++-	unsigned int empty:16;
++-	unsigned int negative:1;
++-	unsigned int mantissa1:32;
++-	unsigned int mantissa0:30;
++-	unsigned int quiet_nan:1;
++-	unsigned int one:1;
++-      } ieee_nan;
++-  };
++-
++-#define IEEE854_LONG_DOUBLE_BIAS 0x3fff
++-
++-__END_DECLS
++-
++-#endif /* ieee754.h */
+diff -urN crosstool-0.38/patches/glibc-2.3.6/glibc-mips-bootstrap-gcc-header-install.patch crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-mips-bootstrap-gcc-header-install.patch
+--- crosstool-0.38/patches/glibc-2.3.6/glibc-mips-bootstrap-gcc-header-install.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/glibc-mips-bootstrap-gcc-header-install.patch	2005-07-07 21:13:38.000000000 +0100
+@@ -0,0 +1,35 @@
++http://sourceware.org/ml/crossgcc/2005-05/msg00165.html
++Fixes a MIPS build problem (unrelated to NPTL)
++
++Message-ID: <428E8B24.1000201@realitydiluted.com>
++Date: Fri, 20 May 2005 20:13:08 -0500
++From: "Steven J dot  Hill" <sjhill at realitydiluted dot com>
++To:  crossgcc at sources dot redhat dot com,  toolchain at gentoo dot org, 
++ Shay_Gal-On at pmc-sierra dot com,  TheNop at gmx dot net
++Subject: New NPTL patches for crosstools and MIPS NPTL patches....
++
++Greetings.
++
++I have uploaded the latest NPTL patch for crosstool-0.34. I have also
++uploaded a tarball of the patches necessary to build a MIPS NPTL
++cross toolchain. To build a MIPS NPTL toolchain you will need the
++released version of binutils-2.16 and the absolute latest GCC and
++glibc code from the HEAD of cvs. Use the 'demo-mips-nptl.sh' script
++to build the toolchain. Please report bugs or issues to the crossgcc
++mailing list. Here is the link off of my FTP site:
++
++    ftp://ftp.realitydiluted.com/crosstools/crosstool-0.34/
++
++[Note: BOOTSTRAP_GCC is set by crosstool.sh when invoking make install-headers]
++
++diff -ur glibc-2.4.0-20050406/sysdeps/mips/mips32/Makefile glibc-2.4.0-20050406-patched/sysdeps/mips/mips32/Makefile
++--- glibc-2.4.0-20050406/sysdeps/mips/mips32/Makefile	2003-03-29 02:15:28.000000000 -0600
+++++ glibc-2.4.0-20050406-patched/sysdeps/mips/mips32/Makefile	2005-04-12 21:36:51.318837655 -0500
++@@ -1,3 +1,7 @@
+++ifeq ($(filter -DBOOTSTRAP_GCC,$(CFLAGS)),)
++ ifeq ($(filter -mabi=32,$(CC)),)
++ CC += -mabi=32
++ endif
+++else
+++CC += -D"_MIPS_SZPTR=32"
+++endif
+diff -urN crosstool-0.38/patches/glibc-2.3.6/make-install-lib-all.patch crosstool-0.38-mg1/patches/glibc-2.3.6/make-install-lib-all.patch
+--- crosstool-0.38/patches/glibc-2.3.6/make-install-lib-all.patch	1970-01-01 01:00:00.000000000 +0100
++++ crosstool-0.38-mg1/patches/glibc-2.3.6/make-install-lib-all.patch	2005-04-27 05:56:36.000000000 +0100
+@@ -0,0 +1,24 @@
++From http://svn.exactcode.de/t2/trunk/package/base/glibc32/make-install-lib-all.patch
++Rule to install all needed libraries, not just the ones installed by install-lib,
++yet not install programs.  
++Needed because we can't use the main install target, as we can't build programs before
++we have the final gcc installed; linking fails because libeh.a is not present,
++and glibc insists on linking programs with that library.
++
++diff -Naur glibc-2.3.4.orig/Makerules glibc-2.3.4/Makerules
++--- glibc-2.3.4.orig/Makerules	2004-12-15 20:52:39.000000000 +0200
+++++ glibc-2.3.4/Makerules	2005-02-19 15:16:31.415125176 +0200
++@@ -844,6 +844,13 @@
++ installed-libcs := $(foreach o,$(filter-out .os,$(object-suffixes-for-libc)),\
++ 			     $(inst_libdir)/$(patsubst %,$(libtype$o),\
++ 						     $(libprefix)$(libc-name)))
+++
+++install-lib-all: $(inst_slibdir)/libc.so$(libc.so-version) \
+++		$(inst_slibdir)/libc-$(version).so \
+++		$(inst_libdir)/libc.so \
+++		$(inst_libdir)/libc.a \
+++		install-lib
+++
++ install: $(installed-libcs)
++ $(installed-libcs): $(inst_libdir)/lib$(libprefix)%: lib $(+force)
++ 	$(make-target-directory)

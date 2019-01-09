@@ -1,0 +1,16 @@
+Index: util-linux.make
+===================================================================
+RCS file: /cvsroot/ptxdist/ptxdist-testing/rules/util-linux.make,v
+retrieving revision 1.1.1.3
+diff -u -r1.1.1.3 util-linux.make
+--- ptxconf.old/rules/util-linux.make	14 Oct 2003 02:32:29 -0000	1.1.1.3
++++ ptxconf/rules/util-linux.make	24 Oct 2003 16:13:29 -0000
+@@ -36,7 +36,7 @@
+ 
+ $(STATEDIR)/util-linux.get: $(util-linux_get_deps)
+ 	@$(call targetinfo, $@)
+-	@$(call get_patches, $(UTIL_LINUX))
++	@$(call get_patches, $(UTIL-LINUX))
+ 	touch $@
+ 
+ $(UTIL-LINUX_SOURCE):

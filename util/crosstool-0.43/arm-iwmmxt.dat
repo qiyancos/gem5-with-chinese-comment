@@ -1,0 +1,4 @@
+KERNELCONFIG=`pwd`/arm.config
+TARGET=arm-iwmmxt-linux-gnu
+TARGET_CFLAGS="-O"
+GCC_EXTRA_CONFIG="--with-cpu=iwmmxt --enable-cxx-flags=-mcpu=iwmmxt"

@@ -1,0 +1,16 @@
+# Board definition file for board "myboard_rshftp"
+
+load_generic_config "unix";
+
+# How to compile C programs for this board
+set_board_info compiler /home3/dank/crosstool-0.7/result/ppc-750-linux-gnu/gcc-3.3-glibc-2.3.2/bin/ppc-750-linux-gnu-gcc
+
+# Network address of board
+# For DejaGnu 1.4.3 and above; DejaGnu 1.4.2.x (Debian 3.0) ignores this setting!
+set_board_info hostname 11.3.1.1
+
+# How to log into this board via rsh and transfer files via ftp.
+set_board_info username root
+set_board_info file_transfer   ftp
+set_board_info ftp_username    root
+set_board_info ftp_password    "DaisyMae"

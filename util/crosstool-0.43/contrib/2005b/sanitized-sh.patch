@@ -1,0 +1,70 @@
+Date: Tue, 3 May 2005 07:38:45 -0400 (EDT)
+From: "Robert P. J. Day" <rpjday@mindspring.com>
+To: crossgcc list <crossgcc@sources.redhat.com>
+Subject: [PATCH] to support SH3 big-endian chain using sanitized headers
+Message-ID: <Pine.LNX.4.61.0505030642120.6185@localhost.localdomain>
+
+
+[Fixes:
+In file included from /home/rpjday/ct/results/sh3eb-unknown-linux-gnu/gcc-4.1-20050501-glibc-20050502/sh3eb-unknown-linux-gnu/include/asm/user.h:4,
+                 from ../sysdeps/unix/sysv/linux/sh/sys/user.h:24,
+                 from ../sysdeps/unix/sysv/linux/sh/sys/procfs.h:31,
+                 from ../linuxthreads_db/proc_service.h:20,
+                 from ../linuxthreads_db/thread_dbP.h:7,
+                 from ../linuxthreads/descr.h:44,
+                 from ../linuxthreads/sysdeps/sh/tls.h:141,
+                 from ../include/tls.h:6,
+                 from <stdin>:2:
+/home/rpjday/ct/results/sh3eb-unknown-linux-gnu/gcc-4.1-20050501-glibc-20050502/sh3eb-unknown-linux-gnu/include/asm/ptrace.h:4:21: error: asm/ubc.h: No such file or directory
+make[2]: *** [/home/rpjday/ct/crosstool-0.32/build/sh3eb-unknown-linux-gnu/gcc-4.1-20050501-glibc-20050502/build-glibc/tcb-offsets.h] Error 1
+make[2]: Leaving directory `/home/rpjday/ct/crosstool-0.32/build/sh3eb-unknown-linux-gnu/gcc-4.1-20050501-glibc-20050502/glibc-20050502/csu'
+make[1]: *** [csu/subdir_lib] Error 2
+make[1]: Leaving directory `/home/rpjday/ct/crosstool-0.32/build/sh3eb-unknown-linux-gnu/gcc-4.1-20050501-glibc-20050502/glibc-20050502'
+make: *** [all] Error 2
+]
+
+
+diff -Nru patches.orig/glibc-20050502/make-install-lib-all.patch patches/glibc-20050502/make-install-lib-all.patch
+--- patches.orig/glibc-20050502/make-install-lib-all.patch	1969-12-31 19:00:00.000000000 -0500
++++ patches/glibc-20050502/make-install-lib-all.patch	2005-05-03 06:32:15.000000000 -0400
+@@ -0,0 +1,24 @@
++From http://svn.exactcode.de/t2/trunk/package/base/glibc32/make-install-lib-all.patch
++Rule to install all needed libraries, not just the ones installed by install-lib,
++yet not install programs.
++Needed because we can't use the main install target, as we can't build programs before
++we have the final gcc installed; linking fails because libeh.a is not present,
++and glibc insists on linking programs with that library.
++
++diff -Naur glibc-2.3.4.orig/Makerules glibc-2.3.4/Makerules
++--- glibc-2.3.4.orig/Makerules	2004-12-15 20:52:39.000000000 +0200
+++++ glibc-2.3.4/Makerules	2005-02-19 15:16:31.415125176 +0200
++@@ -844,6 +844,13 @@
++ installed-libcs := $(foreach o,$(filter-out .os,$(object-suffixes-for-libc)),\
++ 			     $(inst_libdir)/$(patsubst %,$(libtype$o),\
++ 						     $(libprefix)$(libc-name)))
+++
+++install-lib-all: $(inst_slibdir)/libc.so$(libc.so-version) \
+++		$(inst_slibdir)/libc-$(version).so \
+++		$(inst_libdir)/libc.so \
+++		$(inst_libdir)/libc.a \
+++		install-lib
+++
++ install: $(installed-libcs)
++ $(installed-libcs): $(inst_libdir)/lib$(libprefix)%: lib $(+force)
++ 	$(make-target-directory)
+diff -Nru patches.orig/linux-libc-headers-2.6.11.2/no-include-asm-ubc.patch patches/linux-libc-headers-2.6.11.2/no-include-asm-ubc.patch
+--- patches.orig/linux-libc-headers-2.6.11.2/no-include-asm-ubc.patch	1969-12-31 19:00:00.000000000 -0500
++++ patches/linux-libc-headers-2.6.11.2/no-include-asm-ubc.patch	2005-05-03 06:09:25.000000000 -0400
+@@ -0,0 +1,11 @@
++--- linux-libc-headers-2.6.11.2/include/asm-sh/ptrace.h.orig	2005-05-02 16:48:15.000000000 -0400
+++++ linux-libc-headers-2.6.11.2/include/asm-sh/ptrace.h	2005-05-02 16:48:28.000000000 -0400
++@@ -1,7 +1,7 @@
++ #ifndef __ASM_SH_PTRACE_H
++ #define __ASM_SH_PTRACE_H
++
++-#include <asm/ubc.h>
+++/* #include <asm/ubc.h> */
++
++ /*
++  * Copyright (C) 1999, 2000  Niibe Yutaka
+

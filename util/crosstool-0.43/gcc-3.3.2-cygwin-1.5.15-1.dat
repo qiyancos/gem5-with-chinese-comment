@@ -1,0 +1,4 @@
+BINUTILS_DIR=binutils-2.15
+GCC_DIR=gcc-3.3.2
+CYGWIN_DIR=cygwin-1.5.15-1
+CYGWIN_URL=ftp://mirrors.rcn.net/pub/sourceware/cygwin/release/cygwin

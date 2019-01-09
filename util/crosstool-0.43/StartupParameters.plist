@@ -1,0 +1,7 @@
+{
+  Description     = "Crosstool distccd";
+  Provides        = ("Crosstool distccd");
+  Requires        = ("Network");
+  Uses            = ("Disks", "NFS", "Network Time");
+  OrderPreference = "Late";
+}
