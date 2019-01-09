@@ -400,10 +400,11 @@ runGem5(){
 		fi
 	else
 		suiteID=0
+		gem5Options=`echo $gem5Options | sed "s/DEBUGFILE/debug_subtest_$suiteID\.log/"`
 		while [ "${options[$suiteID]}x" != x ]
 		do
 			echo -e "\033[1;31m    ==================== Runing SubTest-$suiteID! ====================\033[0m"
-			gem5Options=`echo $gem5Options | sed "s/DEBUGFILE/debug_subtest_$suiteID\.log/"`
+			gem5Options=`echo $gem5Options | sed "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
 			bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions ${options[$suiteID]}`"
 			mv $m5outDir/stats.txt $m5outDir/stats_subtest_$suiteID.txt
 			suiteID=$[suiteID + 1]
