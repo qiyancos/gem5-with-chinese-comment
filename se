@@ -11,7 +11,9 @@ setScript(){
 	# Where the temporary files should be stored
 	ISA="X86"
 	# [ARM ALPHA RISCV X86 MIPS]
-	buildDir="build_base_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
+	optLevel="peak"
+	# [base(O2) peak(O3)]
+	buildDir="build_$optLevel_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
 	buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
 	# [build_base_riscv.0001, build_base_arm.0001, build_base_alpha.0001,
 	#  build_base_mips.0001, build_base_amd64.0001]
