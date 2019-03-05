@@ -497,7 +497,7 @@ checkSpecDiff(){
         source $specDir/shrc
         cd $tempDir/spec/$fullTarget 
     fi
-    echo -e "\033[1;31m[Diff Report]\033[0m"
+    echo -e "\033[1;31m[Diff Report (with $specTool)]\033[0m"
     echo -e "\033[1;34m    TestSet\tDiff Status\033[0m"
     suiteID=0
     suiteFail=0
