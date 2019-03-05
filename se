@@ -558,8 +558,8 @@ checkSpecDiff(){
     then echo -e "\033[1;33mNot enabled\033[0m"
     else 
         if [ $suiteFail = 1 ]
-        then echo -e "\033[1;33mFail\033[0m"
-        else echo -e "\033[1;33mPass\033[0m"
+        then echo -e "\033[1;31mFail\033[0m"
+        else echo -e "\033[1;32mPass\033[0m"
         fi
     fi
 }
