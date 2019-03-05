@@ -3,7 +3,7 @@ root=$PWD
 
 ################# settings for script #################
 setScript(){
-	specDir="/home/lee/project/spec2006/benchspec/CPU2006"
+	specDir="/home/lee/project/spec2006"
 	# root directory path for spec2006
 	gem5Dir="/home/lee/project/gem5"
 	# root directory path for gem5
@@ -106,7 +106,7 @@ setGem5(){
 
 ################# settings for spec #################
 setSpec(){
-	uppperSuiteID=10
+	upperSuiteID=10
     # The largest suite ID for subtest
     # 400
 	perlbench_ref_0=(perlbench "checkspam.2500.5.25.11.150.1.1.1.1.out" "-o" "-I./lib checkspam.pl 2500 5 25 11 150 1 1 1 1")
@@ -127,7 +127,7 @@ setSpec(){
 	perlbench_test_5=(perlbench "ref.out" "-o" "-I./lib ref.pl")
 	perlbench_test_6=(perlbench "regmesg.out" "-o" "-I./lib regmesg.pl")
 	perlbench_test_7=(perlbench "append.out cmdopt.out fh.out range.out sub_lval.out args.out cmp.out grep.out method.out recurse.out subst.out arith.out comp_term.out my.out subst_amp.out array.out concat.out hashwarn.out nothr5005.out subst_wamp.out context.out if.out oct.out regexp.out tr.out auto.out decl.out inc.out op_cond.out regexp_noamp.out undef.out base_cond.out defins.out index.out op_pat.out unshift.out base_pat.out delete.out int.out ord.out repeat.out vec.out base_term.out die.out join.out override.out reverse.out wantarray.out bless.out do.out length.out rs.out bop.out each.out lex.out package.out sleep.out bproto.out eval.out list.out pos.out sort.out chars.out exists_sub.out loopctl.out push.out splice.out chop.out exp.out lop.out quotemeta.out study.out" "-o" "-I./lib test.pl")
-	perlbench_test_single=0
+	perlbench_test_single=4
 
 	# 401
 	bzip2_ref_0=(bzip2 "chicken.jpg.out" "-o" "chicken.jpg 30")
@@ -437,14 +437,14 @@ runGem5(){
 		redirectOptions=`echo $redirectOptions | sed -e "s/STDOUTFILE/stdout_subtest_$suiteID\.log/" -e "s/STDERRFILE/stderr_subtest_$suiteID\.log/"`
 		while [ $suiteID -le $upperSuiteID ]
 		do
+			gem5Options=`echo $gem5Options | sed "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
+			redirectOptions=`echo $redirectOptions | sed -e "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
             if [ "${options[$suiteID]}x" = x ]
             then
                 suiteID=$[suiteID + 1]
                 continue
             fi
 			echo -e "\033[1;31m      ==================== Runing SubTest-$suiteID! ====================\033[0m"
-			gem5Options=`echo $gem5Options | sed "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
-			redirectOptions=`echo $redirectOptions | sed -e "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
 			startTime[$suiteID]=`date +%s`
             bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions $redirectOptions ${options[$suiteID]}`"
 			endTime[$suiteID]=`date +%s`
@@ -456,7 +456,11 @@ runGem5(){
 
 ################# print Infomation for running time #################
 printTimingInfo(){
-    echo; echo -e "\033[1;34m    TestSet\tRunning_Time (Hour:Min:Second)\033[0m"
+    if [ $timingMode = No ]
+    then return
+    fi
+    echo -e "\033[1;31m[Timing Report]\033[0m"
+    echo -e "\033[1;34m    TestSet\tRunning_Time (Hour:Min:Second)\033[0m"
     totalTime=0
     suiteID=0
     while [ $suiteID -le $upperSuiteID ]
@@ -464,8 +468,8 @@ printTimingInfo(){
         if [ ${startTime[$suiteID]}x != x ]
         then 
             if [ ${#suiteID} -lt 4 ]
-            then echo -ne "\033[1;37m    $[suiteID + 1]\t\t\033[0m"
-            else echo -ne "\033[1;37m    $[suiteID + 1]\t\033[0m"
+            then echo -ne "\033[1;37m    ${suiteID}\t\t\033[0m"
+            else echo -ne "\033[1;37m    ${suiteID}\t\033[0m"
             fi
             if [ ${endTime[$suiteID]}x != x ]
             then 
@@ -475,8 +479,8 @@ printTimingInfo(){
                 echo -e "\033[0;33m${realTime}\033[0m"
             else echo -e "\033[0;31mError\033[0m"
             fi
-            suiteID=$[suiteID + 1]
         fi
+        suiteID=$[suiteID + 1]
     done
     totalTime="$[totalTime / 3600]:$[totalTime % 3600 / 60]:$[totalTime % 60]"
     echo -ne "\033[1;37m    Total\t\033[0m"
@@ -488,18 +492,23 @@ checkSpecDiff(){
     if [ $useDiff = No ]
     then return
     elif [ $diffTool = "specdiff" ]
-    then source $specDir/shrc
+    then
+        cd $specDir 
+        source $specDir/shrc
+        cd $tempDir/spec/$fullTarget 
     fi
-    echo; echo -e "\033[1;34m    TestSet\tDiff Status\033[0m"
+    echo -e "\033[1;31m[Diff Report]\033[0m"
+    echo -e "\033[1;34m    TestSet\tDiff Status\033[0m"
     suiteID=0
+    suiteFail=0
     while [ $suiteID -le $upperSuiteID ]
     do
         if [ "${diffFileList[$suiteID]}x" != x ]
         then
             badDiff=0
             if [ ${#suiteID} -lt 4 ]
-            then echo -ne "\033[1;37m    $[suiteID + 1]\t\t\033[0m"
-            else echo -ne "\033[1;37m    $[suiteID + 1]\t\033[0m"
+            then echo -ne "\033[1;37m    ${suiteID}\t\t\033[0m"
+            else echo -ne "\033[1;37m    ${suiteID}\t\033[0m"
             fi
             for file in ${diffFileList[$suiteID]}
             do
@@ -507,8 +516,8 @@ checkSpecDiff(){
                 if [ ! -f $file ]
                 then 
                     if [[ $file =~ ^.*stderr$ ]]
-                    then targetFile="$m5outDir/stderr_subset_${suiteID}.log"
-                    else targetFile="$m5outDir/stdout_subset_${suiteID}.log"
+                    then targetFile="$m5outDir/stderr_subtest_${suiteID}.log"
+                    else targetFile="$m5outDir/stdout_subtest_${suiteID}.log"
                     fi
                 else targetFile=$file
                 fi
@@ -532,16 +541,27 @@ checkSpecDiff(){
                     exit 1;;
                 esac
                 if [ $badDiff = 1 ]
-                then break
+                then
+                    suiteFail=1
+                    break
                 fi
             done
             if [ $badDiff = 0 ]
-            then echo -e "\033[0;32m   Pass\033[0m"
-            else echo -e "\033[0;31m   Fail\033[0m"
+            then echo -e "\033[0;32mPass\033[0m"
+            else echo -e "\033[0;31mFail\033[0m"
             fi
         fi
         suiteID=$[suiteID + 1]
     done
+    echo -ne "\033[1;37m    Suites\t\033[0m"
+    if [ $runSpecSuites = No ]
+    then echo -e "\033[1;33mNot enabled\033[0m"
+    else 
+        if [ $suiteFail = 1 ]
+        then echo -e "\033[1;33mFail\033[0m"
+        else echo -e "\033[1;33mPass\033[0m"
+        fi
+    fi
 }
 
 ################# get available spec programs #################
@@ -554,16 +574,16 @@ findSpec(){
 	fi
 
 	if [ -f /bin/lsnc ]
-	then filelist=`lsnc $specDir`
-	else filelist=`ls $specDir`
+	then filelist=`lsnc $specDir/benchspec/CPU2006`
+	else filelist=`ls $specDir/benchspec/CPU2006`
 	fi
 
 	for file in $filelist
 	do
-		if [ ! -d $specDir/$file/run/$buildDir ]
+		if [ ! -d $specDir/benchspec/CPU2006/$file/run/$buildDir ]
 		then continue
 		fi
-		errinfo=`cat $specDir/$file/run/$buildDir/make.err | grep "error:"`
+		errinfo=`cat $specDir/benchspec/CPU2006/$file/run/$buildDir/make.err | grep "error:"`
 		if [ "${errinfo}x" = x ]
 		then 
 			delFlag=0
@@ -801,8 +821,8 @@ buildSpecTemp(){
 	
 	runDir=`echo $runDir | sed "s/TESTSET/$testSet/g"`
 
-	if [ -d $specDir/$fullTarget/run/$runDir ]
-	then file_list="$specDir/$fullTarget/run/$runDir/*"
+	if [ -d $specDir/benchspec/CPU2006/$fullTarget/run/$runDir ]
+	then file_list="$specDir/benchspec/CPU2006/$fullTarget/run/$runDir/*"
 	else 
 		echo "RUN_DIR must be defined first!"
 		exit
@@ -818,7 +838,7 @@ buildSpecTemp(){
 		fi
 	done
 
-	cp -r  $specDir/$fullTarget/run/$buildDir/`eval echo -e '$'"{${target}_${testSet}_0[0]}"` $tempDir/spec/$fullTarget/`eval echo -e '$'"{${target}_${testSet}_0[0]}"`
+	cp -r  $specDir/benchspec/CPU2006/$fullTarget/run/$buildDir/`eval echo -e '$'"{${target}_${testSet}_0[0]}"` $tempDir/spec/$fullTarget/`eval echo -e '$'"{${target}_${testSet}_0[0]}"`
 	
 	cd $tempDir/spec/$fullTarget
     
@@ -840,7 +860,7 @@ buildSpecOptions(){
 
     single=`eval echo -e '$'"${target}_${testSet}_single"`
 	if [ ${single}x != x -a $runSpecSuites = No ]
-	then suiteID=single
+	then suiteID=$single
 	else suiteID=0
     fi
 	while [ "`eval echo -e '$'"{${target}_${testSet}_${suiteID}[0]}"`x" != x ]
