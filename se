@@ -419,6 +419,7 @@ runGem5(){
     
     if [ ${m5outDir}x != x -a ! -d $m5outDir/ ]
     then mkdir -p $m5outDir
+    else rm -rf $m5outDir/*
     fi
     
     if [ ${runSpec}x != 1x ]
@@ -526,24 +527,29 @@ checkSpecDiff(){
                     targetSum=(`md5sum $targetFile`)
                     srcSum=(`md5sum $srcFile`)
                     if [ ${targetSum[0]} != ${srcSum[0]} ]
-                    then badDiff=1
+                    then 
+                        badDiff=1
+                        echo "Good: $srcSum" > $m5outDir/${testSet}_${file}_${diffTool}.mis
+                        echo "Real: $targetSum" >> $m5outDir/${testSet}_${file}_${diffTool}.mis
                     fi;;
                 diff)
                     if [ "`diff $targetFile $srcFile`x" != x ]
-                    then badDiff=1
+                    then 
+                        badDiff=1
+                        diff $targetFile $srcFile > $m5outDir/${testSet}_${file}_${diffTool}.mis
                     fi;;
                 specdiff)
                     if [ "`specdiff $targetFile $srcFile`" != "specdiff run completed" ]
-                    then badDiff=1
+                    then 
+                        badDiff=1
+                        specdiff $targetFile $srcFile > $m5outDir/${testSet}_${file}_${diffTool}.mis
                     fi;;
                 *)
                     echo -e "\033[1;31mFatal Error: Unsupported diff tool \"$diffTool\"!\033[0m"
                     exit 1;;
                 esac
                 if [ $badDiff = 1 ]
-                then
-                    suiteFail=1
-                    break
+                then suiteFail=1
                 fi
             done
             if [ $badDiff = 0 ]
@@ -554,13 +560,9 @@ checkSpecDiff(){
         suiteID=$[suiteID + 1]
     done
     echo -ne "\033[1;37m    Suites\t\033[0m"
-    if [ $runSpecSuites = No ]
-    then echo -e "\033[1;33mNot enabled\033[0m"
-    else 
-        if [ $suiteFail = 1 ]
-        then echo -e "\033[1;31mFail\033[0m"
-        else echo -e "\033[1;32mPass\033[0m"
-        fi
+    if [ $suiteFail = 1 ]
+    then echo -e "\033[1;31mFail\033[0m"
+    else echo -e "\033[1;32mPass\033[0m"
     fi
 }
 
@@ -895,11 +897,12 @@ setSpec
 findSpec
 settingParser
 argParser
-buildGem5
 set -e
+buildGem5
 buildSpecOptions
 buildSpecTemp
 printOutputInfo
 runGem5
 printTimingInfo
+set +e
 checkSpecDiff
