@@ -681,10 +681,6 @@ settingParser(){
         fi
         levelIdx=$[levelIdx + 1]
     done
-    
-    #if [ $ISA = X86 -a ${enableSmt}x = Yesx ]
-    #then basicOptions="$basicOptions --ruby"
-    #fi
 }
 
 ################# parse script args #################
@@ -906,8 +902,8 @@ setGem5
 setArgLevel
 setSpec
 findSpec
-settingParser
 argParser
+settingParser
 set -e
 buildGem5
 buildSpecOptions
