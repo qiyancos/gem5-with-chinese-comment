@@ -571,8 +571,9 @@ findSpec(){
     # buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
     if [ ! -d $specDir ]
     then
-        echo "Directory not specified for Spec2000/2006!"
-        exit
+        echo "Warning: Directory not specified for Spec2000/2006!"
+        noSpec=1
+		return
     fi
 
     if [ -f /bin/lsnc ]
@@ -760,6 +761,11 @@ argParser(){
     
     ################# list available spec programs #################
     "-lx")
+		if [ ${noSpec}x = x ]
+		then
+			echo "Error: could not locate spec dir \"$specDir\"!"
+			exit 1
+		fi
         if [ "${#testlist[*]}" = 0 ]
         then echo "No available spec programs for $ISA with optLevel \"$optLevel\"!"
         fi
@@ -770,6 +776,11 @@ argParser(){
 
     ################# select available spec programs #################
     "-px")
+		if [ ${noSpec}x = x ]
+		then
+			echo "Error: could not locate spec dir \"$specDir\"!"
+			exit 1
+		fi
         if [ ${#testlist[*]} = 0 ]
         then
             echo "No available spec programs for $ISA!"
