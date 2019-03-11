@@ -761,7 +761,7 @@ argParser(){
     
     ################# list available spec programs #################
     "-lx")
-		if [ ${noSpec}x = x ]
+		if [ ${noSpec}x = 1x ]
 		then
 			echo "Error: could not locate spec dir \"$specDir\"!"
 			exit 1
@@ -776,7 +776,7 @@ argParser(){
 
     ################# select available spec programs #################
     "-px")
-		if [ ${noSpec}x = x ]
+		if [ ${noSpec}x = 1x ]
 		then
 			echo "Error: could not locate spec dir \"$specDir\"!"
 			exit 1
