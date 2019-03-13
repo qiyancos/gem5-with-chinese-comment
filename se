@@ -490,6 +490,9 @@ printTimingInfo(){
 
 ################# specdiff work #################
 checkSpecDiff(){
+    if [ ${runSpec}x != 1x ]
+    then return
+    fi
     if [ $useDiff = No ]
     then return
     elif [ $diffTool = "specdiff" ]
