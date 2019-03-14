@@ -1,0 +1,5 @@
+# strace
+
+## depends on ! LIBC_BIONIC
+
+source "config/versions/strace.in"

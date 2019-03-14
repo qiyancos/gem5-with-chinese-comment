@@ -1,0 +1,19 @@
+# avr-libc options
+
+## depends on ARCH_AVR
+## depends on ! LINUX && ! WINDOWS && BARE_METAL
+##
+## select LIBC_SUPPORT_THREADS_NONE
+##
+## help The AVR Libc package provides a subset of the standard C library for
+## help Atmel AVR 8-bit RISC microcontrollers. In addition, the library
+## help provides the basic startup code needed by most applications.
+
+source "config/versions/avr-libc.in"
+
+config LIBC_AVR_LIBC_EXTRA_CONFIG_ARRAY
+    string
+    prompt "Extra config for avr-libc"
+    default ""
+    help
+      Extra flags to pass onto ./configure when configuring the avr-libc.
