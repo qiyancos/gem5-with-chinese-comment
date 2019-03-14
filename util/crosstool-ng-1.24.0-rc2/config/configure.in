@@ -1,0 +1,58 @@
+# Default values as found by ./configure
+
+config CONFIGURE_has_static_link
+    def_bool y
+
+config CONFIGURE_has_wget
+    def_bool y
+
+config CONFIGURE_has_curl
+    def_bool y
+
+config CONFIGURE_has_make_3_81_or_newer
+    def_bool y
+
+config CONFIGURE_has_libtool_2_4_or_newer
+    def_bool y
+
+config CONFIGURE_has_libtoolize_2_4_or_newer
+    def_bool y
+
+config CONFIGURE_has_autoconf_2_65_or_newer
+    def_bool y
+
+config CONFIGURE_has_autoreconf_2_65_or_newer
+    def_bool y
+
+config CONFIGURE_has_automake_1_15_or_newer
+    bool
+
+config CONFIGURE_has_gnu_m4_1_4_12_or_newer
+    def_bool y
+
+config CONFIGURE_has_dtc
+    def_bool y
+
+config CONFIGURE_has_cvs
+    bool
+
+config CONFIGURE_has_svn
+    bool
+
+config CONFIGURE_has_git
+    def_bool y
+
+config CONFIGURE_has_md5sum
+    def_bool y
+
+config CONFIGURE_has_sha1sum
+    def_bool y
+
+config CONFIGURE_has_sha256sum
+    def_bool y
+
+config CONFIGURE_has_sha512sum
+    def_bool y
+
+config CONFIGURE_has_install_with_strip_program
+    def_bool y
