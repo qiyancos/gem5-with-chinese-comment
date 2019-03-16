@@ -1,7 +1,0 @@
-#!/bin/bash
-
-set -e
-cd
-ct-ng help
-ct-ng list-samples
-ct-ng list-steps

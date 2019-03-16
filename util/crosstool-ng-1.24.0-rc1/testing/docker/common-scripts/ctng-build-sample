@@ -1,5 +1,0 @@
-#!/bin/bash
-
-set -e
-cd work
-ct-ng build-all ${1+CT_SAMPLES="$*"}
