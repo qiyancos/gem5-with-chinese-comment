@@ -458,7 +458,7 @@ ArmSemihosting::callTmpNam(ThreadContext *tc, bool aarch64,
     const uint64_t max_len = argv[3];
 
     std::vector<char> buf(L_tmpnam);
-    char *path = tmpnam(buf.data());
+    char* path = tmpnam(buf.data());
     if (!path)
         return retError(EINVAL);
 

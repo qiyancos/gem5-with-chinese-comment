@@ -5,7 +5,7 @@ root=$PWD
 setScript(){
     specDir="/home/lee/project/spec2006"
     # root directory path for spec2006
-    gem5Dir="/home/lee/project/gem5"
+    gem5Dir="/home/lishuoke/gem5-with-chinese-comment"
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
@@ -43,7 +43,7 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="Yes" # [Yes/No] 
+    forceNotBuild="No" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
     m5outDir=""
     # m5outDir option [default m5out]
@@ -96,7 +96,7 @@ setGem5(){
         L3size=""
         L3assoc=""
 
-    enableDebug="Yes" # [Yes/No]
+    enableDebug="No" # [Yes/No]
         debugOutputDir="$gem5Dir"
         debugFlags="Fetch" # ,Decode,Rename,IEW,Commit,FreeList" 
         # [Flag1, Flag2] use "-h gem5 --debug-help" to see the debug flags 
@@ -428,6 +428,7 @@ runGem5(){
         if [ ${gem5Only}x = 1x ]
         then bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $options`"
         else
+			cd $root 
             gem5Options=`echo $gem5Options | sed "s/DEBUGFILE/debug\.log/"`
             bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
         fi
@@ -907,8 +908,8 @@ setSpec
 findSpec
 argParser
 settingParser
-set -e
 buildGem5
+set -e
 buildSpecOptions
 buildSpecTemp
 printOutputInfo

@@ -1,7 +1,0 @@
-#!/bin/bash
-
-set -e
-cd work
-/crosstool-ng/configure --prefix=/opt/ctng
-make
-make install
