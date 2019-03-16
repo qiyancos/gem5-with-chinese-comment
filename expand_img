@@ -1,0 +1,108 @@
+#! /bin/bash
+if [ ${1}x = -hx -o ${1}x = x ]
+then
+	echo "Usage: build_img <image file> <new image size>"
+	echo "       <size> Only format like \"1024MB\" or \"2GB\" is accpted"
+	exit
+fi
+
+testSudo(){
+	touch /test.txt &> /dev/null
+	if [ $? != 0 ]
+	then 
+		echo "You must run with sudo to expand image!"
+		sudo touch /test.txt
+	fi
+	sudo rm /test.txt
+}
+
+checkRun(){
+	$*
+	errCode=$?
+	if [ $errCode != 0 ]
+	then 
+		echo "Error(s) occurred while executing the command line listed below:"
+		echo "\"$*\""
+		echo "Returned with error code ($errCode)"
+		exit
+	fi
+}
+
+exitInfo(){
+	echo $*
+	exit
+}
+
+testSudo
+
+root=`dirname $0`
+cd $root
+root=$PWD
+
+if [ ! -f $1 ]
+then exitInfo "$1: No such image file!"
+fi
+
+size=$2
+words=${#size}
+unit=${size:$[words - 2]:2}
+size=${size/$unit/}
+
+if [ ${unit} != MB -a ${unit} != GB ] || [[ ! $size =~ ^[0-9]*$ ]]
+then exitInfo "Bad format for new image size, use -h for help!"
+fi
+
+if [ ${unit} = MB -a $size -lt 2 ]
+then exitInfo "New image size must be bigger than 1MB!"
+fi
+
+if [ ${unit} = MB -a ${size} -gt 16383 ] || [ ${unit} = GB -a ${size} -gt 16 ]
+then exitInfo "$size $unit is too big for LBA, truncating file."
+fi
+
+if [ $unit = GB ]
+then size=$[size * 1024]
+fi
+
+# temporary image file: temp.img
+echo ">> Creating new image file..."
+
+cylinders=$[size * 2048 / 1008]
+heads=16
+sectors=63
+size=$[cylinders * heads * sectors * 512 / 1024 ]
+unit=K
+
+checkRun dd if=/dev/zero of=$root/temp.img bs=$unit count=$size
+checkRun sudo losetup /dev/loop0 $root/temp.img
+checkRun sudo $root/util/sfdisk --no-reread -D -C $cylinders -H 16 -S 63 /dev/loop0 << EOF
+0
+
+
+
+
+EOF
+checkRun sudo losetup -d /dev/loop0
+checkRun sudo losetup /dev/loop0 $root/temp.img
+checkRun sudo losetup -d /dev/loop0
+checkRun sudo losetup -o 32256 /dev/loop0 $root/temp.img
+checkRun sudo mkfs.ext2 /dev/loop0
+checkRun sudo losetup -d /dev/loop0
+echo ">> New image file has been created!"
+
+echo ">> Copying files to new image..."
+checkRun mkdir -p $root/mount/old $root/mount/new
+checkRun sudo mount -o loop,offset=32256 $1 $root/mount/old
+checkRun sudo mount -o loop,offset=32256 $root/temp.img $root/mount/new
+checkRun cp -r $root/mount/old/* $root/mount/new/
+checkRun sudo umount $root/mount/old $root/mount/new
+checkRun rm -rf $root/mount/new $root/mount/old
+chmod 777 $root/temp.img 
+echo ">> New image file is ready to use"
+
+echo -n "Would you like to keep the original image file? [Y/N] "
+read flag
+if [[ ${flag}x =~ ^(Yx|yx|x)$ ]]
+then echo "You can find your new image file \"temp.img\" in $PWD!"
+else checkRun mv ./temp.img $1
+fi
