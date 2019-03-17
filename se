@@ -9,7 +9,7 @@ setScript(){
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
-    ISA="ALPHA"
+    ISA="X86"
     # [ARM ALPHA RISCV X86 MIPS]
     optLevel="peak"
     # [base(O2) peak(O3)]
@@ -98,8 +98,8 @@ setGem5(){
 
     enableDebug="No" # [Yes/No]
         debugOutputDir="$gem5Dir"
-        debugFlags="Fetch" # ,Decode,Rename,IEW,Commit,FreeList" 
-        # [Flag1, Flag2] use "-h gem5 --debug-help" to see the debug flags 
+        debugFlags="Commit,DynInst" #
+        # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
         debugStartTick=""
         debugEndTick=""
 }
