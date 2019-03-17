@@ -9,9 +9,9 @@ setScript(){
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
-    ISA="X86"
+    ISA="ALPHA"
     # [ARM ALPHA RISCV X86 MIPS]
-    optLevel="base"
+    optLevel="peak"
     # [base(O2) peak(O3)]
     buildDir="build_${optLevel}_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
     buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
@@ -23,7 +23,7 @@ setScript(){
     # num of threads you want to use when building gem5.opt
     testSet="test" # [ref test train]
     # Test_set setting
-    runSpecSuites="Yes" # [Yes/No]
+    runSpecSuites="No" # [Yes/No]
     # Decide if you want to run all the tests in the given testSet
     useDiff="Yes" #[Yes/No]
     # If you want to enable stdout-diff after spec test(s)
@@ -428,7 +428,7 @@ runGem5(){
         if [ ${gem5Only}x = 1x ]
         then bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $options`"
         else
-			cd $root 
+            cd $root 
             gem5Options=`echo $gem5Options | sed "s/DEBUGFILE/debug\.log/"`
             bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
         fi
@@ -577,7 +577,7 @@ findSpec(){
     then
         echo "Warning: Directory not specified for Spec2000/2006!"
         noSpec=1
-		return
+        return
     fi
 
     if [ -f /bin/lsnc ]
@@ -631,7 +631,20 @@ printHelpInfo(){
 
 ################# parse settings #################
 settingParser(){
-    ################# decode debug args ##################
+    ################# parse dir args ##################
+    if [ ${GEM5_ROOT}x != x ]
+    then
+        echo "Warning: Environment variable GEM5_ROOT is set, use env-variable"
+        echo "         instead of variable in this script!"
+        gem5Dir=$GEM5_ROOT
+    fi
+    if [ ${SPEC_ROOT}x != x ]
+    then
+        echo "Warning: Environment variable SPEC_ROOT is set, use env-variable"
+        echo "         instead of variable in this script!"
+        specDir=$SPEC_ROOT
+    fi
+    ################# parse debug args ##################
     if [ ${enableDebug}x = Yesx ]
     then 
         if [ "${debugFlags}x" != x ]
@@ -665,7 +678,7 @@ settingParser(){
         fi
     fi
 
-    ################# decode other args ##################
+    ################# parse other args ##################
     levelIdx=0
     for level in ${argLevel[*]}
     do
@@ -697,6 +710,11 @@ argParser(){
     case "${arguments[1]}x" in
     ################# run multiple programs #################
     "-mpx")
+        if [ ${gem5Dir}x = x ]
+        then 
+            echo "Error: Gem5 root directory not set!"
+            exit 1
+        fi
         progIdx=0
         while [ "${arguments[$[progIdx + 2]]}x" != x ]
         do
@@ -729,6 +747,11 @@ argParser(){
     
     ################# run with given args #################
     "-hx")
+        if [ ${gem5Dir}x = x ]
+        then 
+            echo "Error: Gem5 root directory not set!"
+            exit 1
+        fi
         case "${arguments[2]}x" in
         gem5x)
             if [ ! -f $gem5Dir/build/$ISA/gem5.$buildModel ]
@@ -767,11 +790,11 @@ argParser(){
     
     ################# list available spec programs #################
     "-lx")
-		if [ ${noSpec}x = 1x ]
-		then
-			echo "Error: could not locate spec dir \"$specDir\"!"
-			exit 1
-		fi
+        if [ ${noSpec}x = 1x ]
+        then
+            echo "Error: could not locate spec dir \"$specDir\"!"
+            exit 1
+        fi
         if [ "${#testlist[*]}" = 0 ]
         then echo "No available spec programs for $ISA with optLevel \"$optLevel\"!"
         fi
@@ -782,11 +805,16 @@ argParser(){
 
     ################# select available spec programs #################
     "-px")
-		if [ ${noSpec}x = 1x ]
-		then
-			echo "Error: could not locate spec dir \"$specDir\"!"
-			exit 1
-		fi
+        if [ ${gem5Dir}x = x ]
+        then 
+            echo "Error: Gem5 root directory not set!"
+            exit 1
+        fi
+        if [ ${noSpec}x = 1x ]
+        then
+            echo "Error: could not locate spec dir \"$specDir\"!"
+            exit 1
+        fi
         if [ ${#testlist[*]} = 0 ]
         then
             echo "No available spec programs for $ISA!"
