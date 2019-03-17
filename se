@@ -3,9 +3,9 @@ root=$PWD
 
 ################# settings for script #################
 setScript(){
-    specDir="/home/lee/project/spec2006"
+    specDir="/home/lishuoke/spec2006"
     # root directory path for spec2006
-    gem5Dir="/home/lee/project/gem5"
+    gem5Dir="/home/lishuoke/gem5-with-chinese-comment"
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
@@ -19,7 +19,7 @@ setScript(){
     #  build_base_mips.0001, build_base_amd64.0001]
     runDir="run_base_TESTSET_amd64.0001"
     # Do not change this
-    threads=4
+    threads=`lscpu | awk '/^CPU\(s\):/{print $2}'`
     # num of threads you want to use when building gem5.opt
     testSet="test" # [ref test train]
     # Test_set setting
