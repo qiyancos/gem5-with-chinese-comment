@@ -9,7 +9,7 @@ setScript(){
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
-    ISA="X86"
+    ISA="ARM"
     # [ARM ALPHA RISCV X86 MIPS]
     optLevel="peak"
     # [base(O2) peak(O3)]
@@ -43,13 +43,13 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="No" # [Yes/No] 
+    forceNotBuild="Yes" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
     m5outDir=""
     # m5outDir option [default m5out]
 
     enableGlobal="Yes" # [Yes]
-        cpuType="DerivO3CPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
+        cpuType="AtomicSimpleCPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
         # type of cpu to run with
         cpuVoltage="" # []
         # Top-level voltage for blocks running at system power supply
@@ -61,7 +61,7 @@ setGem5(){
         # Run to the specified absolute simulated time in seconds
         numCpus="" # []
 
-    enableSmt="Yes" # [Yes/No]
+    enableSmt="No" # [Yes/No]
     enableSimpoint="No" # [Yes/No]
 
     enableMem="Yes"
@@ -96,9 +96,9 @@ setGem5(){
         L3size=""
         L3assoc=""
 
-    enableDebug="No" # [Yes/No]
+    enableDebug="Yes" # [Yes/No]
         debugOutputDir="$gem5Dir"
-        debugFlags="Commit,DynInst" #
+        debugFlags="Commit" #
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
         debugStartTick=""
         debugEndTick=""
@@ -440,7 +440,7 @@ runGem5(){
         while [ $suiteID -le $upperSuiteID ]
         do
             gem5Options=`echo $gem5Options | sed "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
-            redirectOptions=`echo $redirectOptions | sed -e "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
+            redirectOptions=`echo $redirectOptions | sed -e "s/subtest_$[suiteID - 1]/subtest_$suiteID/g"`
             if [ "${options[$suiteID]}x" = x ]
             then
                 suiteID=$[suiteID + 1]
