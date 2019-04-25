@@ -9,7 +9,7 @@ setScript(){
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
-    ISA="ARM"
+    ISA="ALPHA"
     # [ARM ALPHA RISCV X86 MIPS]
     optLevel="peak"
     # [base(O2) peak(O3)]
@@ -25,7 +25,7 @@ setScript(){
     # Test_set setting
     runSpecSuites="No" # [Yes/No]
     # Decide if you want to run all the tests in the given testSet
-    useDiff="Yes" #[Yes/No]
+    useDiff="No" #[Yes/No]
     # If you want to enable stdout-diff after spec test(s)
     # Attention: stderr and stdout will be redirected if diff is enabled!
     diffTool="specdiff" # [specdiff diff md5sum]
@@ -49,7 +49,7 @@ setGem5(){
     # m5outDir option [default m5out]
 
     enableGlobal="Yes" # [Yes]
-        cpuType="AtomicSimpleCPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
+        cpuType="DerivO3CPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
         # type of cpu to run with
         cpuVoltage="" # []
         # Top-level voltage for blocks running at system power supply
@@ -96,7 +96,7 @@ setGem5(){
         L3size=""
         L3assoc=""
 
-    enableDebug="Yes" # [Yes/No]
+    enableDebug="No" # [Yes/No]
         debugOutputDir="$gem5Dir"
         debugFlags="Commit" #
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
@@ -399,17 +399,20 @@ printOutputInfo(){
 
 ################# build gem5.opt #################
 buildGem5(){
-    if [ ${needBuild}x = 1x -a $forceNotBuild != Yes ]
+    if [ ${needBuild}x = 1x ]
     then 
-        cd $gem5Dir
-        scons -j$threads build/$ISA/gem5.$buildModel $buildOption
-        if [ $? != 0 ]
-        then exit
+        if [ ! -f $gem5Dir/build/$ISA/gem5.$buildModel -o $forceNotBuild != Yes ]
+        then 
+            cd $gem5Dir
+            scons -j$threads build/$ISA/gem5.$buildModel $buildOption
+            if [ $? != 0 ]
+            then exit
+            fi
+            if [ $USER != lee ]
+            then chmod 777 -R $gem5Dir/build/ 2> /dev/null
+            fi
+            # This chmod should be enbaled on server!
         fi
-        if [ $USER != lee ]
-        then chmod 777 -R $gem5Dir/build/ 2> /dev/null
-        fi
-        # This chmod should be enbaled on server!
     fi
 }
 
