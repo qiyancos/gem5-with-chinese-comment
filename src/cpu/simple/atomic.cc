@@ -52,6 +52,7 @@
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
 #include "debug/SimpleCPU.hh"
+#include "debug/ShowRunning.hh"
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 #include "mem/physical.hh"
@@ -597,7 +598,9 @@ void
 AtomicSimpleCPU::tick()
 {
     DPRINTF(SimpleCPU, "Tick\n");
-
+	if(inst_number%10000000==0) //10million
+		DPRINTF(ShowRunning, "Running Insts: %15ld\n",inst_number);
+		
     // Change thread if multi-threaded
     swapActiveThread();
 

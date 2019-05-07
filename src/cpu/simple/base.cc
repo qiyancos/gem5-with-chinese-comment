@@ -122,6 +122,8 @@ BaseSimpleCPU::BaseSimpleCPU(BaseSimpleCPUParams *p)
     } else {
         checker = NULL;
     }
+	//new code
+	inst_number=0;
 }
 
 void
@@ -181,6 +183,9 @@ BaseSimpleCPU::countInst()
 
     system->totalNumInsts++;
     t_info.thread->funcExeInst++;
+	
+	//new code for counte instruction
+	inst_number++;
 }
 
 Counter

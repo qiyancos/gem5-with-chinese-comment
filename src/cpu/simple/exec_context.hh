@@ -84,6 +84,64 @@ class SimpleExecContext : public ExecContext {
     Counter numOp;
     Stats::Scalar numOps;
 
+//************************************************
+
+//added by zyc
+
+    Stats::Scalar numIntAdd;
+    Stats::Scalar numIntSub;
+    Stats::Scalar numIntMov;
+    Stats::Scalar numIntCmp;
+    Stats::Scalar numIntStr;
+    Stats::Scalar numIntB;
+    Stats::Scalar numIntCbz;
+    Stats::Scalar numIntRsb;
+    Stats::Scalar numIntAnd;
+    Stats::Scalar numIntEor;
+    Stats::Scalar numIntOrr;
+    Stats::Scalar numIntBl;
+    Stats::Scalar numIntBx;
+    Stats::Scalar numIntBlx;
+    Stats::Scalar numIntPush;
+    Stats::Scalar numIntStm;
+    Stats::Scalar numIntPop;
+    Stats::Scalar numIntTeq;
+    Stats::Scalar numIntBic;
+    Stats::Scalar numIntAsr;
+    Stats::Scalar numIntLsl;
+    Stats::Scalar numIntLsr;
+    Stats::Scalar numIntLdr;
+    Stats::Scalar numIntLdm;
+    Stats::Scalar numIntIt;
+
+    Stats::Scalar numIntSbc;
+    Stats::Scalar numIntRsc;
+    Stats::Scalar numIntCmn;
+    Stats::Scalar numIntMadd;
+    Stats::Scalar numIntMsub;
+    Stats::Scalar numIntMul;
+    Stats::Scalar numIntSmaddl;
+    Stats::Scalar numIntSdiv;
+    Stats::Scalar numIntUdiv;
+    Stats::Scalar numIntTst;
+    Stats::Scalar numIntRor;
+    Stats::Scalar numIntNeg;
+
+
+// NEON Instructions *************************************
+    Stats::Scalar numVLDR;
+    Stats::Scalar numVSTM;
+    Stats::Scalar numVSTR;
+    Stats::Scalar numVMOV;
+    Stats::Scalar numVADD;
+    Stats::Scalar numVCMP;
+    Stats::Scalar numVSUB;
+    Stats::Scalar numVCVT;
+    Stats::Scalar numVMUL;
+    Stats::Scalar numVMRS;
+    Stats::Scalar numVDIV;
+//****************************************************************
+
     // Number of integer alu accesses
     Stats::Scalar numIntAluAccesses;
 

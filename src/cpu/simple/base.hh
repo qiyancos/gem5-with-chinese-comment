@@ -125,6 +125,8 @@ class BaseSimpleCPU : public BaseCPU
     Status _status;
 
   public:
+	// new code
+	Addr inst_number;
     Addr dbg_vtophys(Addr addr);
 
 
