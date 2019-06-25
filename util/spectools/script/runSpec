@@ -7,9 +7,9 @@ setScript(){
     # root directory path for spec2006
     tempDir="$root"
     # Where the temporary files should be stored
-    ISA="X86"
+    ISA="MIPS_P6600"
     # [ARM ALPHA RISCV X86 MIPS SW]
-    optLevel="peak"
+    optLevel="base"
     # [base(O2) peak(O3)]
     buildDir="build_${optLevel}_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
     buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
@@ -17,7 +17,7 @@ setScript(){
     #  build_base_mips.0001, build_base_amd64.0001]
     runDir="run_base_TESTSET_amd64.0001"
     # Do not change this
-    testSet="test" # [ref test train]
+    testSet="ref" # [ref test train]
     # Test_set setting
     runSpecSuites="Yes" # [Yes/No]
     # Decide if you want to run all the tests in the given testSet
@@ -77,7 +77,7 @@ setSpec(){
     gcc_ref_0=(gcc "166.s" "-o" "166.i -o 166.s")
     gcc_ref_1=(gcc "200.s" "-o" "200.i -o 200.s")
     gcc_ref_2=(gcc "c-typeck.s" "-o" "c-typeck.i -o c-typeck.s")
-    gcc_ref_3=(gcc "c-decl.s" "-o" "c-decl.i -o c-decl.s")
+    gcc_ref_3=(gcc "cp-decl.s" "-o" "cp-decl.i -o cp-decl.s")
     gcc_ref_4=(gcc "expr.s" "-o" "expr.i -o expr.s")
     gcc_ref_5=(gcc "expr2.s" "-o" "expr2.i -o expr2.s")
     gcc_ref_6=(gcc "g23.s" "-o" "g23.i -o g23.s")
@@ -185,7 +185,7 @@ setSpec(){
     calculix_test_0=(calculix "SPECtestformatmodifier_z.txt beampic.dat" "-o" "-i beampic")
 
     # 456
-    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swss4")
+    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swss41")
     hmmer_ref_1=(hmmer "retro.out" "-o" "--fxe 0 --mean 500 --num 500000 --sd 350 --seed 0 retro.hmm")
     hmmer_ref_single=0
     hmmer_train_0=(hmmer "leng100.out" "-o" "--fixed 0 --mean 425 --num 85000 --sd 300 --seed 0 leng100.hmm")
@@ -286,7 +286,8 @@ runRealSpec(){
             suiteID=$[suiteID + 1]
             continue
         fi
-        echo -e "\033[1;31m      ==================== Runing SubTest-$suiteID! ====================\033[0m"
+        options[$suiteID]=`echo ${options[$suiteID]} | sed 's/NULL//'`
+		echo -e "\033[1;31m      ==================== Runing SubTest-$suiteID! ====================\033[0m"
         if [ ${useDiff}x = Yesx ]
         then echo ">> Warning: You won't see any output as all of them will be redirected for checking!"
         fi
@@ -621,7 +622,10 @@ buildSpecOptions(){
         else
             options[$suiteID]="`eval echo -e '$'"{${target}_${testSet}_${suiteID}[2]}" | sed 's/-i /< /g'`"
         fi
-        diffFileList[$suiteID]="`eval echo -e '$'"{${target}_${testSet}_${suiteID}[1]}"`"
+        if [ "x${options[$suiteID]}" = x ]
+		then options[$suiteID]=NULL
+		fi
+		diffFileList[$suiteID]="`eval echo -e '$'"{${target}_${testSet}_${suiteID}[1]}"`"
         if [ $runSpecSuites = No ]
         then break
         fi

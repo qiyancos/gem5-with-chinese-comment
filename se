@@ -149,7 +149,7 @@ setSpec(){
     gcc_ref_0=(gcc "166.s" "-o" "166.i -o 166.s")
     gcc_ref_1=(gcc "200.s" "-o" "200.i -o 200.s")
     gcc_ref_2=(gcc "c-typeck.s" "-o" "c-typeck.i -o c-typeck.s")
-    gcc_ref_3=(gcc "c-decl.s" "-o" "c-decl.i -o c-decl.s")
+    gcc_ref_3=(gcc "cp-decl.s" "-o" "cp-decl.i -o cp-decl.s")
     gcc_ref_4=(gcc "expr.s" "-o" "expr.i -o expr.s")
     gcc_ref_5=(gcc "expr2.s" "-o" "expr2.i -o expr2.s")
     gcc_ref_6=(gcc "g23.s" "-o" "g23.i -o g23.s")
@@ -212,7 +212,7 @@ setSpec(){
     gobmk_ref_1=(gobmk "nngs.out" "-o" "--quiet --mode gtp" "-i nngs.tst")
     gobmk_ref_2=(gobmk "score2.out" "-o" "--quiet --mode gtp" "-i score2.tst")
     gobmk_ref_3=(gobmk "trevorc.out" "-o" "--quiet --mode gtp" "-i trevorc.tst")
-    gobmk_ref_4=(gobmk "trevord.out" "-o" "--quiet --mode gtp" "-i trevorf.tst")
+    gobmk_ref_4=(gobmk "trevord.out" "-o" "--quiet --mode gtp" "-i trevord.tst")
     gobmk_ref_single=0
     gobmk_train_0=(gobmk "arb.out" "-o" "--quiet --mode gtp" "-i arb.tst")
     gobmk_train_1=(gobmk "arend.out" "-o" "--quiet --mode gtp" "-i arend.tst")
@@ -257,7 +257,7 @@ setSpec(){
     calculix_test_0=(calculix "SPECtestformatmodifier_z.txt beampic.dat" "-o" "-i beampic")
 
     # 456
-    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swss4")
+    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swss41")
     hmmer_ref_1=(hmmer "retro.out" "-o" "--fxe 0 --mean 500 --num 500000 --sd 350 --seed 0 retro.hmm")
     hmmer_ref_single=0
     hmmer_train_0=(hmmer "leng100.out" "-o" "--fixed 0 --mean 425 --num 85000 --sd 300 --seed 0 leng100.hmm")
