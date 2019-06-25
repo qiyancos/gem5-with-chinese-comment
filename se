@@ -9,9 +9,9 @@ setScript(){
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
-    ISA="X86"
+    ISA="ALPHA"
     # [ARM ALPHA RISCV X86 MIPS]
-    optLevel="base"
+    optLevel="peak"
     # [base(O2) peak(O3)]
     buildDir="build_${optLevel}_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
     buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
@@ -19,13 +19,13 @@ setScript(){
     #  build_base_mips.0001, build_base_amd64.0001]
     runDir="run_base_TESTSET_amd64.0001"
     # Do not change this
-    threads=4
+    threads=`lscpu | awk '/^CPU\(s\):/{print $2}'`
     # num of threads you want to use when building gem5.opt
     testSet="test" # [ref test train]
     # Test_set setting
-    runSpecSuites="Yes" # [Yes/No]
+    runSpecSuites="No" # [Yes/No]
     # Decide if you want to run all the tests in the given testSet
-    useDiff="Yes" #[Yes/No]
+    useDiff="No" #[Yes/No]
     # If you want to enable stdout-diff after spec test(s)
     # Attention: stderr and stdout will be redirected if diff is enabled!
     diffTool="specdiff" # [specdiff diff md5sum]
@@ -61,7 +61,7 @@ setGem5(){
         # Run to the specified absolute simulated time in seconds
         numCpus="" # []
 
-    enableSmt="Yes" # [Yes/No]
+    enableSmt="No" # [Yes/No]
     enableSimpoint="No" # [Yes/No]
 
     enableMem="Yes"
@@ -98,8 +98,8 @@ setGem5(){
 
     enableDebug="No" # [Yes/No]
         debugOutputDir="$gem5Dir"
-        debugFlags="Fetch" # ,Decode,Rename,IEW,Commit,FreeList" 
-        # [Flag1, Flag2] use "-h gem5 --debug-help" to see the debug flags 
+        debugFlags="Commit" #
+        # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
         debugStartTick=""
         debugEndTick=""
 }
@@ -149,7 +149,7 @@ setSpec(){
     gcc_ref_0=(gcc "166.s" "-o" "166.i -o 166.s")
     gcc_ref_1=(gcc "200.s" "-o" "200.i -o 200.s")
     gcc_ref_2=(gcc "c-typeck.s" "-o" "c-typeck.i -o c-typeck.s")
-    gcc_ref_3=(gcc "c-decl.s" "-o" "c-decl.i -o c-decl.s")
+    gcc_ref_3=(gcc "cp-decl.s" "-o" "cp-decl.i -o cp-decl.s")
     gcc_ref_4=(gcc "expr.s" "-o" "expr.i -o expr.s")
     gcc_ref_5=(gcc "expr2.s" "-o" "expr2.i -o expr2.s")
     gcc_ref_6=(gcc "g23.s" "-o" "g23.i -o g23.s")
@@ -257,7 +257,7 @@ setSpec(){
     calculix_test_0=(calculix "SPECtestformatmodifier_z.txt beampic.dat" "-o" "-i beampic")
 
     # 456
-    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swss4")
+    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swss41")
     hmmer_ref_1=(hmmer "retro.out" "-o" "--fxe 0 --mean 500 --num 500000 --sd 350 --seed 0 retro.hmm")
     hmmer_ref_single=0
     hmmer_train_0=(hmmer "leng100.out" "-o" "--fixed 0 --mean 425 --num 85000 --sd 300 --seed 0 leng100.hmm")
@@ -399,17 +399,20 @@ printOutputInfo(){
 
 ################# build gem5.opt #################
 buildGem5(){
-    if [ ${needBuild}x = 1x -a $forceNotBuild != Yes ]
+    if [ ${needBuild}x = 1x ]
     then 
-        cd $gem5Dir
-        scons -j$threads build/$ISA/gem5.$buildModel $buildOption
-        if [ $? != 0 ]
-        then exit
+        if [ ! -f $gem5Dir/build/$ISA/gem5.$buildModel -o $forceNotBuild != Yes ]
+        then 
+            cd $gem5Dir
+            scons -j$threads build/$ISA/gem5.$buildModel $buildOption
+            if [ $? != 0 ]
+            then exit
+            fi
+            if [ $USER != lee ]
+            then chmod 777 -R $gem5Dir/build/ 2> /dev/null
+            fi
+            # This chmod should be enbaled on server!
         fi
-        if [ $USER != lee ]
-        then chmod 777 -R $gem5Dir/build/ 2> /dev/null
-        fi
-        # This chmod should be enbaled on server!
     fi
 }
 
@@ -428,7 +431,7 @@ runGem5(){
         if [ ${gem5Only}x = 1x ]
         then bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $options`"
         else
-			cd $root 
+            cd $root 
             gem5Options=`echo $gem5Options | sed "s/DEBUGFILE/debug\.log/"`
             bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/se.py $basicOptions $options`"
         fi
@@ -440,7 +443,7 @@ runGem5(){
         while [ $suiteID -le $upperSuiteID ]
         do
             gem5Options=`echo $gem5Options | sed "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
-            redirectOptions=`echo $redirectOptions | sed -e "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
+            redirectOptions=`echo $redirectOptions | sed -e "s/subtest_$[suiteID - 1]/subtest_$suiteID/g"`
             if [ "${options[$suiteID]}x" = x ]
             then
                 suiteID=$[suiteID + 1]
@@ -577,7 +580,7 @@ findSpec(){
     then
         echo "Warning: Directory not specified for Spec2000/2006!"
         noSpec=1
-		return
+        return
     fi
 
     if [ -f /bin/lsnc ]
@@ -631,7 +634,20 @@ printHelpInfo(){
 
 ################# parse settings #################
 settingParser(){
-    ################# decode debug args ##################
+    ################# parse dir args ##################
+    if [ ${GEM5_ROOT}x != x ]
+    then
+        echo "Warning: Environment variable GEM5_ROOT is set, use env-variable"
+        echo "         instead of variable in this script!"
+        gem5Dir=$GEM5_ROOT
+    fi
+    if [ ${SPEC_ROOT}x != x ]
+    then
+        echo "Warning: Environment variable SPEC_ROOT is set, use env-variable"
+        echo "         instead of variable in this script!"
+        specDir=$SPEC_ROOT
+    fi
+    ################# parse debug args ##################
     if [ ${enableDebug}x = Yesx ]
     then 
         if [ "${debugFlags}x" != x ]
@@ -665,7 +681,7 @@ settingParser(){
         fi
     fi
 
-    ################# decode other args ##################
+    ################# parse other args ##################
     levelIdx=0
     for level in ${argLevel[*]}
     do
@@ -697,6 +713,11 @@ argParser(){
     case "${arguments[1]}x" in
     ################# run multiple programs #################
     "-mpx")
+        if [ ${gem5Dir}x = x ]
+        then 
+            echo "Error: Gem5 root directory not set!"
+            exit 1
+        fi
         progIdx=0
         while [ "${arguments[$[progIdx + 2]]}x" != x ]
         do
@@ -729,14 +750,25 @@ argParser(){
     
     ################# run with given args #################
     "-hx")
+        if [ ${gem5Dir}x = x ]
+        then 
+            echo "Error: Gem5 root directory not set!"
+            exit 1
+        fi
         case "${arguments[2]}x" in
         gem5x)
+            if [ ! -f $gem5Dir/build/$ISA/gem5.$buildModel ]
+            then needBuild=1
+            fi
             gem5Only=1
             if [ "${arguments[3]}x" = x ]
             then options="-h"
             else options=${arguments[*]:3:$[${#arguments[*]} - 3]}
             fi;;
         sex)
+            if [ ! -f $gem5Dir/build/$ISA/gem5.$buildModel ]
+            then needBuild=1
+            fi
             if [ "${arguments[3]}x" = x ]
             then options="-h"
             else
@@ -761,11 +793,11 @@ argParser(){
     
     ################# list available spec programs #################
     "-lx")
-		if [ ${noSpec}x = 1x ]
-		then
-			echo "Error: could not locate spec dir \"$specDir\"!"
-			exit 1
-		fi
+        if [ ${noSpec}x = 1x ]
+        then
+            echo "Error: could not locate spec dir \"$specDir\"!"
+            exit 1
+        fi
         if [ "${#testlist[*]}" = 0 ]
         then echo "No available spec programs for $ISA with optLevel \"$optLevel\"!"
         fi
@@ -776,11 +808,16 @@ argParser(){
 
     ################# select available spec programs #################
     "-px")
-		if [ ${noSpec}x = 1x ]
-		then
-			echo "Error: could not locate spec dir \"$specDir\"!"
-			exit 1
-		fi
+        if [ ${gem5Dir}x = x ]
+        then 
+            echo "Error: Gem5 root directory not set!"
+            exit 1
+        fi
+        if [ ${noSpec}x = 1x ]
+        then
+            echo "Error: could not locate spec dir \"$specDir\"!"
+            exit 1
+        fi
         if [ ${#testlist[*]} = 0 ]
         then
             echo "No available spec programs for $ISA!"
