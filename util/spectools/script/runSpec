@@ -140,7 +140,7 @@ setSpec(){
     gobmk_ref_1=(gobmk "nngs.out" "-o" "--quiet --mode gtp" "-i nngs.tst")
     gobmk_ref_2=(gobmk "score2.out" "-o" "--quiet --mode gtp" "-i score2.tst")
     gobmk_ref_3=(gobmk "trevorc.out" "-o" "--quiet --mode gtp" "-i trevorc.tst")
-    gobmk_ref_4=(gobmk "trevord.out" "-o" "--quiet --mode gtp" "-i trevorf.tst")
+    gobmk_ref_4=(gobmk "trevord.out" "-o" "--quiet --mode gtp" "-i trevord.tst")
     gobmk_ref_single=0
     gobmk_train_0=(gobmk "arb.out" "-o" "--quiet --mode gtp" "-i arb.tst")
     gobmk_train_1=(gobmk "arend.out" "-o" "--quiet --mode gtp" "-i arend.tst")
