@@ -185,7 +185,7 @@ setSpec(){
     calculix_test_0=(calculix "SPECtestformatmodifier_z.txt beampic.dat" "-o" "-i beampic")
 
     # 456
-    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swss41")
+    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swiss41")
     hmmer_ref_1=(hmmer "retro.out" "-o" "--fxe 0 --mean 500 --num 500000 --sd 350 --seed 0 retro.hmm")
     hmmer_ref_single=0
     hmmer_train_0=(hmmer "leng100.out" "-o" "--fixed 0 --mean 425 --num 85000 --sd 300 --seed 0 leng100.hmm")
