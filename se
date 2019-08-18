@@ -3,13 +3,13 @@ root=$PWD
 
 ################# settings for script #################
 setScript(){
-    specDir="/home/lishuoke/spec2006"
+    specDir="/home/lee/project/spec2006"
     # root directory path for spec2006
-    gem5Dir="/home/lishuoke/gem5-with-chinese-comment"
+    gem5Dir="/home/lee/project/gem5"
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
-    ISA="ALPHA"
+    ISA="X86"
     # [ARM ALPHA RISCV X86 MIPS]
     optLevel="peak"
     # [base(O2) peak(O3)]
@@ -43,7 +43,7 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="Yes" # [Yes/No] 
+    forceNotBuild="No" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
     m5outDir=""
     # m5outDir option [default m5out]
@@ -59,7 +59,7 @@ setGem5(){
         # Clock for blocks running at CPU speed
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
-        numCpus="" # []
+        numCpus="4" # []
 
     enableSmt="No" # [Yes/No]
     enableSimpoint="No" # [Yes/No]
