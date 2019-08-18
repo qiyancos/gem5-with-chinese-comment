@@ -81,6 +81,16 @@ class IOCache(Cache):
     size = '1kB'
     tgts_per_mshr = 12
 
+# https://blog.csdn.net/tristan_tian/article/details/79851063
+class L3Cache(Cache):
+    assoc = 64
+    tag_latency = 32
+    data_latency = 32
+    response_latency = 32
+    mshrs = 32
+    tgts_per_mshr = 24
+    write_buffers = 16
+
 class PageTableWalkerCache(Cache):
     assoc = 2
     tag_latency = 2

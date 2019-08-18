@@ -60,6 +60,7 @@ setGem5(){
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
         numCpus="4" # []
+        # number of cpu you want to run with
 
     enableSmt="No" # [Yes/No]
     enableSimpoint="No" # [Yes/No]
@@ -95,6 +96,9 @@ setGem5(){
         numL3Caches=""
         L3size=""
         L3assoc=""
+
+    enableSWCache="No" # [Yes/No]
+        numCpuPerGroup=2
 
     enableDebug="No" # [Yes/No]
         debugOutputDir="$gem5Dir"
@@ -336,8 +340,8 @@ setSpec(){
 ################# settings for settingParser #################
 setArgLevel(){
     # argument level
-    argLevel=("Global" "Simpoint" "Smt" "Mem" "Cache" "L2Cache" "L3Cache")
-    formatLevel=("" "--simpoint" "--smt" "" "--caches" "--l2cache" "")
+    argLevel=("Global" "Simpoint" "Smt" "Mem" "Cache" "L2Cache" "L3Cache" "SWCache")
+    formatLevel=("" "--simpoint" "--smt" "" "--caches" "--l2cache" "--l3cache" "--swcache")
 
     # argument list
     argListGlobal=("cpuType" "cpuVoltage" "sysClock" "cpuClock" "maxTime" "numCpus")
@@ -345,6 +349,7 @@ setArgLevel(){
     argListCache=("numDirs" "cacheLineSize" "L1Dsize" "L1Dassoc" "L1Isize" "L1Iassoc")
     argListL2Cache=("numL2Caches" "L2size" "L2assoc")
     argListL3Cache=("numL3Caches" "L3size" "L3assoc")
+    argListSWCache=("numCpuPerGroup")
 
     # format list for arguments
     formatListGlobal=("--cpu-type" "--sys-voltage" "--sys-clock" "--cpu-clock" "--maxtime" "--num-cpus")
@@ -352,6 +357,7 @@ setArgLevel(){
     formatListCache=("--num-dirs" "--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1i_size" "--l1i_assoc")
     formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc")
     formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc")
+    formatListSWCache=("--cpu_per_group")
 
     buildOption="CPU_MODELS=$cpuModel"
 }

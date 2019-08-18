@@ -48,9 +48,29 @@ from m5.objects import *
 from Caches import *
 
 def config_cache(options, system):
-    if options.external_memory_system and (options.caches or options.l2cache):
+    if options.external_memory_system and (options.caches or options.l2cache \
+            or options.l3cache):
         print("External caches and internal caches are exclusive options.\n")
         sys.exit(1)
+
+    if not options.l2cache and options.l3cache:
+        print("Can not setup L3-Cache without L2-Cache.\n")
+        sys.exit(1)
+    
+    if options.swcache:
+        if (not options.l2cache or not options.l3cache):
+            print("""SW cache structure can not be set up with out l2 cache or
+                  l3 cache.\n""")
+            sys.exit(1)
+        if options.num_cpus < options.cpu_per_group * 2:
+            print("Too few cpus (<= %d) set for SW cache structures.\n" % \
+                    options.cpu_per_group * 2)
+            sys.exit(1)
+        if options.num_cpus % options.cpu_per_group != 0:
+            print("Total cpu number(%d) must be an integeral multiple of" % \
+                    options.num_cpus)
+            print(" cpu number per group(%d).\n" % options.cpu_per_group)
+            sys.exit(1)
 
     if options.external_memory_system:
         ExternalCache = ExternalCacheFactory(options.external_memory_system)
@@ -66,8 +86,8 @@ def config_cache(options, system):
             O3_ARM_v7a_DCache, O3_ARM_v7a_ICache, O3_ARM_v7aL2, \
             O3_ARM_v7aWalkCache
     else:
-        dcache_class, icache_class, l2_cache_class, walk_cache_class = \
-            L1_DCache, L1_ICache, L2Cache, None
+        dcache_class, icache_class, l2_cache_class, l3_cache_class, \
+            walk_cache_class = L1_DCache, L1_ICache, L2Cache, L3Cache, None
 
         if buildEnv['TARGET_ISA'] == 'x86':
             walk_cache_class = PageTableWalkerCache
@@ -79,10 +99,59 @@ def config_cache(options, system):
     # minimal so that compute delays do not include memory access latencies.
     # Configure the compulsory L1 caches for the O3CPU, do not configure
     # any more caches.
-    if options.l2cache and options.elastic_trace_en:
-        fatal("When elastic trace is enabled, do not configure L2 caches.")
+    if (options.l2cache or options.l3cache) and options.elastic_trace_en:
+        fatal("When elastic trace is enabled, do not configure L2/L3 caches.")
 
-    if options.l2cache:
+    if options.l2cache and options.l3cache and options.swcache:
+        # Provide a clock for the L2 and the L1-to-L2 bus here as they
+        # are not connected using addTwoLevelCacheHierarchy. Use the
+        # same clock as the CPUs.
+        
+        # L2 will be set as private and l3 will be set as shared
+        system.l3 = l3_cache_class(clk_domain=system.cpu_clk_domain,
+                               size=options.l3_size,
+                               assoc=options.l3_assoc)
+
+        system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
+       
+        last_cpu_with_cache = 0
+        for i in xrange(options.num_cpus):
+            if i % options.cpu_per_group == 0:
+                last_cpu_with_cache = i
+                system.cpu[i].l2 = l2_cache_class(
+                        clk_domain=system.cpu_clk_domain,
+                        size = options.l2_size, assoc = options.l2_assoc)
+                system.cpu[i].tol2bus = L2XBar(clk_domain = \
+                        system.cpu_clk_domain)
+                system.cpu[i].l2.mem_side = system.tol3bus.slave
+            
+        
+        system.l3.cpu_side = system.tol3bus.master
+        system.l3.mem_side = system.membus.slave
+   
+    elif options.l2cache and options.l3cache:
+        # Provide a clock for the L2 and the L1-to-L2 bus here as they
+        # are not connected using addTwoLevelCacheHierarchy. Use the
+        # same clock as the CPUs.
+        
+        # L2 will be set as private and l3 will be set as shared
+        system.l3 = l3_cache_class(clk_domain=system.cpu_clk_domain,
+                               size=options.l3_size,
+                               assoc=options.l3_assoc)
+
+        system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
+        
+        for i in xrange(options.num_cpus):
+            system.cpu[i].l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
+                    size = options.l2_size, assoc = options.l2_assoc)
+            system.cpu[i].tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
+            system.cpu[i].l2.cpu_side = system.cpu[i].tol2bus.master
+            system.cpu[i].l2.mem_side = system.tol3bus.slave
+        
+        system.l3.cpu_side = system.tol3bus.master
+        system.l3.mem_side = system.membus.slave
+   
+    elif options.l2cache:
         # Provide a clock for the L2 and the L1-to-L2 bus here as they
         # are not connected using addTwoLevelCacheHierarchy. Use the
         # same clock as the CPUs.
@@ -97,6 +166,7 @@ def config_cache(options, system):
     if options.memchecker:
         system.memchecker = MemChecker()
 
+    last_cpu_with_cache = 0
     for i in range(options.num_cpus):
         if options.caches:
             icache = icache_class(size=options.l1i_size,
@@ -157,7 +227,16 @@ def config_cache(options, system):
                         ExternalCache("cpu%d.dcache" % i))
 
         system.cpu[i].createInterruptController()
-        if options.l2cache:
+        if options.l2cache and options.l3cache:
+            system.cpu[i].connectAllPorts(
+                    system.cpu[last_cpu_with_cache].tol2bus, system.membus)
+            if options.swcache:
+                if i % options.cpu_per_group == 0:
+                    last_cpu_with_cache = i
+                    system.cpu[i].tol2bus.master = system.cpu[i].l2.cpu_side 
+            else:
+                last_cpu_with_cache = i + 1
+        elif options.l2cache:
             system.cpu[i].connectAllPorts(system.tol2bus, system.membus)
         elif options.external_memory_system:
             system.cpu[i].connectUncachedPorts(system.membus)
