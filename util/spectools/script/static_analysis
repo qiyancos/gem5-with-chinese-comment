@@ -1,0 +1,83 @@
+#! /bin/bash 
+#set -e
+ISA="ALPHA"
+optLevel="peak"
+prefix="build_${optLevel}_`echo $ISA | tr 'A-Z' 'a-z'`"
+tempFile=/tmp/temp.log
+
+specRoot="/home/lee/project/spec2006"
+root=`dirname $0`
+cd $root
+root=$PWD
+
+source $specRoot/shrc
+cd $specRoot/benchspec/CPU2006
+specDir=$PWD
+
+if [ -f /bin/lsnc ]
+then file_list=`lsnc`
+else file_list=`ls`
+fi
+
+titleInfo="SpecName\tSize(Bytes)\t.text(Bytes)\t.bss(Bytes)\t"
+
+getInfo(){
+    tool="`eval echo '$'"${ISA}_prefix"`readelf"
+    errinfo=`cat $1/make.err | grep "error:"`
+    if [ "${errinfo}x" != x ]
+    then 
+        echo "Error" > $tempFile
+        return
+    else 
+        stat -c %s $1/$2 > $tempFile
+        $tool -S $1/$2 >> $tempFile
+    fi
+    if [ ${#3} -ge 8 ]
+    then echo -en "$3\t"
+    else echo -en "$3\t\t"
+    fi
+}
+
+selectInfo(){
+    size=`sed -n 1p $tempFile`
+    if [[ ${size}x =~ ^(Errorx|x)$ ]]
+    then 
+        echo -e "\tError"
+        return 
+    fi
+    textline=`awk '/\.text/{print NR}' $tempFile`
+    text=`sed -n $[textline + 1]p $tempFile | $root/readHex`
+    bssline=`awk '/\.bss/{print NR}' $tempFile`
+    bss=`sed -n $[bssline + 1]p $tempFile | $root/readHex`
+    content="${size} ${text} ${bss}"
+    for num in $content
+    do
+        if [ ${#num} -ge 8 ]
+        then echo -en "${num}\t"
+        else echo -en "${num}\t\t"
+        fi
+    done
+    echo
+}
+
+sphinx3="sphinx_livepretend"
+xalancbmk="Xalan"
+ALPHA_prefix="alphaev67-unknown-linux-gnu-"
+RISCV_prefix="riscv64-unknown-linux-gnu-"
+
+echo -e $titleInfo
+for file in $file_list
+do
+    name=(`echo $file | sed 's/\./ /g'`)
+    if [[ ${file:0:1} =~ ^[0-9]$ ]]
+    then
+        elfName=`eval echo '$'"${name[1]}"`
+        if [ ${elfName}x != x ]
+        then getInfo $specDir/$file/run/${prefix}.0001 $elfName ${name[1]}
+        else getInfo $specDir/$file/run/${prefix}.0001 ${name[1]} ${name[1]}
+        fi
+        selectInfo $tempFile
+    fi
+done
+
+rm -rf $tempFile

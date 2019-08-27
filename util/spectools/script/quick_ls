@@ -1,0 +1,3 @@
+#! /bin/bash
+specDir=/home/lee/project/spec2006
+ls $specDir/benchspec/CPU2006/*$1/data/$2/output

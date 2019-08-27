@@ -1,0 +1,28 @@
+#! /bin/bash
+isas="amd64 alpha arm mips riscv"
+prefixes=("" "alphaev67-unknown-linux-gnu-" "arm-linux-gnueabi-" "mips-linux-gnu-" "riscv64-unknown-linux-gnu-")
+
+root=`dirname $0`
+cd $root
+if [ ${1}x = x ]
+then srcfile=.x86.cfg
+else srcfile=$1
+fi
+
+if [ ! -f $srcfile ]
+then
+	echo "Error: No such file \"$srcfile\" used as basic config file!"
+	exit 1
+fi
+
+index=0
+for isa in $isas
+do
+	prefix=${prefixes[$index]}
+	cp $srcfile ${isa}.cfg
+	sed -i "s/^CC.*gcc.*$/CC           = ${prefix}gcc/g" ${isa}.cfg
+	sed -i "s/^CXX.*g++.*$/CXX          = ${prefix}g++/g" ${isa}.cfg
+	sed -i "s/^FC.*gfortran.*$/FC           = ${prefix}gfortran/g" ${isa}.cfg
+	sed -i "s/^ext.*amd64.*$/ext           = $isa/g" ${isa}.cfg
+	index=$[index + 1]
+done

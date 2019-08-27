@@ -96,8 +96,8 @@ def install_style_hooks(env):
             print("Error updating git %s hook" % hook_name)
             raise
 
-    if hook_exists("pre-commit") and hook_exists("commit-msg"):
-        return
+    #if hook_exists("pre-commit") and hook_exists("commit-msg"):
+    return
 
     print(git_style_message, end=' ')
     try:

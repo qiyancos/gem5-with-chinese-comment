@@ -1,0 +1,657 @@
+#! /bin/bash
+root=$PWD
+
+################# settings for script #################
+setScript(){
+    specDir="$root"
+    # root directory path for spec2006
+    tempDir="$root"
+    # Where the temporary files should be stored
+    ISA="MIPS_P6600"
+    # [ARM ALPHA RISCV X86 MIPS SW]
+    optLevel="base"
+    # [base(O2) peak(O3)]
+    buildDir="build_${optLevel}_`echo $ISA | tr 'A-Z' 'a-z'`.0001"
+    buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
+    # [build_base_riscv.0001, build_base_arm.0001, build_base_alpha.0001,
+    #  build_base_mips.0001, build_base_amd64.0001]
+    runDir="run_base_TESTSET_amd64.0001"
+    # Do not change this
+    testSet="ref" # [ref test train]
+    # Test_set setting
+    runSpecSuites="Yes" # [Yes/No]
+    # Decide if you want to run all the tests in the given testSet
+    useDiff="Yes" #[Yes/No]
+    # If you want to enable stdout-diff after spec test(s)
+    # Attention: stderr and stdout will be redirected if diff is enabled!
+    diffTool="diff" # [specdiff diff md5sum]
+    # The tool used for diff
+    bad_spec=""
+    # Spec programs that may have problems
+    timingMode="Yes" #[Yes/No]
+    # Decide if we shall print time-info for running
+}
+
+################# settings for spec #################
+setSpec(){
+    upperSuiteID=10
+    # The largest suite ID for subtest
+    # 400
+    perlbench_ref_0=(perlbench "checkspam.2500.5.25.11.150.1.1.1.1.out" "-o" "-I./lib checkspam.pl 2500 5 25 11 150 1 1 1 1")
+    perlbench_ref_1=(perlbench "diffmail.4.800.10.17.19.300.out" "-o" "-I./lib diffmail.pl 4 800 10 17 19 300")
+    perlbench_ref_2=(perlbench "splitmail.1600.12.26.16.4500.out" "-o" "-I./lib splitmail.pl 1600 12 26 16 4500")
+    perlbench_ref_single=0
+    perlbench_train_0=(perlbench "diffmail.2.550.15.24.23.100.out" "-o" "-I./lib diffmail.pl 2 550 15 24 23 100")
+    perlbench_train_1=(perlbench "perfect.b.3.out" "-o" "-I./lib perfect.pl b 3")
+    perlbench_train_2=(perlbench "scrabbl.out" "-o" "-I./lib scrabbl.pl")
+    perlbench_train_3=(perlbench "splitmail.535.13.25.24.1091.out" "-o" "-I./lib splitmail.pl 535 13 25 24 1091")
+    perlbench_train_4=(perlbench "suns.out" "-o" "-I./lib suns.pl")
+    perlbench_train_single=0
+    perlbench_test_0=(perlbench "attrs.out" "-o" "-I./lib attrs.pl")
+    perlbench_test_1=(perlbench "gv.out" "-o" "-I./lib gv.pl")
+    perlbench_test_2=(perlbench "makerand.out" "-o" "-I./lib makerand.pl")
+    perlbench_test_3=(perlbench "pack.out" "-o" "-I./lib pack.pl")
+    perlbench_test_4=(perlbench "redef.out" "-o" "-I./lib redef.pl")
+    perlbench_test_5=(perlbench "ref.out" "-o" "-I./lib ref.pl")
+    perlbench_test_6=(perlbench "regmesg.out" "-o" "-I./lib regmesg.pl")
+    perlbench_test_7=(perlbench "append.out cmdopt.out fh.out range.out sub_lval.out args.out cmp.out grep.out method.out recurse.out subst.out arith.out comp_term.out my.out subst_amp.out array.out concat.out hashwarn.out nothr5005.out subst_wamp.out context.out if.out oct.out regexp.out tr.out auto.out decl.out inc.out op_cond.out regexp_noamp.out undef.out base_cond.out defins.out index.out op_pat.out unshift.out base_pat.out delete.out int.out ord.out repeat.out vec.out base_term.out die.out join.out override.out reverse.out wantarray.out bless.out do.out length.out rs.out bop.out each.out lex.out package.out sleep.out bproto.out eval.out list.out pos.out sort.out chars.out exists_sub.out loopctl.out push.out splice.out chop.out exp.out lop.out quotemeta.out study.out" "-o" "-I./lib test.pl")
+    perlbench_test_single=4
+
+    # 401
+    bzip2_ref_0=(bzip2 "chicken.jpg.out" "-o" "chicken.jpg 30")
+    bzip2_ref_1=(bzip2 "input.source.out" "-o" "input.source 280") 
+    bzip2_ref_2=(bzip2 "liberty.jpg.out" "-o" "liberty.jpg 30")
+    bzip2_ref_3=(bzip2 "input.program.out" "-o" "input.program 280")
+    bzip2_ref_4=(bzip2 "text.html.out" "-o" "text.html 280")
+    bzip2_ref_5=(bzip2 "input.combined.out" "-o" "input.combined 200")
+    bzip2_ref_single=0
+    bzip2_train_0=(bzip2 "input.program.out" "-o" "input.program 10")
+    bzip2_train_1=(bzip2 "byoudoin.jpg.out" "-o" "byoudoin.jpg 5")
+    bzip2_train_2=(bzip2 "input.combined.out" "-o" "input.combined 80")
+    bzip2_train_single=0
+    bzip2_test_0=(bzip2 "input.program.out" "-o" "input.program 5")
+    bzip2_test_1=(bzip2 "dryer.jpg.out" "-o" "dryer.jpg 2")
+    bzip2_test_single=0
+
+    # 403
+    gcc_ref_0=(gcc "166.s" "-o" "166.i -o 166.s")
+    gcc_ref_1=(gcc "200.s" "-o" "200.i -o 200.s")
+    gcc_ref_2=(gcc "c-typeck.s" "-o" "c-typeck.i -o c-typeck.s")
+    gcc_ref_3=(gcc "cp-decl.s" "-o" "cp-decl.i -o cp-decl.s")
+    gcc_ref_4=(gcc "expr.s" "-o" "expr.i -o expr.s")
+    gcc_ref_5=(gcc "expr2.s" "-o" "expr2.i -o expr2.s")
+    gcc_ref_6=(gcc "g23.s" "-o" "g23.i -o g23.s")
+    gcc_ref_7=(gcc "s04.s" "-o" "s04.i -o s04.s")
+    gcc_ref_8=(gcc "scilab.s" "-o" "scilab.i -o scilab.s")
+    gcc_ref_single=0
+    gcc_train_0=(gcc "integrate.s" "-o" "integrate.i -o integrate.s")
+    gcc_test_0=(gcc "cccp.s" "-o" "cccp.i -o cccp.s")
+
+    # 410
+    bwaves_ref_0=(bwaves "bwaves.out bwaves2.out bwaves3.out")
+    bwaves_train_0=(bwaves "bwaves.out bwaves2.out bwaves3.out")
+    bwaves_test_0=(bwaves "bwaves.out bwaves2.out bwaves3.out")
+
+    # 416
+    gamess_ref_0=(gamess "cytosine.2.out" "-i cytosine.2.config")
+    gamess_ref_1=(gamess "h2ocu2+.gradient.out" "-i h2ocu2+.gradient.config")
+    gamess_ref_2=(gamess "triazolium.out" "-i triazolium.config")
+    gamess_ref_single=0
+    gamess_train_0=(gamess "h2ocu2+.energy.out" "-i h2ocu2+.energy.config")
+    gamess_test_0=(gamess "exam29.out" "-i exam29.config")
+
+    # 429
+    mcf_ref_0=(mcf "inp.out mcf.out" "-o" "inp.in")
+    mcf_train_0=(mcf "inp.out mcf.out" "-o" "inp.in")
+    mcf_test_0=(mcf "inp.out mcf.out" "-o" "inp.in")
+
+    # 433
+    milc_ref_0=(milc "su3imp.out" "-i su3imp.in")
+    milc_train_0=(milc "su3imp.out" "-i su3imp.in")
+    milc_test_0=(milc "su3imp.out" "-i su3imp.in")
+
+    # 434
+    zeusmp_ref_0=(zeusmp "tsl000aa")
+    zeusmp_train_0=(zeusmp "tsl000aa")
+    zeusmp_test_0=(zeusmp "tsl000aa")
+
+    # 435
+    gromacs_ref_0=(gromacs "gromacs.out" "-o" "-silent -deffnm gromacs -nice 0")
+    gromacs_train_0=(gromacs "gromacs.out" "-o" "-silent -deffnm gromacs -nice 0")
+    gromacs_test_0=(gromacs "gromacs.out" "-o" "-silent -deffnm gromacs -nice 0")
+
+    # 436
+    cactusADM_ref_0=(cactusADM "benchADM.out" "-o" "benchADM.par")
+    cactusADM_train_0=(cactusADM "benchADM.out" "-o" "benchADM.par")
+    cactusADM_test_0=(cactusADM "benchADM.out" "-o" "benchADM.par")
+    
+    # 437
+    leslie3d_ref_0=(leslie3d "leslie3d.out" "-i leslie3d.in")
+    leslie3d_train_0=(leslie3d "leslie3d.out" "-i leslie3d.in")
+    leslie3d_test_0=(leslie3d "leslie3d.out" "-i leslie3d.in")
+
+    # 444
+    namd_ref_0=(namd "namd.out" "-o" "--input namd.input --iterations 38 --output namd.out")
+    namd_train_0=(namd "namd.out" "-o" "--input namd.input --iterations 1 --output named.out")
+    namd_test_0=(namd "namd.out" "-o" "--input namd.input --iterations 1 --output named.out")
+
+    # 445
+    gobmk_ref_0=(gobmk "13x13.out" "-o" "--quiet --mode gtp" "-i 13x13.tst")
+    gobmk_ref_1=(gobmk "nngs.out" "-o" "--quiet --mode gtp" "-i nngs.tst")
+    gobmk_ref_2=(gobmk "score2.out" "-o" "--quiet --mode gtp" "-i score2.tst")
+    gobmk_ref_3=(gobmk "trevorc.out" "-o" "--quiet --mode gtp" "-i trevorc.tst")
+    gobmk_ref_4=(gobmk "trevord.out" "-o" "--quiet --mode gtp" "-i trevord.tst")
+    gobmk_ref_single=0
+    gobmk_train_0=(gobmk "arb.out" "-o" "--quiet --mode gtp" "-i arb.tst")
+    gobmk_train_1=(gobmk "arend.out" "-o" "--quiet --mode gtp" "-i arend.tst")
+    gobmk_train_2=(gobmk "arion.out" "-o" "--quiet --mode gtp" "-i arion.tst")
+    gobmk_train_3=(gobmk "atari_atari.out" "-o" "--quiet --mode gtp" "-i atari_atari.tst")
+    gobmk_train_4=(gobmk "blunder.out" "-o" "--quiet --mode gtp" "-i blunder.tst")
+    gobmk_train_5=(gobmk "buzco.out" "-o" "--quiet --mode gtp" "-i buzco.tst")
+    gobmk_train_6=(gobmk "nicklas2.out" "-o" "--quiet --mode gtp" "-i nicklas2.tst")
+    gobmk_train_7=(gobmk "nicklas4.out" "-o" "--quiet --mode gtp" "-i nicklas4.tst")
+    gobmk_train_single=0
+    gobmk_test_0=(gobmk "capture.out" "-o" "--quiet --mode gtp" "-i capture.tst")
+    gobmk_test_1=(gobmk "connect.out" "-o" "--quiet --mode gtp" "-i connect.tst")
+    gobmk_test_2=(gobmk "connect_rot.out" "-o" "--quiet --mode gtp" "-i connect_rot.tst")
+    gobmk_test_3=(gobmk "connection.out" "-o" "--quiet --mode gtp" "-i connection.tst")
+    gobmk_test_4=(gobmk "connection_rot.out" "-o" "--quiet --mode gtp" "-i connection_rot.tst")
+    gobmk_test_5=(gobmk "cutstone.out" "-o" "--quiet --mode gtp" "-i cutstone.tst")
+    gobmk_test_7=(gobmk "dniwog.out" "-o" "--quiet --mode gtp" "-i dniwog.tst")
+    gobmk_test_single=0
+
+    # 447
+    dealII_ref_0=(dealII "grid-10.eps grid-16.eps grid-22.eps solution-12.gmv solution-18.gmv solution-9.gmv grid-11.eps grid-17.eps grid-23.eps solution-13.gmv solution-19.gmv grid-12.eps grid-18.eps grid-9.eps solution-14.gmv solution-20.gmv grid-13.eps grid-19.eps log solution-15.gmv solution-21.gmv grid-14.eps grid-20.eps solution-10.gmv solution-16.gmv solution-22.gmv grid-15.eps grid-21.eps solution-11.gmv solution-17.gmv solution-23.gmv" "-o" "23")
+    dealII_train_0=(dealII "grid-10.eps grid-9.eps log solution-10.gmv solution-9.gmv" "-o" "10")
+    dealII_test_0=(dealII "log" "-o" "8")
+
+    # 450
+    soplex_ref_0=(soplex "ref.out ref.stderr" "-o" "-m3500 ref.mps")
+    soplex_ref_1=(soplex "pds-50.mps.out pds-50.mps.stderr" "-o" "-s1 -e -m45000 pds-50.mps")
+    soplex_ref_single=0
+    soplex_train_0=(soplex "train.out train.stderr" "-o" "-m1200 train.mps")
+    soplex_train_1=(soplex "pds-20.mps.out pds-20.mps.stderr" "-o" "-s1 -e -m5000 pds-20.mps")
+    soplex_train_single=0
+    soplex_test_0=(soplex "test.out  test.stderr" "-o" "-m10000 test.mps")
+
+    # 453
+    povray_ref_0=(povray "SPEC-benchmark.log SPEC-benchmark.tga" "-o" "SPEC-benchmark-ref.ini")
+    povray_train_0=(povray "SPEC-benchmark.log SPEC-benchmark.tga" "-o" "SPEC-benchmark-train.ini")
+    povray_test_0=(povray "SPEC-benchmark.log SPEC-benchmark.tga" "-o" "SPEC-benchmark-test.ini")
+
+    # 454
+    calculix_ref_0=(calculix "SPECtestformatmodifier_z.txt hyperviscoplastic.dat" "-o" "-i hyperviscoplastic")
+    calculix_train_0=(calculix "SPECtestformatmodifier_z.txt stairs.dat" "-o" "-i stairs")
+    calculix_test_0=(calculix "SPECtestformatmodifier_z.txt beampic.dat" "-o" "-i beampic")
+
+    # 456
+    hmmer_ref_0=(hmmer "nph3.out" "-o" "nph3.hmm swiss41")
+    hmmer_ref_1=(hmmer "retro.out" "-o" "--fxe 0 --mean 500 --num 500000 --sd 350 --seed 0 retro.hmm")
+    hmmer_ref_single=0
+    hmmer_train_0=(hmmer "leng100.out" "-o" "--fixed 0 --mean 425 --num 85000 --sd 300 --seed 0 leng100.hmm")
+    hmmer_test_0=(hmmer "bombesin.out" "-o" "--fixed 0 --mean 325 --num 45000 --sd 200 --seed 0 bombesin.hmm")
+
+    # 458
+    sjeng_ref_0=(sjeng "ref.out" "-o" "ref.txt")
+    sjeng_train_0=(sjeng "train.out" "-o" "train.txt")
+    sjeng_test_0=(sjeng "test.out" "-o" "test.txt")
+
+    # 459
+    GemsFDTD_ref_0=(GemsFDTD "sphere_td.nft")
+    GemsFDTD_train_0=(GemsFDTD "sphere_td.nft")
+    GemsFDTD_test_0=(GemsFDTD "sphere_td.nft")
+
+    # 462
+    libquantum_ref_0=(libquantum "ref,out" "-o" "1397 8")
+    libquantum_train_0=(libquantum "train.out" "-o" "143 25")
+    libquantum_test_0=(libquantum "test.out" "-o" "33 5")
+
+    # 464
+    h264ref_ref_0=(h264ref "foreman_ref_baseline_encodelog.out foreman_ref_baseline_leakybucketparam.cfg" "-o" "-d foreman_ref_encoder_baseline.cfg") # broken now
+    h264ref_ref_1=(h264ref "foreman_ref_main_encodelog.out foreman_ref_main_leakybucketparam.cfg" "-o" "-d foreman_ref_encoder_main.cfg")
+    h264ref_ref_2=(h264ref "sss_main_encodelog.out sss_main_leakybucketparam.cfg" "-o" "-d sss_encoder_main.cfg")
+    h264ref_ref_single=2
+    h264ref_train_0=(h264ref "foreman_train_baseline_encodelog.out foreman_train_baseline_leakybucketparam.cfg" "-o" "-d foreman_train_encoder_baseline.cfg")
+    h264ref_test_0=(h264ref "foreman_test_baseline_encodelog.out foreman_test_baseline_leakybucketparam.cfg" "-o" "-d foreman_test_encoder_baseline.cfg")
+    # Some errors occurred while running this spec with RISCV's gem5 
+
+    # 465
+    tonto_ref_0=(tonto "stdout")
+    tonto_train_0=(tonto "stdout")
+    tonto_test_0=(tonto "stdout")
+    # Some errors occurred while running this spec on real machine
+
+    # 470
+    lbm_ref_0=(lbm "lbm.out" "-o" "3000 reference.dat 0 0 100_100_130_ldc.of")
+    lbm_train_0=(lbm "lbm.out" "-o" "300 reference.dat 0 0 100_100_130_cf_b.of")
+    lbm_test_0=(lbm "lbm.out" "-o" "3000 reference.dat 0 1 100_100_130_cf_a.of")
+
+    # 471
+    omnetpp_ref_0=(omnetpp "omnetpp.log omnetpp.sca" "-o" "omnetpp.ini")
+    omnetpp_train_0=(omnetpp "omnetpp.log omnetpp.sca" "-o" "omnetpp.ini")
+    omnetpp_test_0=(omnetpp "omnetpp.log omnetpp.sca" "-o" "omnetpp.ini")
+
+    # 473
+    astar_ref_0=(astar "BigLakes2048.out" "-o" "BigLakes2048.cfg")
+    astar_ref_1=(astar "rivers.out" "-o" "rivers.cfg")
+    astar_ref_single=0
+    astar_train_0=(astar "BigLakes1024.out" "-o" "BigLakes1024.cfg")
+    astar_train_1=(astar "rivers1.out" "-o" "rivers1.cfg")
+    astar_train_single=0
+    astar_test_0=(astar "lake.out" "-o" "lake.cfg")
+
+    # 481
+    wrf_ref_0=(wrf "rsl.out.0000")
+    wrf_train_0=(wrf "rsl.out.0000")
+    wrf_test_0=(wrf "rsl.out.0000")
+
+    # 482
+    sphinx3_ref_0=(sphinx_livepretend "an4.log considered.out total_considered.out" "-o" "ctlfile . args.an4")
+    sphinx3_train_0=(sphinx_livepretend "an4.log considered.out total_considered.out" "-o" "ctlfile . args.an4")
+    sphinx3_test_0=(sphinx_livepretend "an4.log considered.out total_considered.out" "-o" "ctlfile . args.an4")
+
+    # 483
+    xalancbmk_ref_0=(Xalan "ref.out" "-o" "-v t5.xml xalanc.xsl")
+    xalancbmk_train_0=(Xalan "train.out" "-o" "-v allbooks.xml xalanc.xsl")
+    xalancbmk_test_0=(Xalan "test.out" "-o" "-v test.xml xalanc.xsl")
+
+    # 999
+    specrand_ref_0=(specrand "rand.234923.out" "-o" "1255432124 234923")
+    specrand_train_0=(specrand "rand.3.out" "-o" "1 3")
+    specrand_test_0=(specrand "rand.24239.out" "-o" "324342 24239")
+}
+
+################# print path for output files #################
+prepareForDiff(){
+    diffDir=$tempDir/spec/$fullTarget/diffFiles
+    if [ ${runSpec}x = 1x -a ${useDiff}x = Yesx ]
+    then
+        rm -rf $diffDir
+        mkdir -p $diffDir
+        redirectOptions="1>$diffDir/STDOUTFILE"
+        redirectOptions="$redirectOptions 2>$diffDir/STDERRFILE"
+    fi
+}
+
+################# running spec with generated options #################
+runRealSpec(){
+    suiteID=0
+    redirectOptions=`echo $redirectOptions | sed -e "s/STDOUTFILE/stdout_subtest_$suiteID\.log/" -e "s/STDERRFILE/stderr_subtest_$suiteID\.log/"`
+    while [ $suiteID -le $upperSuiteID ]
+    do
+        specOptions=`echo $specOptions | sed "s/subtest_$[suiteID - 1]/subtest_$suiteID/"`
+        redirectOptions=`echo $redirectOptions | sed -e "s/subtest_$[suiteID - 1]/subtest_$suiteID/g"`
+        if [ "${options[$suiteID]}x" = x ]
+        then
+            suiteID=$[suiteID + 1]
+            continue
+        fi
+        options[$suiteID]=`echo ${options[$suiteID]} | sed 's/NULL//'`
+		echo -e "\033[1;31m      ==================== Runing SubTest-$suiteID! ====================\033[0m"
+        if [ ${useDiff}x = Yesx ]
+        then echo ">> Warning: You won't see any output as all of them will be redirected for checking!"
+        fi
+        runTime[$suiteID]=error
+        (time eval "$specExecutable ${options[$suiteID]} $redirectOptions")> $tempDir/spec/$fullTarget/diffFiles/time_subtest_$[suiteID].log 2>&1
+        runTime[$suiteID]=`cat $tempDir/spec/$fullTarget/diffFiles/time_subtest_$[suiteID].log | grep "real" | awk '{print $2}'`
+        suiteID=$[suiteID + 1]
+    done
+}
+
+################# print Infomation for running time #################
+printTimingInfo(){
+    if [ $timingMode = No ]
+    then return
+    fi
+    if [ ! -f $root/calTime.cpp ]
+    then 
+        echo "Error: cannot find calTime.cpp for this script!"
+        exit 1
+    else 
+        g++ $root/calTime.cpp -o $root/calTime
+        if [ $? != 0 ]
+        then
+            echo "Error: some errors have occurred when compiling!"
+            exit 1
+        fi
+    fi
+    echo -e "\033[1;31m[Timing Report]\033[0m"
+    echo -e "\033[1;34m    TestSet\tRunning_Time (Hour:Min:Second:Mille_Second)\033[0m"
+    totalTime=0
+    suiteID=0
+    while [ $suiteID -le $upperSuiteID ]
+    do
+        if [ ${runTime[$suiteID]}x != x ]
+        then 
+            if [ ${#suiteID} -lt 4 ]
+            then echo -ne "\033[1;37m    ${suiteID}\t\t\033[0m"
+            else echo -ne "\033[1;37m    ${suiteID}\t\033[0m"
+            fi
+            realTime=`echo ${runTime[$suiteID]} | sed -e 's/m/ /g' -e 's/h/ /g' \
+                    -e 's/s/ /g' | $root/calTime`
+            totalTime=$[totalTime + realTime]
+            realTime="$[realTime / 3600000]:$[realTime / 60000 % 60]:$[realTime / 1000 % 60]:$[realTime % 1000]"
+            echo -e "\033[0;33m${realTime}\033[0m"
+        elif [ ${runTime[$suiteID]}x = errorx ]
+        then 
+            if [ ${#suiteID} -lt 4 ]
+            then echo -ne "\033[1;37m    ${suiteID}\t\t\033[0m"
+            else echo -ne "\033[1;37m    ${suiteID}\t\033[0m"
+            fi
+            echo -e "\033[0;31mError\033[0m"
+        fi
+        suiteID=$[suiteID + 1]
+    done
+    totalTime="$[totalTime / 3600000]:$[totalTime / 60000 % 60]:$[totalTime / 1000 % 60]:$[totalTime % 1000]"
+    echo -ne "\033[1;37m    Total\t\033[0m"
+    echo -e "\033[1;33m${totalTime}\033[0m"
+}
+
+################# specdiff work #################
+checkSpecDiff(){
+    if [ ${runSpec}x != 1x ]
+    then return
+    fi
+    if [ $useDiff = No ]
+    then return
+    elif [ $diffTool = "specdiff" ]
+    then
+        cd $specDir 
+        source $specDir/shrc
+        cd $tempDir/spec/$fullTarget 
+    fi
+    echo -e "\033[1;31m[Diff Report (with $diffTool)]\033[0m"
+    echo -e "\033[1;34m    TestSet\tDiff Status\033[0m"
+    suiteID=0
+    suiteFail=0
+    while [ $suiteID -le $upperSuiteID ]
+    do
+        if [ "${diffFileList[$suiteID]}x" != x ]
+        then
+            badDiff=0
+            if [ ${#suiteID} -lt 4 ]
+            then echo -ne "\033[1;37m    ${suiteID}\t\t\033[0m"
+            else echo -ne "\033[1;37m    ${suiteID}\t\033[0m"
+            fi
+            for file in ${diffFileList[$suiteID]}
+            do
+                srcFile="$specDir/benchspec/CPU2006/$fullTarget/data/$testSet/output/$file"
+                if [ ! -f $file ]
+                then 
+                    if [[ $file =~ ^.*stderr$ ]]
+                    then targetFile="$diffDir/stderr_subtest_${suiteID}.log"
+                    else targetFile="$diffDir/stdout_subtest_${suiteID}.log"
+                    fi
+                else targetFile=$file
+                fi
+                case $diffTool in
+                md5sum)
+                    targetSum=(`md5sum $targetFile`)
+                    srcSum=(`md5sum $srcFile`)
+                    if [ ${targetSum[0]} != ${srcSum[0]} ]
+                    then 
+                        badDiff=1
+                        echo "Good: $srcSum" > $diffDir/${testSet}_${file}_${diffTool}.mis
+                        echo "Real: $targetSum" >> $diffDir/${testSet}_${file}_${diffTool}.mis
+                    fi;;
+                diff)
+                    if [ "`diff $targetFile $srcFile`x" != x ]
+                    then 
+                        badDiff=1
+                        diff $targetFile $srcFile > $diffDir/${testSet}_${file}_${diffTool}.mis
+                    fi;;
+                specdiff)
+                    if [ "`specdiff $targetFile $srcFile`" != "specdiff run completed" ]
+                    then 
+                        badDiff=1
+                        specdiff $targetFile $srcFile > $diffDir/${testSet}_${file}_${diffTool}.mis
+                    fi;;
+                *)
+                    echo -e "\033[1;31mFatal Error: Unsupported diff tool \"$diffTool\"!\033[0m"
+                    exit 1;;
+                esac
+                if [ $badDiff = 1 ]
+                then suiteFail=1
+                fi
+            done
+            if [ $badDiff = 0 ]
+            then echo -e "\033[0;32mPass\033[0m"
+            else echo -e "\033[0;31mFail\033[0m"
+            fi
+        fi
+        suiteID=$[suiteID + 1]
+    done
+    echo -ne "\033[1;37m    Suites\t\033[0m"
+    if [ $suiteFail = 1 ]
+    then echo -e "\033[1;31mFail\033[0m"
+    else echo -e "\033[1;32mPass\033[0m"
+    fi
+}
+
+################# get available spec programs #################
+findSpec(){
+    # buildDir=`echo $buildDir | sed 's/x86/amd64/g'`
+    if [ ! -d $specDir ]
+    then
+        echo "Warning: Directory not specified for Spec2000/2006!"
+        noSpec=1
+        return
+    fi
+
+    if [ -f /bin/lsnc ]
+    then filelist=`lsnc $specDir/benchspec/CPU2006`
+    else filelist=`ls $specDir/benchspec/CPU2006`
+    fi
+
+    for file in $filelist
+    do
+        specName=(`echo $file | sed 's/\./ /g'`)
+        if [ ! -d $specDir/benchspec/CPU2006/$file/run/$buildDir ]
+        then continue
+        fi
+        if [ -f $specDir/benchspec/CPU2006/$file/run/$buildDir/`eval echo -e '$'"{${specName[1]}_${testSet}_0[0]}"` ]
+        then 
+            delFlag=0
+            for delete in $bad_spec
+            do
+                if [ $file = $delete -a $ISA = RISCV ]
+                then
+                    delFlag=1
+                    break
+                fi
+            done
+            if [ $delFlag != 1 ]
+            then testlist="$testlist $file"
+            fi
+        fi
+    done
+    testlist=($testlist)
+}
+
+################# help infomation #################
+printHelpInfo(){
+    echo "Usage: realRun [OPTION]" 
+    echo "    -h [-h] Use -h to see help info!"
+    echo "    -l [-l] Use -l to list valid spec programs!"
+    echo "    -p [-p <spec program name/number>]  If the spec program is not given, then"
+    echo "        it will be chosen randomly!"
+}
+
+################# parse settings #################
+settingParser(){
+    ################# parse dir args ##################
+    if [ ${SPEC_ROOT}x != x ]
+    then
+        echo "Warning: Environment variable SPEC_ROOT is set, use env-variable"
+        echo "         instead of variable in this script!"
+        specDir=$SPEC_ROOT
+    fi
+}
+
+################# parse script args #################
+argParser(){
+    ################# help infomation #################
+    if [ "${arguments[1]}x" = -hx -o "${arguments[1]}x" = x ] && [ "${arguments[2]}x" = x ]
+    then printHelpInfo;exit
+    fi
+
+    case "${arguments[1]}x" in
+    ################# list available spec programs #################
+    "-lx")
+        if [ ${noSpec}x = 1x ]
+        then
+            echo "Error: could not locate spec dir \"$specDir\"!"
+            exit 1
+        fi
+        if [ "${#testlist[*]}" = 0 ]
+        then echo "No available spec programs for $ISA with optLevel \"$optLevel\"!"
+        fi
+        for item in ${testlist[*]}
+        do echo $item
+        done
+        exit;;
+
+    ################# select available spec programs #################
+    "-px")
+        if [ ${noSpec}x = 1x ]
+        then
+            echo "Error: could not locate spec dir \"$specDir\"!"
+            exit 1
+        fi
+        if [ ${#testlist[*]} = 0 ]
+        then
+            echo "No available spec programs for $ISA!"
+            exit
+        fi
+        
+        if [ "${arguments[2]}x" != x ]
+        then
+            argIdx=0
+            while [ $argIdx -lt ${#testlist[*]} ]
+            do
+                name=(`echo ${testlist[$argIdx]} | sed 's/\./ /g'`)
+                #echo ${name[*]}
+                if [ "${arguments[2]}" = ${name[0]} -o "${arguments[2]}" = ${name[1]} -o "${arguments[2]}" = ${testlist[$i]} ]
+                then 
+                    target=(${name[*]})
+                    break
+                fi
+                argIdx=$[argIdx + 1]
+            done
+            if [ ${target}x = x ]
+            then 
+                echo "${arguments[2]}: Bad spec program number/name or the spec program is not valid!"
+                echo "Use -l to see the available spec program list!"
+                exit
+            fi
+        else
+            argIdx=$[$RANDOM % ${#testlist[*]} ]
+            target=(`echo ${testlist[$argIdx]} | sed 's/\./ /g'`)    
+        fi
+        fullTarget="${target[0]}.${target[1]}"
+        target=${target[1]}
+        runSpec=1
+        needBuild=1;;
+    *) 
+        echo "Bad argument \"${arguments[1]}\"! Use -h for help!"
+        exit;;
+    esac
+}
+
+################# copy and link files needed for spec #################
+buildSpecTemp(){
+    if [ ${runSpec}x != 1x ]
+    then return 
+    fi
+    
+    echo -e ">> Files used for spec will be saved to \"\033[1;31m$tempDir/spec\033[0m\"!"
+    
+    mkdir -p $tempDir/spec/$fullTarget
+    rm -rf $tempDir/spec/$fullTarget/*
+    
+    runDir=`echo $runDir | sed "s/TESTSET/$testSet/g"`
+
+    if [ -d $specDir/benchspec/CPU2006/$fullTarget/run/$runDir ]
+    then file_list="$specDir/benchspec/CPU2006/$fullTarget/run/$runDir/*"
+    else 
+        echo "RUN_DIR must be defined first!"
+        exit
+    fi
+
+    for file in $file_list
+    do
+        cp -r $file $tempDir/spec/$fullTarget/`basename $file`
+        if [ $? != 0 ]
+        then
+            echo "Error occurred while trying to build link for $file"
+            exit
+        fi
+    done
+
+    cp -r  $specDir/benchspec/CPU2006/$fullTarget/run/$buildDir/`eval echo -e '$'"{${target}_${testSet}_0[0]}"` $tempDir/spec/$fullTarget/`eval echo -e '$'"{${target}_${testSet}_0[0]}"`
+    
+    cd $tempDir/spec/$fullTarget
+    
+    suiteID=0
+    while [ $suiteID -le $upperSuiteID ]
+    do 
+        rm -f ${diffFileList[$suiteID]}
+        suiteID=$[suiteID + 1]
+    done
+}
+
+################# generate options for spec #################
+buildSpecOptions(){
+    if [ ${runSpec}x != 1x ]
+    then return
+    fi
+    
+    echo -e "\033[1;31m ==================== Running Spec $fullTarget! ====================\033[0m"
+
+    single=`eval echo -e '$'"${target}_${testSet}_single"`
+    if [ ${single}x != x -a $runSpecSuites = No ]
+    then suiteID=$single
+    else suiteID=0
+    fi
+    specExecutable="./`eval echo -e '$'"{${target}_${testSet}_${suiteID}[0]}"`"
+    while [ "`eval echo -e '$'"{${target}_${testSet}_${suiteID}[0]}"`x" != x ]
+    do
+        if [ "`eval echo -e '$'"{${target}_${testSet}_${suiteID}[2]}"`" = "-o" ]
+        then
+            options[$suiteID]="`eval echo -e '$'"{${target}_${testSet}_${suiteID}[3]}"` `eval echo -e '$'"{${target}_${testSet}_${suiteID}[4]}" | sed 's/-i /< /g'`"
+        else
+            options[$suiteID]="`eval echo -e '$'"{${target}_${testSet}_${suiteID}[2]}" | sed 's/-i /< /g'`"
+        fi
+        if [ "x${options[$suiteID]}" = x ]
+		then options[$suiteID]=NULL
+		fi
+		diffFileList[$suiteID]="`eval echo -e '$'"{${target}_${testSet}_${suiteID}[1]}"`"
+        if [ $runSpecSuites = No ]
+        then break
+        fi
+        suiteID=$[suiteID + 1]
+    done
+}
+
+argIdx=1
+arguments[0]="$0"
+while [ "${1}x" != x ]
+do
+    arguments[$argIdx]="$1"
+    shift 1
+    argIdx=$[argIdx + 1]
+done
+
+setScript
+setSpec
+findSpec
+argParser
+settingParser
+set -e
+buildSpecOptions
+buildSpecTemp
+prepareForDiff
+runRealSpec
+printTimingInfo
+set +e
+checkSpecDiff

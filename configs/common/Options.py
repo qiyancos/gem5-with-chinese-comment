@@ -115,8 +115,11 @@ def addNoISAOptions(parser):
                       help="use external ports of this port_type for caches")
     parser.add_option("--tlm-memory", type="string",
                       help="use external port for SystemC TLM cosimulation")
-    parser.add_option("--caches", action="store_true")
-    parser.add_option("--l2cache", action="store_true")
+    parser.add_option("--caches", action="store_true", help="Enable L1 Cache.")
+    parser.add_option("--l2cache", action="store_true",
+                      help="Enable L2 Cache.")
+    parser.add_option("--l3cache", action="store_true",
+                      help="Enable L3 Cache.")
     parser.add_option("--num-dirs", type="int", default=1)
     parser.add_option("--num-l2caches", type="int", default=1)
     parser.add_option("--num-l3caches", type="int", default=1)
@@ -132,6 +135,12 @@ def addNoISAOptions(parser):
 
     # Enable Ruby
     parser.add_option("--ruby", action="store_true")
+
+    # SW Cache Structure
+    parser.add_option("--swcache", action="store_true",
+                      help="Enable ShenWei Cache Strcuture.")
+    parser.add_option("--cpu_per_group", type="int", default=2,
+                      help="How many cpu assigned to one group.")    
 
     # Run duration options
     parser.add_option("-m", "--abs-max-tick", type="int", default=m5.MaxTick,
