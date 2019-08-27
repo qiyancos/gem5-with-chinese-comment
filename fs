@@ -3,10 +3,10 @@ root=$PWD
 
 ################# settings for script #################
 setScript(){
-    gem5Dir="/home/lee/project/temp/gem5"
+    gem5Dir="/home/lee/project/gem5"
     # root directory path for gem5
     imageDir="$gem5Dir/gem5_fs_images/parsec_disk"
-    # root directory path for spec2006
+    # root directory path for parsec image
     rcSDir="$gem5Dir/util/parsec_tools/rcSes"
     # directory that hold your rcS file or rcS generator
     tempDir=$root
@@ -17,8 +17,8 @@ setScript(){
     # [ARM ALPHA RISCV X86 MIPS]
     testSet="test" # [dev large medium small test]
     # Test_set setting
-    bad_spec=""
-    # parspec programs that may have problems
+    bad_parsec=""
+    # parsec programs that may have problems
     timingMode="Yes" #[Yes/No]
     # Decide if we shall print time-info for running
 }
@@ -217,7 +217,7 @@ settingParser(){
 
 ################# print path for output files #################
 printOutputInfo(){
-    if [ ${runSpec}x != 1x ]
+    if [ ${runParsec}x != 1x ]
     then
         debugDir="$tempDir"
         gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir%"`
@@ -226,7 +226,7 @@ printOutputInfo(){
         gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir%"`
     fi
     
-    if [ ${m5outDir}x = x -a ${runSpec}x = 1x ]
+    if [ ${m5outDir}x = x -a ${runParsec}x = 1x ]
     then 
         echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/parsec/$fullTarget/m5out\033[0m\"!"
         m5outDir="$tempDir/parsec/$fullTarget/m5out"
@@ -335,8 +335,9 @@ printHelpInfo(){
     echo "           <gem5> Show help information for gem5.opt"
     echo "           <fs> Show help information for fs.py"
     echo 
-    echo "    -l [-l] Use -l to list valid spec programs!"
-    echo "    -p [-p <parsec program name> <thread number>]  If the spec program is not given,"
+    echo "    -c [-c <port number>] Use -c to connect to the running full-system simulation."
+    echo "    -l [-l] Use -l to list valid parsec programs!"
+    echo "    -p [-p <parsec program name> <thread number>]  If the parsec program is not given,"
     echo "        then it will be chosen manually!"
     echo "    -mp [-mp <programs list>] (Not support now.) Running multiple programs! Program"
     echo "        list should be like \"prog1=arguments prog2=arguments\"!"
@@ -350,6 +351,30 @@ argParser(){
     fi
 
     case "${arguments[1]}x" in
+    ################# connect to fs simulation #################
+    "-cx")
+        if [ ${arguments[1]}x = x ]
+        then
+            echo "Warnning: Port number is not given, it will set as 3456 in default."
+            portNumber=3456
+        else portNumber=${arguments[1]}
+        fi
+        m5termDir=/usr/local/bin
+        if [ ! -f ${m5termDir}/m5term ]
+        then
+            cd $gem5Dir/util/term
+            touch /test.txt &> /dev/null
+            if [ $? != 0 ]
+            then
+                echo "Can not install m5term to your system without sudo."
+                m5termDir=$gem5Dir/util/term
+            else rm /test.txt
+            fi
+            echo ">> Installing m5term..."
+            make
+            sudo make install
+        fi
+        ${m5termDir}/m5term 127.0.0.1 $portNumber;;
     ################# run multiple programs #################
     "-mpx")
         echo "Error: -mp not supported now. Exit..."
@@ -432,7 +457,7 @@ argParser(){
             exit;;
         esac;;
     
-    ################# list available spec programs #################
+    ################# list available parsec programs #################
     "-lx")
         if [ ! -d $rcSDir ]
         then
@@ -444,7 +469,7 @@ argParser(){
         done
         exit;;
 
-    ################# select available spec programs #################
+    ################# select available parsec programs #################
     "-px")
         if [ ${gem5Dir}x = x ]
         then 
@@ -503,7 +528,7 @@ argParser(){
     esac
 }
 
-################# mkdir and generate options for spec #################
+################# mkdir and generate options for parsec #################
 preBuildForParsec(){
     if [ ${runParsec}x != 1x ]
     then return 

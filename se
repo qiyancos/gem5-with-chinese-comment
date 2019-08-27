@@ -97,7 +97,7 @@ setGem5(){
         L3size=""
         L3assoc=""
 
-    enableSWCache="No" # [Yes/No]
+    enableSWCache="Yes" # [Yes/No]
         numCpuPerGroup=2
 
     enableDebug="No" # [Yes/No]
