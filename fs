@@ -30,13 +30,13 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="No" # [Yes/No] 
+    forceNotBuild="Yes" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
     m5outDir=""
     # m5outDir option [default m5out]
 
     enableGlobal="Yes" # [Yes]
-        cpuType="DerivO3CPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
+        cpuType="AtomicSimpleCPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
         # type of cpu to run with
         cpuVoltage="" # []
         # Top-level voltage for blocks running at system power supply
@@ -94,12 +94,12 @@ setGem5(){
         L2size=""
         L2assoc=""
 
-    enableL3Cache="No"
+    enableL3Cache="Yes"
         numL3Caches=""
         L3size=""
         L3assoc=""
 
-    enableSWCache="No" # [Yes/No]
+    enableSWCache="Yes" # [Yes/No]
         numCpuPerGroup=2
 
     enableDebug="No" # [Yes/No]
@@ -140,7 +140,7 @@ setArgLevel(){
 ################# parse settings #################
 settingParser(){
     ################# test for parsec ##################
-    testList=("blackscholes" "bodytrack" "canneal" "dedup" "facesim" "ferret" "fluidanimate" "freqmine" "streamcluster" "swaptions" "vips" "x264" "rtview")
+    testList=("blackscholes" "bodytrack" "canneal" "dedup" "facesim" "ferret" "fluidanimate" "freqmine" "streamcluster" "swaptions" "vips" "x264" "rtview" "EMPTY")
     ################# parse dir args ##################
     if [ ${GEM5_ROOT}x != x ]
     then
@@ -222,14 +222,14 @@ printOutputInfo(){
         debugDir="$tempDir"
         gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir%"`
     else
-        debugDir="$tempDir/parsec/$fullTarget/m5out"
+        debugDir="$tempDir/parsec/$targetName/m5out"
         gem5Options=`echo $gem5Options | sed "s%DEBUGDIR%$debugDir%"`
     fi
     
     if [ ${m5outDir}x = x -a ${runParsec}x = 1x ]
     then 
-        echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/parsec/$fullTarget/m5out\033[0m\"!"
-        m5outDir="$tempDir/parsec/$fullTarget/m5out"
+        echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/parsec/$targetName/m5out\033[0m\"!"
+        m5outDir="$tempDir/parsec/$targetName/m5out"
     elif [ ${m5outDir}x = x ]
     then 
         echo -e ">> Output files will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
@@ -242,7 +242,7 @@ printOutputInfo(){
     if [ ${enableDebug}x = Yesx ]
     then
         if [ ${debugOutputDir}x = x -a ${runParsec}x = 1x ]
-        then echo -e ">> Debug data will be saved to \"\033[1;31m$tempDir/parsec/$fullTarget/m5out\033[0m\"!"
+        then echo -e ">> Debug data will be saved to \"\033[1;31m$tempDir/parsec/$targetName/m5out\033[0m\"!"
         elif [ ${debugOutputDir}x = x ]
         then echo -e ">> Debug data will be saved to \"\033[1;31m$tempDir/m5out\033[0m\"!"
         else echo -e ">> Debug data will be saved to \"\033[1;31m$debugOutputDir\033[0m\"!"
@@ -338,6 +338,7 @@ printHelpInfo(){
     echo "    -c [-c <port number>] Use -c to connect to the running full-system simulation."
     echo "    -m [-m <mount dir>] Use -m to mount system image to the given dir.(Need sudo)"
     echo "    -l [-l] Use -l to list valid parsec programs!"
+    echo "    -r [-r] Use -r to run full-system simulation directly."
     echo "    -p [-p <parsec program name> <thread number>]  If the parsec program is not given,"
     echo "        then it will be chosen manually!"
     echo "    -mp [-mp <programs list>] (Not support now.) Running multiple programs! Program"
@@ -378,8 +379,10 @@ argParser(){
         fi
         ${m5termDir}/m5term 127.0.0.1 $portNumber
         exit 0;;
+    
+    ################# mount system image #################
     "-mx")
-        mountDir=$2
+        mountDir=${arguments[2]}
         if [ x$mountDir = x ]
         then
             echo -n "Warning: system image will be mount to default dir "
@@ -425,6 +428,7 @@ argParser(){
             fi
         fi
         exit 0;;
+
     ################# run multiple programs #################
     "-mpx")
         echo "Error: -mp not supported now. Exit..."
@@ -518,7 +522,12 @@ argParser(){
         do echo $item
         done
         exit;;
-
+    
+    ################# select available parsec programs #################
+    "-rx")
+        targetName=RAW
+        threadNum=4;;
+    
     ################# select available parsec programs #################
     "-px")
         if [ ${gem5Dir}x = x ]
@@ -586,24 +595,7 @@ preBuildForParsec(){
     
     mkdir -p $tempDir/parsec/$targetName
     
-    if [ ! -f $rcSDir/${targetName}_${threadNum}c_${testSet}.rcS ]
-    then
-        if [ ! -x $rcSDir/writescript.pl ]
-        then
-            echo "Error: Can not find executable perl script to generate rcS file."
-            exit 1
-        fi
-        echo ">> Building rcS script for $targetName with thread number $threadNum..."
-        cd $rcSDir
-        $rcSDir/writescript.pl $targetName $threadNum
-        if [ ! -f $rcSDir/${targetName}_${threadNum}c_${testSet}.rcS ]
-        then
-            echo "Error: Failed to generate rcS file."
-            exit 1
-        fi
-    fi
-    
-    cd $tempDir/parsec/$fullTarget
+    cd $tempDir/parsec/$targetName
 
     if [ ! -f $imageDir/binaries/$kernelStdName ]
     then
@@ -653,7 +645,33 @@ preBuildForParsec(){
                 > $gem5Dir/configs/common/SysPaths.py
     fi
 
-    options="--kernel=$kernelPath --disk-image=$diskImagePath --script=$rcSDir/${targetName}_${threadNum}c_${testSet}.rcS"
+    if [ $targetName != RAW -a $targetName != EMPTY -a ! -f $rcSDir/${targetName}_${threadNum}c_${testSet}.rcS ]
+    then
+        if [ ! -x $rcSDir/writescript.pl ]
+        then
+            echo "Error: Can not find executable perl script to generate rcS file."
+            exit 1
+        fi
+        echo ">> Building rcS script for $targetName with thread number $threadNum..."
+        cd $rcSDir
+        $rcSDir/writescript.pl $targetName $threadNum
+        if [ ! -f $rcSDir/${targetName}_${threadNum}c_${testSet}.rcS ]
+        then
+            echo "Error: Failed to generate rcS file."
+            exit 1
+        fi
+    fi
+
+    if [ $targetName = EMPTY ]
+    then
+        echo -e "#! /bin/sh\n/sbin/m5 exit\n/sbin/m5 exit" > $tempDir/parsec/EMPTY.sh
+        options="--kernel=$kernelPath --disk-image=$diskImagePath --script=$tempDir/parsec/EMPTY.sh"
+    elif [ $targetName = RAW ]
+    then
+        options="--kernel=$kernelPath --disk-image=$diskImagePath"
+    else
+        options="--kernel=$kernelPath --disk-image=$diskImagePath --script=$rcSDir/${targetName}_${threadNum}c_${testSet}.rcS"
+    fi
 }
 
 argIdx=1

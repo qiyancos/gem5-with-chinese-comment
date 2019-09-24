@@ -1,5 +1,6 @@
 build
 spec
+parsec
 mount
 parser.out
 parsetab.py
