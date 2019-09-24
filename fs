@@ -336,6 +336,7 @@ printHelpInfo(){
     echo "           <fs> Show help information for fs.py"
     echo 
     echo "    -c [-c <port number>] Use -c to connect to the running full-system simulation."
+    echo "    -m [-m <mount dir>] Use -m to mount system image to the given dir.(Need sudo)"
     echo "    -l [-l] Use -l to list valid parsec programs!"
     echo "    -p [-p <parsec program name> <thread number>]  If the parsec program is not given,"
     echo "        then it will be chosen manually!"
@@ -353,28 +354,77 @@ argParser(){
     case "${arguments[1]}x" in
     ################# connect to fs simulation #################
     "-cx")
-        if [ ${arguments[1]}x = x ]
+        if [ ${arguments[2]}x = x ]
         then
-            echo "Warnning: Port number is not given, it will set as 3456 in default."
+            echo "Warning: Port number is not given, it will set as 3456 in default."
             portNumber=3456
-        else portNumber=${arguments[1]}
+        else portNumber=${arguments[2]}
         fi
         m5termDir=/usr/local/bin
         if [ ! -f ${m5termDir}/m5term ]
         then
             cd $gem5Dir/util/term
+            make
             touch /test.txt &> /dev/null
             if [ $? != 0 ]
             then
-                echo "Can not install m5term to your system without sudo."
+                echo "Warning: Can not install m5term to your system without sudo."
                 m5termDir=$gem5Dir/util/term
+            else
+                rm /test.txt
+                echo ">> Installing m5term..."
+                sudo make install
+            fi
+        fi
+        ${m5termDir}/m5term 127.0.0.1 $portNumber
+        exit 0;;
+    "-mx")
+        mountDir=$2
+        if [ x$mountDir = x ]
+        then
+            echo -n "Warning: system image will be mount to default dir "
+            echo "\"$gem5Dir/image_mount_dir\" as no mount dir is given."
+            mkdir -p $gem5Dir/image_mount_dir
+            mountDir=$gem5Dir/image_mount_dir
+        fi
+        if [ ! -d $mountDir ]
+        then
+            echo "Error: No such file or directory \"$mountDir\"."
+            exit -1
+        else
+            diskImagePath=(`find $imageDir -name "*.img" | sed /swap/d`)
+            if [ ${#diskImagePath[*]} == 0 ]
+            then
+                echo "Error: Can not find linux file system image in $imageDir."
+                exit 1
+            elif [ ${#diskImagePath[*]} -gt 1 ]
+            then
+                echo -n ">> We have found multiple candidate for system image. "
+                echo " You will have to choose by yourself:"
+                select path in ${diskImagePath[*]}
+                do
+                    diskImagePath=$path
+                    break;
+                done
+            fi
+            touch /test.txt &> /dev/null
+            if [ $? != 0 ]
+            then
+                echo "Warning: Can not mount system image without sudo."
+                exit -1
             else rm /test.txt
             fi
-            echo ">> Installing m5term..."
-            make
-            sudo make install
+            mount -o loop,offset=32256 $diskImagePath $mountDir
+            if [ $? = 0 ]
+            then
+                echo -n "-- Your system image file \"$diskImagePath\" has already "
+                echo "been mounted to $mountDir!"
+            else
+                echo -n "-- Failed to mount your system image file "
+                echo "\"$diskImagePath\" to $mountDir!"
+            fi
         fi
-        ${m5termDir}/m5term 127.0.0.1 $portNumber;;
+        exit 0;;
     ################# run multiple programs #################
     "-mpx")
         echo "Error: -mp not supported now. Exit..."
