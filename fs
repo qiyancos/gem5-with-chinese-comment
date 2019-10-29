@@ -325,7 +325,7 @@ printTimingInfo(){
 
 ################# help infomation #################
 printHelpInfo(){
-    echo "Usage: se [OPTION]" 
+    echo "Usage: fs [OPTION]" 
     echo "    -h [-h <target file> <more options>]"
     echo "        Use -h to see help info or use more options for gem5.opt and config file!" 
     echo "        If <more options> exists, it will be directly passed to the file specified" 
