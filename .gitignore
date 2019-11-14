@@ -30,3 +30,4 @@ m5out
 /system/arm/simple_bootloader/boot_emm.arm
 /system/arm/aarch64_bootloader/boot_emm.arm64
 gem5_fs_images
+check_points

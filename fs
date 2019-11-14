@@ -3,7 +3,7 @@ root=$PWD
 
 ################# settings for script #################
 setScript(){
-    gem5Dir="/home/lee/project/gem5"
+    gem5Dir="/home/lishuoke/gem5-with-chinese-comment"
     # root directory path for gem5
     imageDir="$gem5Dir/gem5_fs_images/parsec_disk"
     # root directory path for parsec image
@@ -30,11 +30,17 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="Yes" # [Yes/No] 
+    forceNotBuild="No" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
-    m5outDir=""
+    m5outDir="$gem5Dir/check_points/"
     # m5outDir option [default m5out]
 
+    enableSmt="No" # [Yes/No]
+    enableSimpoint="No" # [Yes/No]
+    enableCountAsInstruction="Yes" # [Yes/No]
+    # Whether we should take the number as instruction count
+    # for the following two options.
+    
     enableGlobal="Yes" # [Yes]
         cpuType="AtomicSimpleCPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
         # type of cpu to run with
@@ -46,26 +52,14 @@ setGem5(){
         # Clock for blocks running at CPU speed
         fastForwardInsts="" # []
         # number of instruction put into warm up region
+        warmupInsts="" # []
+        # warmup period in total instructions
         maxInsts="" # []
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
         numCpus="4" # []
         # number of cpu you want to run with
-
-    enableCheckPoint="No" # [Yes/No]
-        enableCountAsInstruction="Yes" # [Yes/No]
-        # Whether we should take the number as instruction count
-        # for the following two options.
-        loadCheckPointPos=""
-        # num of instructions already run to load checkpoint
-        saveCheckPointPos=""
-        # num of instructions to take checkpoint
-        checkPointDir=""
-        # where to put or load the checkpoint file
-
-    enableSimpoint="No" # [Yes/No]
-    enableSmt="No" # [Yes/No]
 
     enableMem="Yes"
         memType="" 
@@ -81,25 +75,36 @@ setGem5(){
         memSize="2GB"
         # Specify the physical memory size (single memory)
 
-    enableCache="Yes"
+    enableCache="No"
         numDirs=""
         cacheLineSize=""
-        L1Dsize=""
-        L1Dassoc=""
-        L1Isize=""
-        L1Iassoc=""
+        L1Dsize="32768"
+        L1Dassoc="4"
+        L1Dprefetcher="StridePrefetcher"
+        # Prefetcher used for L1DCache
+        # Following prefetchers are available
+        # [TaggedPrefetcher, BOPPrefetcher, STeMSPrefetcher
+        #  IrregularStreamBufferPrefetcher, DCPTPrefetcher, MultiPrefetcher
+	    #  SBOOEPrefetcher, IndirectMemoryPrefetcher, SignaturePathPrefetcher
+	    #  SignaturePathPrefetcherV2, PIFPrefetcher, SlimAMPMPrefetcher
+	    #  AMPMPrefetcher, StridePrefetcher]
+        L1Isize="65536"
+        L1Iassoc="4"
+        L1Iprefetcher="BOPPrefetcher"
 
-    enableL2Cache="Yes"
+    enableL2Cache="No"
         numL2Caches=""
-        L2size=""
-        L2assoc=""
+        L2size="1048576"
+        L2assoc="8"
+        L2prefetcher="StridePrefetcher"
 
-    enableL3Cache="Yes"
+    enableL3Cache="No"
         numL3Caches=""
-        L3size=""
-        L3assoc=""
+        L3size="4194304"
+        L3assoc="16"
+        L3prefetcher="StridePrefetcher"
 
-    enableSWCache="Yes" # [Yes/No]
+    enableSWCache="No" # [Yes/No]
         numCpuPerGroup=2
 
     enableDebug="No" # [Yes/No]
@@ -108,6 +113,14 @@ setGem5(){
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
         debugStartTick=""
         debugEndTick=""
+    
+    enableCheckPoint="Yes" # [Yes/No]
+        loadCheckPointPos=""
+        # num of instructions already run to load checkpoint
+        saveCheckPointPos="300000000"
+        # num of instructions to take checkpoint
+        checkPointDir="$gem5Dir/check_points/"
+        # where to put or load the checkpoint file
 }
 
 ################# settings for settingParser #################
@@ -117,21 +130,21 @@ setArgLevel(){
     formatLevel=("" "" "--simpoint" "--smt" "" "--caches" "--l2cache" "--l3cache" "--swcache" "--at-instruction")
 
     # argument list
-    argListGlobal=("cpuType" "cpuVoltage" "sysClock" "cpuClock" "fastForwardInsts" "maxInsts" "maxTime" "numCpus")
+    argListGlobal=("cpuType" "cpuVoltage" "sysClock" "cpuClock" "fastForwardInsts" "warmupInsts" "maxInsts" "maxTime" "numCpus")
     argListCheckPoint=("loadCheckPointPos" "saveCheckPointPos" "checkPointDir")
     argListMem=("memType" "memChannels" "memRanks" "memSize")
-    argListCache=("numDirs" "cacheLineSize" "L1Dsize" "L1Dassoc" "L1Isize" "L1Iassoc")
-    argListL2Cache=("numL2Caches" "L2size" "L2assoc")
-    argListL3Cache=("numL3Caches" "L3size" "L3assoc")
+    argListCache=("numDirs" "cacheLineSize" "L1Dsize" "L1Dassoc" "L1Dprefetcher" "L1Isize" "L1Iassoc" "L1Iprefetcher")
+    argListL2Cache=("numL2Caches" "L2size" "L2assoc" "L2prefetcher")
+    argListL3Cache=("numL3Caches" "L3size" "L3assoc" "L3prefetcher")
     argListSWCache=("numCpuPerGroup")
 
     # format list for arguments
-    formatListGlobal=("--cpu-type" "--sys-voltage" "--sys-clock" "--cpu-clock" "--fast-forward" "--maxinsts" "--maxtime" "--num-cpus")
+    formatListGlobal=("--cpu-type" "--sys-voltage" "--sys-clock" "--cpu-clock" "--fast-forward" "--warmup-insts" "--maxinsts" "--maxtime" "--num-cpus")
     formatListCheckPoint=("--checkpoint-restore" "--take-checkpoints" "--checkpoint-dir")
     formatListMem=("--mem-type" "--mem-channels" "--mem-ranks" "--mem-size")
-    formatListCache=("--num-dirs" "--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1i_size" "--l1i_assoc")
-    formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc")
-    formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc")
+    formatListCache=("--num-dirs" "--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1d-hwp-type" "--l1i_size" "--l1i_assoc" "--l1i-hwp-type")
+    formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc" "--l2-hwp-type")
+    formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc" "--l3-hwp-type")
     formatListSWCache=("--cpu_per_group")
 
     buildOption="CPU_MODELS=$cpuModel"
@@ -140,7 +153,7 @@ setArgLevel(){
 ################# parse settings #################
 settingParser(){
     ################# test for parsec ##################
-    testList=("blackscholes" "bodytrack" "canneal" "dedup" "facesim" "ferret" "fluidanimate" "freqmine" "streamcluster" "swaptions" "vips" "x264" "rtview" "EMPTY")
+    testList=("blackscholes" "bodytrack" "canneal" "dedup" "facesim" "ferret" "fluidanimate" "freqmine" "streamcluster" "swaptions" "vips" "x264" "rtview" "CHECKPOINT" "EMPTY")
     ################# parse dir args ##################
     if [ ${GEM5_ROOT}x != x ]
     then
@@ -183,6 +196,10 @@ settingParser(){
             exit
         else gem5Options="$gem5Options --outdir=$m5outDir"
         fi
+    fi
+
+    if [ x$enableCheckPoint = xYes ]
+    then mkdir -p $checkPointDir
     fi
 
     ################# parse other args ##################
@@ -291,7 +308,7 @@ runGem5(){
         endTime=`date +%s`
     else
         gem5Options=`echo $gem5Options | sed "s/DEBUGFILE/debug.log/"`
-        echo -e ">> Start Running Parsec \033[1;31m[Name: $targetName Thread: $threadNum, TestSet: $testSet]\033[0m ..."
+        echo -e ">> Start Running Parsec \033[1;31m[Name: $targetName; Thread: $threadNum; TestSet: $testSet]\033[0m ..."
         startTime=`date +%s`
         bash -c "`echo $gem5Dir/build/$ISA/gem5.$buildModel $gem5Options $gem5Dir/configs/example/fs.py $basicOptions $options`"
         endTime=`date +%s`
@@ -357,7 +374,7 @@ argParser(){
     "-cx")
         if [ ${arguments[2]}x = x ]
         then
-            echo "Warning: Port number is not given, it will set as 3456 in default."
+            echo "Warning: port number is not given, it will be set as 3456 in default."
             portNumber=3456
         else portNumber=${arguments[2]}
         fi
@@ -526,7 +543,9 @@ argParser(){
     ################# select available parsec programs #################
     "-rx")
         targetName=RAW
-        threadNum=4;;
+        threadNum=4
+        runParsec=1
+        needBuild=1;;
     
     ################# select available parsec programs #################
     "-px")
@@ -645,7 +664,7 @@ preBuildForParsec(){
                 > $gem5Dir/configs/common/SysPaths.py
     fi
 
-    if [ $targetName != RAW -a $targetName != EMPTY -a ! -f $rcSDir/${targetName}_${threadNum}c_${testSet}.rcS ]
+    if [ $targetName != RAW -a $targetName != EMPTY -a $targetName != CHECKPOINT -a ! -f $rcSDir/${targetName}_${threadNum}c_${testSet}.rcS ]
     then
         if [ ! -x $rcSDir/writescript.pl ]
         then
@@ -666,6 +685,16 @@ preBuildForParsec(){
     then
         echo -e "#! /bin/sh\n/sbin/m5 exit\n/sbin/m5 exit" > $tempDir/parsec/EMPTY.sh
         options="--kernel=$kernelPath --disk-image=$diskImagePath --script=$tempDir/parsec/EMPTY.sh"
+    elif [ $targetName = CHECKPOINT ]
+    then
+        if [ -f $gem5Dir/util/parsec_tools/simple_checkpoint.sh ]
+        then
+            options="--kernel=$kernelPath --disk-image=$diskImagePath"
+            options="$options --script=$gem5Dir/util/parsec_tools/simple_checkpoint.sh"
+        else
+            echo "Error: Can not find script for taking checkpoint."
+            exit -1
+        fi
     elif [ $targetName = RAW ]
     then
         options="--kernel=$kernelPath --disk-image=$diskImagePath"

@@ -124,6 +124,14 @@ def config_cache(options, system):
                                size=options.l3_size,
                                assoc=options.l3_assoc)
     
+        if options.l3_hwp_type:
+            hwpClass = HWPConfig.get(options.l3_hwp_type)
+            if system.l3.prefetcher != "Null":
+                print("Warning: l3-hwp-type is set (", hwpClass, "), but",
+                    "the current l3 has a default Hardware Prefetcher",
+                    "of type", type(system.l3.prefetcher), ", using the",
+                    "specified by the flag option.")
+            system.l3.prefetcher = hwpClass()
         system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
     
         last_cpu_with_cache = 0
@@ -133,6 +141,14 @@ def config_cache(options, system):
                 system.cpu[i].l2 = l2_cache_class(
                         clk_domain=system.cpu_clk_domain,
                         size = options.l2_size, assoc = options.l2_assoc)
+                if options.l2_hwp_type:
+                    hwpClass = HWPConfig.get(options.l2_hwp_type)
+                    if system.cpu[i].l2.prefetcher != "Null":
+                        print("Warning: l2-hwp-type is set (", hwpClass, "), but",
+                            "the current l2 has a default Hardware Prefetcher",
+                            "of type", type(system.cpu[i].l2.prefetcher), ", using the",
+                            "specified by the flag option.")
+                    system.cpu[i].l2.prefetcher = hwpClass()
                 system.cpu[i].tol2bus = L2XBar(clk_domain = \
                         system.cpu_clk_domain)
                 system.cpu[i].l2.mem_side = system.tol3bus.slave
@@ -151,11 +167,27 @@ def config_cache(options, system):
                                size=options.l3_size,
                                assoc=options.l3_assoc)
     
+        if options.l3_hwp_type:
+            hwpClass = HWPConfig.get(options.l3_hwp_type)
+            if system.l3.prefetcher != "Null":
+                print("Warning: l3-hwp-type is set (", hwpClass, "), but",
+                    "the current l3 has a default Hardware Prefetcher",
+                    "of type", type(system.l3.prefetcher), ", using the",
+                    "specified by the flag option.")
+            system.l3.prefetcher = hwpClass()
         system.tol3bus = L3XBar(clk_domain = system.cpu_clk_domain)
     
         for i in xrange(options.num_cpus):
             system.cpu[i].l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
                     size = options.l2_size, assoc = options.l2_assoc)
+            if options.l2_hwp_type:
+                hwpClass = HWPConfig.get(options.l2_hwp_type)
+                if system.l2.prefetcher != "Null":
+                    print("Warning: l2-hwp-type is set (", hwpClass, "), but",
+                        "the current l2 has a default Hardware Prefetcher",
+                        "of type", type(system.cpu[i].l2.prefetcher), ", using the",
+                        "specified by the flag option.")
+                system.cpu[i].l2.prefetcher = hwpClass()
             system.cpu[i].tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
             system.cpu[i].l2.cpu_side = system.cpu[i].tol2bus.master
             system.cpu[i].l2.mem_side = system.tol3bus.slave
