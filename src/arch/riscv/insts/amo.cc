@@ -43,22 +43,6 @@ using namespace std;
 namespace RiscvISA
 {
 
-// memfence micro instruction
-string MemFenceMicro::generateDisassembly(Addr pc,
-    const SymbolTable *symtab) const
-{
-    stringstream ss;
-    ss << csprintf("0x%08x", machInst) << ' ' << mnemonic;
-    return ss.str();
-}
-
-Fault MemFenceMicro::execute(ExecContext *xc,
-    Trace::InstRecord *traceData) const
-{
-    return NoFault;
-}
-
-// load-reserved
 string LoadReserved::generateDisassembly(Addr pc,
     const SymbolTable *symtab) const
 {
@@ -68,16 +52,6 @@ string LoadReserved::generateDisassembly(Addr pc,
     return ss.str();
 }
 
-string LoadReservedMicro::generateDisassembly(Addr pc,
-    const SymbolTable *symtab) const
-{
-    stringstream ss;
-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", ("
-            << registerName(_srcRegIdx[0]) << ')';
-    return ss.str();
-}
-
-// store-conditional
 string StoreCond::generateDisassembly(Addr pc,
     const SymbolTable *symtab) const
 {
@@ -88,17 +62,6 @@ string StoreCond::generateDisassembly(Addr pc,
     return ss.str();
 }
 
-string StoreCondMicro::generateDisassembly(Addr pc,
-    const SymbolTable *symtab) const
-{
-    stringstream ss;
-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", "
-            << registerName(_srcRegIdx[1]) << ", ("
-            << registerName(_srcRegIdx[0]) << ')';
-    return ss.str();
-}
-
-// AMOs
 string AtomicMemOp::generateDisassembly(Addr pc,
     const SymbolTable *symtab) const
 {
@@ -113,9 +76,7 @@ string AtomicMemOpMicro::generateDisassembly(Addr pc,
     const SymbolTable *symtab) const
 {
     stringstream ss;
-    ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", "
-            << registerName(_srcRegIdx[1]) << ", ("
-            << registerName(_srcRegIdx[0]) << ')';
+    ss << csprintf("0x%08x", machInst) << ' ' << mnemonic;
     return ss.str();
 }
 

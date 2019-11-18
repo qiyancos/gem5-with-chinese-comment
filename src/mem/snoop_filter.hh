@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016,2019 ARM Limited
+ * Copyright (c) 2013-2016 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -45,7 +45,6 @@
 #ifndef __MEM_SNOOP_FILTER_HH__
 #define __MEM_SNOOP_FILTER_HH__
 
-#include <bitset>
 #include <unordered_map>
 #include <utility>
 
@@ -87,14 +86,10 @@
  */
 class SnoopFilter : public SimObject {
   public:
-
-    // Change for systems with more than 256 ports tracked by this object
-    static const int SNOOP_MASK_SIZE = 256;
-
     typedef std::vector<QueuedSlavePort*> SnoopList;
 
     SnoopFilter (const SnoopFilterParams *p) :
-        SimObject(p), reqLookupResult(cachedLocations.end()),
+        SimObject(p), reqLookupResult(cachedLocations.end()), retryItem{0, 0},
         linesize(p->system->cacheLineSize()), lookupLatency(p->lookup_latency),
         maxEntryCount(p->max_capacity / p->system->cacheLineSize())
     {
@@ -119,9 +114,9 @@ class SnoopFilter : public SimObject {
         }
 
         // make sure we can deal with this many ports
-        fatal_if(id > SNOOP_MASK_SIZE,
+        fatal_if(id > 8 * sizeof(SnoopMask),
                  "Snoop filter only supports %d snooping ports, got %d\n",
-                 SNOOP_MASK_SIZE, id);
+                 8 * sizeof(SnoopMask), id);
     }
 
     /**
@@ -203,9 +198,13 @@ class SnoopFilter : public SimObject {
 
     /**
      * The underlying type for the bitmask we use for tracking. This
-     * limits the number of snooping ports supported per crossbar.
+     * limits the number of snooping ports supported per crossbar. For
+     * the moment it is an uint64_t to offer maximum
+     * scalability. However, it is possible to use e.g. a uint16_t or
+     * uint32_to slim down the footprint of the hash map (and
+     * ultimately improve the simulation performance).
      */
-    typedef std::bitset<SNOOP_MASK_SIZE> SnoopMask;
+    typedef uint64_t SnoopMask;
 
     /**
     * Per cache line item tracking a bitmask of SlavePorts who have an
@@ -261,37 +260,17 @@ class SnoopFilter : public SimObject {
 
     /** Simple hash set of cached addresses. */
     SnoopFilterCache cachedLocations;
-
     /**
-     * A request lookup must be followed by a call to finishRequest to inform
-     * the operation's success. If a retry is needed, however, all changes
-     * made to the snoop filter while performing the lookup must be undone.
-     * This structure keeps track of the state previous to such changes.
+     * Iterator used to store the result from lookupRequest until we
+     * call finishRequest.
      */
-    struct ReqLookupResult {
-        /** Iterator used to store the result from lookupRequest. */
-        SnoopFilterCache::iterator it;
-
-        /**
-         * Variable to temporarily store value of snoopfilter entry
-         * in case finishRequest needs to undo changes made in lookupRequest
-         * (because of crossbar retry)
-         */
-        SnoopItem retryItem;
-
-        /**
-         * The constructor must be informed of the internal cache's end
-         * iterator, so do not allow the compiler to implictly define it.
-         *
-         * @param end_it Iterator to the end of the internal cache.
-         */
-        ReqLookupResult(SnoopFilterCache::iterator end_it)
-            : it(end_it), retryItem{0, 0}
-        {
-        }
-        ReqLookupResult() = delete;
-    } reqLookupResult;
-
+    SnoopFilterCache::iterator reqLookupResult;
+    /**
+     * Variable to temporarily store value of snoopfilter entry
+     * incase finishRequest needs to undo changes made in lookupRequest
+     * (because of crossbar retry)
+     */
+    SnoopItem retryItem;
     /** List of all attached snooping slave ports. */
     SnoopList slavePorts;
     /** Track the mapping from port ids to the local mask ids. */
@@ -335,7 +314,7 @@ SnoopFilter::maskToPortList(SnoopMask port_mask) const
 {
     SnoopList res;
     for (const auto& p : slavePorts)
-        if ((port_mask & portToMask(*p)).any())
+        if (port_mask & portToMask(*p))
             res.push_back(p);
     return res;
 }

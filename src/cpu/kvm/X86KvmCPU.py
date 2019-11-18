@@ -28,8 +28,7 @@
 
 from m5.params import *
 from m5.SimObject import *
-
-from m5.objects.BaseKvmCPU import BaseKvmCPU
+from BaseKvmCPU import BaseKvmCPU
 
 class X86KvmCPU(BaseKvmCPU):
     type = 'X86KvmCPU'

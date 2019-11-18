@@ -858,30 +858,7 @@ decode OPCODE default Unknown::unknown() {
             } else {
                 // check to see if simulator wants to do something special
                 // on this PAL call (including maybe suppress it)
-                bool dopal = true;
-                ThreadContext *tc = xc->tcBase();
-                auto *base_stats = tc->getKernelStats();
-                auto *stats = dynamic_cast<AlphaISA::Kernel::Statistics *>(
-                        base_stats);
-                assert(stats || !base_stats);
-                if (stats)
-                    stats->callpal(palFunc, tc);
-
-                System *sys = tc->getSystemPtr();
-
-                switch (palFunc) {
-                  case PAL::halt:
-                    xc->tcBase()->halt();
-                    if (--System::numSystemsRunning == 0)
-                        exitSimLoop("all cpus halted");
-                    break;
-
-                  case PAL::bpt:
-                  case PAL::bugchk:
-                    if (sys->breakpoint())
-                        dopal = false;
-                    break;
-                }
+                bool dopal = xc->simPalCheck(palFunc);
 
                 if (dopal) {
                     xc->setMiscReg(IPR_EXC_ADDR, NPC);
@@ -953,24 +930,7 @@ decode OPCODE default Unknown::unknown() {
   0x1e: decode PALMODE {
       0: OpcdecFault::hw_rei();
         format BasicOperate {
-          1: hw_rei({{
-                Addr pc = PC;
-                if (!(pc & 0x3))
-                    return std::make_shared<UnimplementedOpcodeFault>();
-
-                LockFlag = false;
-                NPC = IprExcAddr;
-
-                ThreadContext *tc = xc->tcBase();
-                auto *base_stats = tc->getKernelStats();
-                auto *stats = dynamic_cast<AlphaISA::Kernel::Statistics *>(
-                        base_stats);
-                assert(stats || !base_stats);
-                if (stats)
-                    stats->hwrei();
-
-                CPA::cpa()->swAutoBegin(tc, IprExcAddr);
-          }}, IsSerializing, IsSerializeBefore);
+          1: hw_rei({{ xc->hwrei(); }}, IsSerializing, IsSerializeBefore);
         }
     }
 

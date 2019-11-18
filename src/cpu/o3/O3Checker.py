@@ -27,7 +27,7 @@
 # Authors: Nathan Binkert
 
 from m5.params import *
-from m5.objects.CheckerCPU import CheckerCPU
+from CheckerCPU import CheckerCPU
 
 class O3Checker(CheckerCPU):
     type = 'O3Checker'

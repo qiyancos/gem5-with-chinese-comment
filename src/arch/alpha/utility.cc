@@ -48,12 +48,12 @@ getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
     const int NumArgumentRegs = 6;
     if (number < NumArgumentRegs) {
         if (fp)
-            return tc->readFloatReg(16 + number);
+            return tc->readFloatRegBits(16 + number);
         else
             return tc->readIntReg(16 + number);
     } else {
         Addr sp = tc->readIntReg(StackPointerReg);
-        PortProxy &vp = tc->getVirtProxy();
+        FSTranslatingPortProxy &vp = tc->getVirtProxy();
         uint64_t arg = vp.read<uint64_t>(sp +
                                          (number-NumArgumentRegs) *
                                          sizeof(uint64_t));
@@ -70,7 +70,7 @@ copyRegs(ThreadContext *src, ThreadContext *dest)
 
     // Then loop through the floating point registers.
     for (int i = 0; i < NumFloatRegs; ++i)
-        dest->setFloatReg(i, src->readFloatReg(i));
+        dest->setFloatRegBits(i, src->readFloatRegBits(i));
 
     // Would need to add condition-code regs if implemented
     assert(NumCCRegs == 0);
@@ -100,7 +100,7 @@ copyMiscRegs(ThreadContext *src, ThreadContext *dest)
 void
 skipFunction(ThreadContext *tc)
 {
-    PCState newPC = tc->pcState();
+    TheISA::PCState newPC = tc->pcState();
     newPC.set(tc->readIntReg(ReturnAddressReg));
     tc->pcState(newPC);
 }

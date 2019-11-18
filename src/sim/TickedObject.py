@@ -35,7 +35,7 @@
 #
 # Authors: Andrew Bardsley
 
-from m5.objects.ClockedObject import ClockedObject
+from ClockedObject import ClockedObject
 
 class TickedObject(ClockedObject):
     type = 'TickedObject'

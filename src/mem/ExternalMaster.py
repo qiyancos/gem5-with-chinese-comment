@@ -39,9 +39,9 @@
 
 from m5.params import *
 from m5.proxy import *
-from m5.SimObject import SimObject
+from MemObject import MemObject
 
-class ExternalMaster(SimObject):
+class ExternalMaster(MemObject):
     type = 'ExternalMaster'
     cxx_header = "mem/external_master.hh"
 

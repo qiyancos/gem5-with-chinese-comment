@@ -26,6 +26,7 @@
 #
 # Authors: Nathan Binkert
 
+from orderdict import orderdict
 import output
 
 class FileData(dict):

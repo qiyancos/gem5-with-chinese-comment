@@ -31,16 +31,26 @@
 #ifndef __MEM_CACHE_REPLACEMENT_POLICIES_BASE_HH__
 #define __MEM_CACHE_REPLACEMENT_POLICIES_BASE_HH__
 
-#include <memory>
-
-#include "mem/cache/replacement_policies/replaceable_entry.hh"
+#include "mem/cache/base.hh"
+#include "mem/cache/blk.hh"
 #include "params/BaseReplacementPolicy.hh"
 #include "sim/sim_object.hh"
 
 /**
  * Replacement candidates as chosen by the indexing policy.
+ *
+ * The base functions touch() and reset() must be called by all subclasses
+ * that override them.
+ *
+ * @todo
+ *   Currently the replacement candidates are simply the cache blocks
+ *   derived from the possible placement locations of an address, as
+ *   defined by the getPossibleLocations() from BaseTags. In a future
+ *   patch it should be an inheritable class to allow the replacement
+ *   policies to be used with any table-like structure that needs to
+ *   replace its entries.
  */
-typedef std::vector<ReplaceableEntry*> ReplacementCandidates;
+typedef std::vector<CacheBlk*> ReplacementCandidates;
 
 /**
  * A common base class of cache replacement policy objects.
@@ -56,7 +66,7 @@ class BaseReplacementPolicy : public SimObject
     /**
      * Construct and initiliaze this replacement policy.
      */
-    BaseReplacementPolicy(const Params *p) : SimObject(p) {}
+    BaseReplacementPolicy(const Params *p);
 
     /**
      * Destructor.
@@ -64,44 +74,32 @@ class BaseReplacementPolicy : public SimObject
     virtual ~BaseReplacementPolicy() {}
 
     /**
-     * Invalidate replacement data to set it as the next probable victim.
+     * Touch a block to update its replacement data.
+     * Updates number of references.
      *
-     * @param replacement_data Replacement data to be invalidated.
+     * This base function must be called by all subclasses that override it.
+     *
+     * @param blk Cache block to be touched.
      */
-    virtual void invalidate(const std::shared_ptr<ReplacementData>&
-                                                replacement_data) const = 0;
+    virtual void touch(CacheBlk *blk);
 
     /**
-     * Update replacement data.
+     * Reset replacement data for a block. Used when a block is inserted.
+     * Sets the insertion tick, and update number of references.
      *
-     * @param replacement_data Replacement data to be touched.
-     */
-    virtual void touch(const std::shared_ptr<ReplacementData>&
-                                                replacement_data) const = 0;
-
-    /**
-     * Reset replacement data. Used when it's holder is inserted/validated.
+     * This base function must be called by all subclasses that override it.
      *
-     * @param replacement_data Replacement data to be reset.
+     * @param blk Cache block to be reset.
      */
-    virtual void reset(const std::shared_ptr<ReplacementData>&
-                                                replacement_data) const = 0;
+    virtual void reset(CacheBlk *blk);
 
     /**
      * Find replacement victim among candidates.
      *
      * @param candidates Replacement candidates, selected by indexing policy.
-     * @return Replacement entry to be replaced.
+     * @return Cache block to be replaced.
      */
-    virtual ReplaceableEntry* getVictim(
-                           const ReplacementCandidates& candidates) const = 0;
-
-    /**
-     * Instantiate a replacement data entry.
-     *
-     * @return A shared pointer to the new replacement data.
-     */
-    virtual std::shared_ptr<ReplacementData> instantiateEntry() = 0;
+    virtual CacheBlk* getVictim(const ReplacementCandidates& candidates) = 0;
 };
 
 #endif // __MEM_CACHE_REPLACEMENT_POLICIES_BASE_HH__

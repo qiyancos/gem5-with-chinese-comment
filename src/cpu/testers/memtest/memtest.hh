@@ -49,9 +49,8 @@
 #include <unordered_map>
 
 #include "base/statistics.hh"
-#include "mem/port.hh"
+#include "mem/mem_object.hh"
 #include "params/MemTest.hh"
-#include "sim/clocked_object.hh"
 #include "sim/eventq.hh"
 #include "sim/stats.hh"
 
@@ -68,7 +67,7 @@
  * both requests and responses, thus checking that the memory-system
  * is making progress.
  */
-class MemTest : public ClockedObject
+class MemTest : public MemObject
 {
 
   public:
@@ -76,10 +75,10 @@ class MemTest : public ClockedObject
     typedef MemTestParams Params;
     MemTest(const Params *p);
 
-    void regStats() override;
+    virtual void regStats();
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    virtual BaseMasterPort &getMasterPort(const std::string &if_name,
+                                          PortID idx = InvalidPortID);
 
   protected:
 

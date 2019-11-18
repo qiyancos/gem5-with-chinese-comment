@@ -86,9 +86,6 @@ class Logger
     /** Set objects to ignore */
     void setIgnore(ObjectMatch &ignore_) { ignore = ignore_; }
 
-    /** Add objects to ignore */
-    void addIgnore(const ObjectMatch &ignore_) { ignore.add(ignore_); }
-
     virtual ~Logger() { }
 };
 

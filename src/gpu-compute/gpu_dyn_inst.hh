@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
+ * Copyright (c) 2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * For use for simulation and test purposes only
@@ -14,9 +14,9 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from this
- * software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software
+ * without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,7 +30,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Anthony Gutierrez
+ * Author: Anthony Gutierrez
  */
 
 #ifndef __GPU_DYN_INST_HH__
@@ -39,7 +39,6 @@
 #include <cstdint>
 #include <string>
 
-#include "base/logging.hh"
 #include "enums/MemType.hh"
 #include "enums/StorageClassType.hh"
 #include "gpu-compute/compute_unit.hh"
@@ -55,7 +54,6 @@ class AtomicOpAnd : public TypedAtomicOpFunctor<T>
 
     AtomicOpAnd(T _a) : a(_a) { }
     void execute(T *b) { *b &= a; }
-    AtomicOpFunctor* clone () { return new AtomicOpAnd(a); }
 };
 
 template<typename T>
@@ -65,7 +63,6 @@ class AtomicOpOr : public TypedAtomicOpFunctor<T>
     T a;
     AtomicOpOr(T _a) : a(_a) { }
     void execute(T *b) { *b |= a; }
-    AtomicOpFunctor* clone () { return new AtomicOpOr(a); }
 };
 
 template<typename T>
@@ -75,7 +72,6 @@ class AtomicOpXor : public TypedAtomicOpFunctor<T>
     T a;
     AtomicOpXor(T _a) : a(_a) {}
     void execute(T *b) { *b ^= a; }
-    AtomicOpFunctor* clone () { return new AtomicOpXor(a); }
 };
 
 template<typename T>
@@ -105,7 +101,6 @@ class AtomicOpCAS : public TypedAtomicOpFunctor<T>
             computeUnit->xactCasLoadMap.clear();
         }
     }
-    AtomicOpFunctor* clone () { return new AtomicOpCAS(c, s, computeUnit); }
 };
 
 template<typename T>
@@ -115,7 +110,6 @@ class AtomicOpExch : public TypedAtomicOpFunctor<T>
     T a;
     AtomicOpExch(T _a) : a(_a) { }
     void execute(T *b) { *b = a; }
-    AtomicOpFunctor* clone () { return new AtomicOpExch(a); }
 };
 
 template<typename T>
@@ -125,7 +119,6 @@ class AtomicOpAdd : public TypedAtomicOpFunctor<T>
     T a;
     AtomicOpAdd(T _a) : a(_a) { }
     void execute(T *b) { *b += a; }
-    AtomicOpFunctor* clone () { return new AtomicOpAdd(a); }
 };
 
 template<typename T>
@@ -135,7 +128,6 @@ class AtomicOpSub : public TypedAtomicOpFunctor<T>
     T a;
     AtomicOpSub(T _a) : a(_a) { }
     void execute(T *b) { *b -= a; }
-    AtomicOpFunctor* clone () { return new AtomicOpSub(a); }
 };
 
 template<typename T>
@@ -144,7 +136,6 @@ class AtomicOpInc : public TypedAtomicOpFunctor<T>
   public:
     AtomicOpInc() { }
     void execute(T *b) { *b += 1; }
-    AtomicOpFunctor* clone () { return new AtomicOpInc(); }
 };
 
 template<typename T>
@@ -153,7 +144,6 @@ class AtomicOpDec : public TypedAtomicOpFunctor<T>
   public:
     AtomicOpDec() {}
     void execute(T *b) { *b -= 1; }
-    AtomicOpFunctor* clone () { return new AtomicOpDec(); }
 };
 
 template<typename T>
@@ -169,7 +159,6 @@ class AtomicOpMax : public TypedAtomicOpFunctor<T>
         if (a > *b)
             *b = a;
     }
-    AtomicOpFunctor* clone () { return new AtomicOpMax(a); }
 };
 
 template<typename T>
@@ -185,7 +174,6 @@ class AtomicOpMin : public TypedAtomicOpFunctor<T>
         if (a < *b)
             *b = a;
     }
-    AtomicOpFunctor* clone () { return new AtomicOpMin(a); }
 };
 
 typedef enum
@@ -394,7 +382,7 @@ class GPUDynInst : public GPUExecContext
     }
 
     void
-    setRequestFlags(RequestPtr req, bool setMemOrder=true)
+    setRequestFlags(Request *req, bool setMemOrder=true)
     {
         // currently these are the easy scopes to deduce
         if (isPrivateSeg()) {
@@ -408,7 +396,8 @@ class GPUDynInst : public GPUExecContext
         } else if (isGroupSeg()) {
             req->setMemSpaceConfigFlags(Request::GROUP_SEGMENT);
         } else if (isFlat()) {
-            panic("TODO: translate to correct scope");
+            // TODO: translate to correct scope
+            assert(false);
         } else {
             fatal("%s has bad segment type\n", disassemble());
         }

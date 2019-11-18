@@ -29,7 +29,6 @@
 #          Brad Beckmann
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 import m5
 from m5.objects import *
@@ -66,9 +65,7 @@ parser.add_option("--suppress-func-warnings", action="store_true",
 #
 Ruby.define_options(parser)
 
-exec(compile( \
-    open(os.path.join(config_root, "common", "Options.py")).read(), \
-    os.path.join(config_root, "common", "Options.py"), 'exec'))
+execfile(os.path.join(config_root, "common", "Options.py"))
 
 (options, args) = parser.parse_args()
 
@@ -99,25 +96,31 @@ if options.num_cpus > block_size:
 #
 # Currently ruby does not support atomic or uncacheable accesses
 #
-cpus = [ MemTest(max_loads = options.maxloads,
+cpus = [ MemTest(atomic = False,
+                 max_loads = options.maxloads,
+                 issue_dmas = False,
                  percent_functional = options.functional,
                  percent_uncacheable = 0,
                  progress_interval = options.progress,
                  suppress_func_warnings = options.suppress_func_warnings) \
-         for i in range(options.num_cpus) ]
+         for i in xrange(options.num_cpus) ]
 
 system = System(cpu = cpus,
+                funcmem = SimpleMemory(in_addr_map = False),
+                funcbus = IOXBar(),
                 clk_domain = SrcClockDomain(clock = options.sys_clock),
                 mem_ranges = [AddrRange(options.mem_size)])
 
 if options.num_dmas > 0:
-    dmas = [ MemTest(max_loads = options.maxloads,
+    dmas = [ MemTest(atomic = False,
+                     max_loads = options.maxloads,
+                     issue_dmas = True,
                      percent_functional = 0,
                      percent_uncacheable = 0,
                      progress_interval = options.progress,
                      suppress_func_warnings =
                                         not options.suppress_func_warnings) \
-             for i in range(options.num_dmas) ]
+             for i in xrange(options.num_dmas) ]
     system.dma_devices = dmas
 else:
     dmas = []
@@ -147,13 +150,24 @@ for (i, cpu) in enumerate(cpus):
     #
     # Tie the cpu memtester ports to the correct system ports
     #
-    cpu.port = system.ruby._cpu_ports[i].slave
+    cpu.test = system.ruby._cpu_ports[i].slave
+    cpu.functional = system.funcbus.slave
 
     #
     # Since the memtester is incredibly bursty, increase the deadlock
     # threshold to 5 million cycles
     #
     system.ruby._cpu_ports[i].deadlock_threshold = 5000000
+
+for (i, dma) in enumerate(dmas):
+    #
+    # Tie the dma memtester ports to the correct functional port
+    # Note that the test port has already been connected to the dma_sequencer
+    #
+    dma.functional = system.funcbus.slave
+
+# connect reference memory to funcbus
+system.funcbus.master = system.funcmem.port
 
 # -----------------------
 # run simulation

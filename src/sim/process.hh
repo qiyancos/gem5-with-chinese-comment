@@ -73,9 +73,10 @@ class Process : public SimObject
     DrainState drain() override;
 
     virtual void syscall(int64_t callnum, ThreadContext *tc, Fault *fault);
-    virtual RegVal getSyscallArg(ThreadContext *tc, int &i) = 0;
-    virtual RegVal getSyscallArg(ThreadContext *tc, int &i, int width);
-    virtual void setSyscallArg(ThreadContext *tc, int i, RegVal val) = 0;
+    virtual TheISA::IntReg getSyscallArg(ThreadContext *tc, int &i) = 0;
+    virtual TheISA::IntReg getSyscallArg(ThreadContext *tc, int &i, int width);
+    virtual void setSyscallArg(ThreadContext *tc, int i,
+                               TheISA::IntReg val) = 0;
     virtual void setSyscallReturn(ThreadContext *tc,
                                   SyscallReturn return_value) = 0;
     virtual SyscallDesc *getDesc(int callnum) = 0;
@@ -87,10 +88,12 @@ class Process : public SimObject
     inline uint64_t pid() { return _pid; }
     inline uint64_t ppid() { return _ppid; }
     inline uint64_t pgid() { return _pgid; }
-    inline void pgid(uint64_t pgid) { _pgid = pgid; }
     inline uint64_t tgid() { return _tgid; }
+    inline void setpgid(uint64_t pgid) { _pgid = pgid; }
 
     const char *progName() const { return executable.c_str(); }
+    std::string fullPath(const std::string &filename);
+    std::string getcwd() const { return cwd; }
 
     /**
      * Find an emulated device driver.
@@ -160,7 +163,7 @@ class Process : public SimObject
                        ThreadContext *new_tc, bool alloc_page);
 
     virtual void clone(ThreadContext *old_tc, ThreadContext *new_tc,
-                       Process *new_p, RegVal flags);
+                       Process *new_p, TheISA::IntReg flags);
 
     // thread contexts associated with this process
     std::vector<ContextID> contextIds;
@@ -170,12 +173,8 @@ class Process : public SimObject
 
     Stats::Scalar numSyscalls;  // track how many system calls are executed
 
-    // flag for using architecture specific page table
-    bool useArchPT;
-    // running KVM requires special initialization
-    bool kvmInSE;
-    // flag for using the process as a thread which shares page tables
-    bool useForClone;
+    bool useArchPT; // flag for using architecture specific page table
+    bool kvmInSE;   // running KVM requires special initialization
 
     EmulationPageTable *pTable;
 
@@ -184,48 +183,8 @@ class Process : public SimObject
     ObjectFile *objFile;
     std::vector<std::string> argv;
     std::vector<std::string> envp;
+    std::string cwd;
     std::string executable;
-
-    /**
-     * Return an absolute path given a relative path paired with the current
-     * working directory of the process running under simulation.
-     *
-     * @param path The relative path (generally a filename) that needs the
-     * current working directory prepended.
-     * @param host_fs A flag which determines whether to return a
-     * path for the host filesystem or the filesystem of the process running
-     * under simulation. Only matters if filesysem redirection is used to
-     * replace files (or directories) that would normally appear via the
-     * host filesystem.
-     * @return String containing an absolute path.
-     */
-    std::string absolutePath(const std::string &path, bool host_fs);
-
-    /**
-     * Redirect file path if it matches any keys initialized by system object.
-     * @param filename An input parameter containing either a relative path
-     * or an absolute path. If given a relative path, the path will be
-     * prepended to the current working directory of the simulation with
-     * respect to the host filesystem.
-     * @return String containing an absolute path.
-     */
-    std::string checkPathRedirect(const std::string &filename);
-
-    /**
-     * The cwd members are used to track changes to the current working
-     * directory for the purpose of executing system calls which depend on
-     * relative paths (i.e. open, chdir).
-     *
-     * The tgt member and host member may differ if the path for the current
-     * working directory is redirected to point to a different location
-     * (i.e. `cd /proc` should point to '$(gem5_repo)/m5out/fs/proc'
-     * instead of '/proc').
-     */
-    std::string tgtCwd;
-    std::string hostCwd;
-
-    // Syscall emulation uname release.
-    std::string release;
 
     // Id of the owner of the process
     uint64_t _uid;

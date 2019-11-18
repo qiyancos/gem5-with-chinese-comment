@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, 2016-2019 ARM Limited
+ * Copyright (c) 2011,2013,2016 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
@@ -61,6 +61,7 @@
 #include "cpu/exetrace.hh"
 #include "cpu/inst_res.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/o3/comm.hh"
 #include "cpu/op_class.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/translation.hh"
@@ -82,10 +83,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     typedef typename Impl::CPUType ImplCPU;
     typedef typename ImplCPU::ImplState ImplState;
     using VecRegContainer = TheISA::VecRegContainer;
-
-    using LSQRequestPtr = typename Impl::CPUPol::LSQ::LSQRequest*;
-    using LQIterator = typename Impl::CPUPol::LSQUnit::LQIterator;
-    using SQIterator = typename Impl::CPUPol::LSQUnit::SQIterator;
 
     // The DynInstPtr type.
     typedef typename Impl::DynInstPtr DynInstPtr;
@@ -116,9 +113,6 @@ class BaseDynInst : public ExecContext, public RefCounted
         SquashedInIQ,            /// Instruction is squashed in the IQ
         SquashedInLSQ,           /// Instruction is squashed in the LSQ
         SquashedInROB,           /// Instruction is squashed in the ROB
-        PinnedRegsRenamed,       /// Pinned registers are renamed
-        PinnedRegsWritten,       /// Pinned registers are written back
-        PinnedRegsSquashDone,    /// Regs pinning status updated after squash
         RecoverInst,             /// Is a recover instruction
         BlockingInst,            /// Is a blocking instruction
         ThreadsyncWait,          /// Is a thread synchronization instruction
@@ -138,7 +132,6 @@ class BaseDynInst : public ExecContext, public RefCounted
         EffAddrValid,
         RecordResult,
         Predicate,
-        MemAccPredicate,
         PredTaken,
         IsStrictlyOrdered,
         ReqMade,
@@ -176,14 +169,12 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** PC state for this instruction. */
     TheISA::PCState pc;
 
-  private:
     /* An amalgamation of a lot of boolean values into one */
     std::bitset<MaxFlags> instFlags;
 
     /** The status of this BaseDynInst.  Several bits can be set. */
     std::bitset<NumStatus> status;
 
-  protected:
      /** Whether or not the source register is ready.
      *  @todo: Not sure this should be here vs the derived class.
      */
@@ -212,7 +203,12 @@ class BaseDynInst : public ExecContext, public RefCounted
     Addr effAddr;
 
     /** The effective physical address. */
-    Addr physEffAddr;
+    Addr physEffAddrLow;
+
+    /** The effective physical address
+     *  of the second request for a split request
+     */
+    Addr physEffAddrHigh;
 
     /** The memory request flags (from translation). */
     unsigned memReqFlags;
@@ -221,26 +217,26 @@ class BaseDynInst : public ExecContext, public RefCounted
     short asid;
 
     /** The size of the request */
-    unsigned effSize;
+    uint8_t effSize;
 
     /** Pointer to the data for the memory access. */
     uint8_t *memData;
 
     /** Load queue index. */
     int16_t lqIdx;
-    LQIterator lqIt;
 
     /** Store queue index. */
     int16_t sqIdx;
-    SQIterator sqIt;
 
 
     /////////////////////// TLB Miss //////////////////////
     /**
-     * Saved memory request (needed when the DTB address translation is
+     * Saved memory requests (needed when the DTB address translation is
      * delayed due to a hw page table walk).
      */
-    LSQRequestPtr savedReq;
+    RequestPtr savedReq;
+    RequestPtr savedSreqLow;
+    RequestPtr savedSreqHigh;
 
     /////////////////////// Checker //////////////////////
     // Need a copy of main request pointer to verify on writes.
@@ -274,7 +270,6 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     /** Is the effective virtual address valid. */
     bool effAddrValid() const { return instFlags[EffAddrValid]; }
-    void effAddrValid(bool b) { instFlags[EffAddrValid] = b; }
 
     /** Whether or not the memory operation is done. */
     bool memOpDone() const { return instFlags[MemOpDone]; }
@@ -303,15 +298,22 @@ class BaseDynInst : public ExecContext, public RefCounted
         cpu->demapPage(vaddr, asn);
     }
 
-    Fault initiateMemRead(Addr addr, unsigned size, Request::Flags flags,
-            const std::vector<bool>& byteEnable = std::vector<bool>());
+    Fault initiateMemRead(Addr addr, unsigned size, Request::Flags flags);
 
     Fault writeMem(uint8_t *data, unsigned size, Addr addr,
-                   Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byteEnable = std::vector<bool>());
+                   Request::Flags flags, uint64_t *res);
 
-    Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
-                         AtomicOpFunctor *amo_op);
+    /** Splits a request in two if it crosses a dcache block. */
+    void splitRequest(RequestPtr req, RequestPtr &sreqLow,
+                      RequestPtr &sreqHigh);
+
+    /** Initiate a DTB address translation. */
+    void initiateTranslation(RequestPtr req, RequestPtr sreqLow,
+                             RequestPtr sreqHigh, uint64_t *res,
+                             BaseTLB::Mode mode);
+
+    /** Finish a DTB address translation. */
+    void finishTranslation(WholeTranslationState *state);
 
     /** True if the DTB address translation has started. */
     bool translationStarted() const { return instFlags[TranslationStarted]; }
@@ -390,8 +392,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     {
         _destRegIdx[idx] = renamed_dest;
         _prevDestRegIdx[idx] = previous_rename;
-        if (renamed_dest->isPinned())
-            setPinnedRegsRenamed();
     }
 
     /** Renames a source logical register to the physical register which
@@ -454,9 +454,6 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     /** Returns the fault type. */
     Fault getFault() const { return fault; }
-    /** TODO: This I added for the LSQRequest side to be able to modify the
-     * fault. There should be a better mechanism in place. */
-    Fault& getFault() { return fault; }
 
     /** Checks whether or not this instruction has had its branch target
      *  calculated yet.  For now it is not utilized and is hacked to be
@@ -508,7 +505,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isMemRef()       const { return staticInst->isMemRef(); }
     bool isLoad()         const { return staticInst->isLoad(); }
     bool isStore()        const { return staticInst->isStore(); }
-    bool isAtomic()       const { return staticInst->isAtomic(); }
     bool isStoreConditional() const
     { return staticInst->isStoreConditional(); }
     bool isInstPrefetch() const { return staticInst->isInstPrefetch(); }
@@ -592,14 +588,8 @@ class BaseDynInst : public ExecContext, public RefCounted
     int8_t numIntDestRegs() const { return staticInst->numIntDestRegs(); }
     int8_t numCCDestRegs() const { return staticInst->numCCDestRegs(); }
     int8_t numVecDestRegs() const { return staticInst->numVecDestRegs(); }
-    int8_t numVecElemDestRegs() const
-    {
+    int8_t numVecElemDestRegs() const {
         return staticInst->numVecElemDestRegs();
-    }
-    int8_t
-    numVecPredDestRegs() const
-    {
-        return staticInst->numVecPredDestRegs();
     }
 
     /** Returns the logical register index of the i'th destination register. */
@@ -655,26 +645,22 @@ class BaseDynInst : public ExecContext, public RefCounted
                         InstResult::ResultType::VecElem));
         }
     }
-
-    /** Predicate result. */
-    template<typename T>
-    void setVecPredResult(T&& t)
-    {
-        if (instFlags[RecordResult]) {
-            instResult.push(InstResult(std::forward<T>(t),
-                            InstResult::ResultType::VecPredReg));
-        }
-    }
     /** @} */
 
     /** Records an integer register being set to a value. */
-    void setIntRegOperand(const StaticInst *si, int idx, RegVal val)
+    void setIntRegOperand(const StaticInst *si, int idx, IntReg val)
     {
         setScalarResult(val);
     }
 
     /** Records a CC register being set to a value. */
-    void setCCRegOperand(const StaticInst *si, int idx, RegVal val)
+    void setCCRegOperand(const StaticInst *si, int idx, CCReg val)
+    {
+        setScalarResult(val);
+    }
+
+    /** Records an fp register being set to a value. */
+    void setFloatRegOperand(const StaticInst *si, int idx, FloatReg val)
     {
         setScalarResult(val);
     }
@@ -688,7 +674,7 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     /** Records an fp register being set to an integer value. */
     void
-    setFloatRegOperandBits(const StaticInst *si, int idx, RegVal val)
+    setFloatRegOperandBits(const StaticInst *si, int idx, FloatRegBits val)
     {
         setScalarResult(val);
     }
@@ -697,13 +683,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     void setVecElemOperand(const StaticInst *si, int idx, const VecElem val)
     {
         setVecElemResult(val);
-    }
-
-    /** Record a vector register being set to a value */
-    void setVecPredRegOperand(const StaticInst *si, int idx,
-                              const VecPredRegContainer& val)
-    {
-        setVecPredResult(val);
     }
 
     /** Records that one of the source registers is ready. */
@@ -774,7 +753,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isCommitted() const { return status[Committed]; }
 
     /** Sets this instruction as squashed. */
-    void setSquashed();
+    void setSquashed() { status.set(Squashed); }
 
     /** Returns whether or not this instruction is squashed. */
     bool isSquashed() const { return status[Squashed]; }
@@ -809,7 +788,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isInLSQ() const { return status[LsqEntry]; }
 
     /** Sets this instruction as squashed in the LSQ. */
-    void setSquashedInLSQ() { status.set(SquashedInLSQ); status.set(Squashed);}
+    void setSquashedInLSQ() { status.set(SquashedInLSQ);}
 
     /** Returns whether or not this instruction is squashed in the LSQ. */
     bool isSquashedInLSQ() const { return status[SquashedInLSQ]; }
@@ -832,41 +811,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Returns whether or not this instruction is squashed in the ROB. */
     bool isSquashedInROB() const { return status[SquashedInROB]; }
 
-    /** Returns whether pinned registers are renamed */
-    bool isPinnedRegsRenamed() const { return status[PinnedRegsRenamed]; }
-
-    /** Sets the destination registers as renamed */
-    void
-    setPinnedRegsRenamed()
-    {
-        assert(!status[PinnedRegsSquashDone]);
-        assert(!status[PinnedRegsWritten]);
-        status.set(PinnedRegsRenamed);
-    }
-
-    /** Returns whether destination registers are written */
-    bool isPinnedRegsWritten() const { return status[PinnedRegsWritten]; }
-
-    /** Sets destination registers as written */
-    void
-    setPinnedRegsWritten()
-    {
-        assert(!status[PinnedRegsSquashDone]);
-        assert(status[PinnedRegsRenamed]);
-        status.set(PinnedRegsWritten);
-    }
-
-    /** Return whether dest registers' pinning status updated after squash */
-    bool
-    isPinnedRegsSquashDone() const { return status[PinnedRegsSquashDone]; }
-
-    /** Sets dest registers' status updated after squash */
-    void
-    setPinnedRegsSquashDone() {
-        assert(!status[PinnedRegsSquashDone]);
-        status.set(PinnedRegsSquashDone);
-    }
-
     /** Read the PC state of this instruction. */
     TheISA::PCState pcState() const { return pc; }
 
@@ -882,7 +826,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     /**Read the micro PC of this instruction. */
     Addr microPC() const { return pc.microPC(); }
 
-    bool readPredicate() const
+    bool readPredicate()
     {
         return instFlags[Predicate];
     }
@@ -896,21 +840,8 @@ class BaseDynInst : public ExecContext, public RefCounted
         }
     }
 
-    bool
-    readMemAccPredicate() const
-    {
-        return instFlags[MemAccPredicate];
-    }
-
-    void
-    setMemAccPredicate(bool val)
-    {
-        instFlags[MemAccPredicate] = val;
-    }
-
     /** Sets the ASID. */
     void setASID(short addr_space_id) { asid = addr_space_id; }
-    short getASID() { return asid; }
 
     /** Sets the thread id. */
     void setTid(ThreadID tid) { threadNumber = tid; }
@@ -923,16 +854,13 @@ class BaseDynInst : public ExecContext, public RefCounted
 
   public:
     /** Returns whether or not the eff. addr. source registers are ready. */
-    bool eaSrcsReady() const;
+    bool eaSrcsReady();
 
     /** Is this instruction's memory access strictly ordered? */
     bool strictlyOrdered() const { return instFlags[IsStrictlyOrdered]; }
-    void strictlyOrdered(bool so) { instFlags[IsStrictlyOrdered] = so; }
 
     /** Has this instruction generated a memory request. */
-    bool hasRequest() const { return instFlags[ReqMade]; }
-    /** Assert this instruction has generated a memory request. */
-    void setRequest() { instFlags[ReqMade] = true; }
+    bool hasRequest() { return instFlags[ReqMade]; }
 
     /** Returns iterator to this instruction in the list of all insts. */
     ListIt &getInstListIt() { return instListIt; }
@@ -962,40 +890,209 @@ class BaseDynInst : public ExecContext, public RefCounted
 template<class Impl>
 Fault
 BaseDynInst<Impl>::initiateMemRead(Addr addr, unsigned size,
-                                   Request::Flags flags,
-                                   const std::vector<bool>& byteEnable)
+                                   Request::Flags flags)
 {
-    return cpu->pushRequest(
-            dynamic_cast<typename DynInstPtr::PtrType>(this),
-            /* ld */ true, nullptr, size, addr, flags, nullptr, nullptr,
-            byteEnable);
+    instFlags[ReqMade] = true;
+    Request *req = NULL;
+    Request *sreqLow = NULL;
+    Request *sreqHigh = NULL;
+
+    if (instFlags[ReqMade] && translationStarted()) {
+        req = savedReq;
+        sreqLow = savedSreqLow;
+        sreqHigh = savedSreqHigh;
+    } else {
+        req = new Request(asid, addr, size, flags, masterId(), this->pc.instAddr(),
+                          thread->contextId());
+
+        req->taskId(cpu->taskId());
+
+        // Only split the request if the ISA supports unaligned accesses.
+        if (TheISA::HasUnalignedMemAcc) {
+            splitRequest(req, sreqLow, sreqHigh);
+        }
+        initiateTranslation(req, sreqLow, sreqHigh, NULL, BaseTLB::Read);
+    }
+
+    if (translationCompleted()) {
+        if (fault == NoFault) {
+            effAddr = req->getVaddr();
+            effSize = size;
+            instFlags[EffAddrValid] = true;
+
+            if (cpu->checker) {
+                if (reqToVerify != NULL) {
+                    delete reqToVerify;
+                }
+                reqToVerify = new Request(*req);
+            }
+            fault = cpu->read(req, sreqLow, sreqHigh, lqIdx);
+        } else {
+            // Commit will have to clean up whatever happened.  Set this
+            // instruction as executed.
+            this->setExecuted();
+        }
+    }
+
+    if (traceData)
+        traceData->setMem(addr, size, flags);
+
+    return fault;
 }
 
 template<class Impl>
 Fault
 BaseDynInst<Impl>::writeMem(uint8_t *data, unsigned size, Addr addr,
-                            Request::Flags flags, uint64_t *res,
-                            const std::vector<bool>& byteEnable)
+                            Request::Flags flags, uint64_t *res)
 {
-    return cpu->pushRequest(
-            dynamic_cast<typename DynInstPtr::PtrType>(this),
-            /* st */ false, data, size, addr, flags, res, nullptr, byteEnable);
+    if (traceData)
+        traceData->setMem(addr, size, flags);
+
+    instFlags[ReqMade] = true;
+    Request *req = NULL;
+    Request *sreqLow = NULL;
+    Request *sreqHigh = NULL;
+
+    if (instFlags[ReqMade] && translationStarted()) {
+        req = savedReq;
+        sreqLow = savedSreqLow;
+        sreqHigh = savedSreqHigh;
+    } else {
+        req = new Request(asid, addr, size, flags, masterId(), this->pc.instAddr(),
+                          thread->contextId());
+
+        req->taskId(cpu->taskId());
+
+        // Only split the request if the ISA supports unaligned accesses.
+        if (TheISA::HasUnalignedMemAcc) {
+            splitRequest(req, sreqLow, sreqHigh);
+        }
+        initiateTranslation(req, sreqLow, sreqHigh, res, BaseTLB::Write);
+    }
+
+    if (fault == NoFault && translationCompleted()) {
+        effAddr = req->getVaddr();
+        effSize = size;
+        instFlags[EffAddrValid] = true;
+
+        if (cpu->checker) {
+            if (reqToVerify != NULL) {
+                delete reqToVerify;
+            }
+            reqToVerify = new Request(*req);
+        }
+        fault = cpu->write(req, sreqLow, sreqHigh, data, sqIdx);
+    }
+
+    return fault;
 }
 
 template<class Impl>
-Fault
-BaseDynInst<Impl>::initiateMemAMO(Addr addr, unsigned size,
-                                  Request::Flags flags,
-                                  AtomicOpFunctor *amo_op)
+inline void
+BaseDynInst<Impl>::splitRequest(RequestPtr req, RequestPtr &sreqLow,
+                                RequestPtr &sreqHigh)
 {
-    // atomic memory instructions do not have data to be written to memory yet
-    // since the atomic operations will be executed directly in cache/memory.
-    // Therefore, its `data` field is nullptr.
-    // Atomic memory requests need to carry their `amo_op` fields to cache/
-    // memory
-    return cpu->pushRequest(
-            dynamic_cast<typename DynInstPtr::PtrType>(this),
-            /* atomic */ false, nullptr, size, addr, flags, nullptr, amo_op);
+    // Check to see if the request crosses the next level block boundary.
+    unsigned block_size = cpu->cacheLineSize();
+    Addr addr = req->getVaddr();
+    Addr split_addr = roundDown(addr + req->getSize() - 1, block_size);
+    assert(split_addr <= addr || split_addr - addr < block_size);
+
+    // Spans two blocks.
+    if (split_addr > addr) {
+        req->splitOnVaddr(split_addr, sreqLow, sreqHigh);
+    }
+}
+
+template<class Impl>
+inline void
+BaseDynInst<Impl>::initiateTranslation(RequestPtr req, RequestPtr sreqLow,
+                                       RequestPtr sreqHigh, uint64_t *res,
+                                       BaseTLB::Mode mode)
+{
+    translationStarted(true);
+
+    if (!TheISA::HasUnalignedMemAcc || sreqLow == NULL) {
+        WholeTranslationState *state =
+            new WholeTranslationState(req, NULL, res, mode);
+
+        // One translation if the request isn't split.
+        DataTranslation<BaseDynInstPtr> *trans =
+            new DataTranslation<BaseDynInstPtr>(this, state);
+
+        cpu->dtb->translateTiming(req, thread->getTC(), trans, mode);
+
+        if (!translationCompleted()) {
+            // The translation isn't yet complete, so we can't possibly have a
+            // fault. Overwrite any existing fault we might have from a previous
+            // execution of this instruction (e.g. an uncachable load that
+            // couldn't execute because it wasn't at the head of the ROB).
+            fault = NoFault;
+
+            // Save memory requests.
+            savedReq = state->mainReq;
+            savedSreqLow = state->sreqLow;
+            savedSreqHigh = state->sreqHigh;
+        }
+    } else {
+        WholeTranslationState *state =
+            new WholeTranslationState(req, sreqLow, sreqHigh, NULL, res, mode);
+
+        // Two translations when the request is split.
+        DataTranslation<BaseDynInstPtr> *stransLow =
+            new DataTranslation<BaseDynInstPtr>(this, state, 0);
+        DataTranslation<BaseDynInstPtr> *stransHigh =
+            new DataTranslation<BaseDynInstPtr>(this, state, 1);
+
+        cpu->dtb->translateTiming(sreqLow, thread->getTC(), stransLow, mode);
+        cpu->dtb->translateTiming(sreqHigh, thread->getTC(), stransHigh, mode);
+
+        if (!translationCompleted()) {
+            // The translation isn't yet complete, so we can't possibly have a
+            // fault. Overwrite any existing fault we might have from a previous
+            // execution of this instruction (e.g. an uncachable load that
+            // couldn't execute because it wasn't at the head of the ROB).
+            fault = NoFault;
+
+            // Save memory requests.
+            savedReq = state->mainReq;
+            savedSreqLow = state->sreqLow;
+            savedSreqHigh = state->sreqHigh;
+        }
+    }
+}
+
+template<class Impl>
+inline void
+BaseDynInst<Impl>::finishTranslation(WholeTranslationState *state)
+{
+    fault = state->getFault();
+
+    instFlags[IsStrictlyOrdered] = state->isStrictlyOrdered();
+
+    if (fault == NoFault) {
+        // save Paddr for a single req
+        physEffAddrLow = state->getPaddr();
+
+        // case for the request that has been split
+        if (state->isSplit) {
+          physEffAddrLow = state->sreqLow->getPaddr();
+          physEffAddrHigh = state->sreqHigh->getPaddr();
+        }
+
+        memReqFlags = state->getFlags();
+
+        if (state->mainReq->isCondSwap()) {
+            assert(state->res);
+            state->mainReq->setExtraData(*state->res);
+        }
+
+    } else {
+        state->deleteReqs();
+    }
+    delete state;
+
+    translationCompleted(true);
 }
 
 #endif // __CPU_BASE_DYN_INST_HH__

@@ -47,8 +47,7 @@ output header {{
                 {
                 }
 
-               std::string generateDisassembly(
-                       Addr pc, const SymbolTable *symtab) const override;
+               std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 
                 bool user_mode;
         };
@@ -63,6 +62,8 @@ output header {{
                 {
                     user_mode = true;
                 }
+
+            //std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
         };
 }};
 
@@ -101,7 +102,7 @@ output exec {{
             MVPConf0Reg &mvp_conf0)
     {
         vpe_conf0 = xc->readMiscReg(MISCREG_VPE_CONF0);
-        tc_bind_mt = readRegOtherThread(xc, RegId(MiscRegClass,
+        tc_bind_mt = xc->readRegOtherThread(RegId(MiscRegClass,
                                                   MISCREG_TC_BIND));
         tc_bind = xc->readMiscReg(MISCREG_TC_BIND);
         vpe_control = xc->readMiscReg(MISCREG_VPE_CONTROL);

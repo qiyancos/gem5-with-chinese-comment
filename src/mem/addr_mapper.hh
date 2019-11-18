@@ -40,10 +40,9 @@
 #ifndef __MEM_ADDR_MAPPER_HH__
 #define __MEM_ADDR_MAPPER_HH__
 
-#include "mem/port.hh"
+#include "mem/mem_object.hh"
 #include "params/AddrMapper.hh"
 #include "params/RangeAddrMapper.hh"
-#include "sim/sim_object.hh"
 
 /**
  * An address mapper changes the packet addresses in going from the
@@ -54,7 +53,7 @@
  * currently not modified.
  */
 
-class AddrMapper : public SimObject
+class AddrMapper : public MemObject
 {
 
   public:
@@ -63,10 +62,13 @@ class AddrMapper : public SimObject
 
     virtual ~AddrMapper() { }
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    virtual BaseMasterPort& getMasterPort(const std::string& if_name,
+                                          PortID idx = InvalidPortID);
 
-    void init() override;
+    virtual BaseSlavePort& getSlavePort(const std::string& if_name,
+                                        PortID idx = InvalidPortID);
+
+    virtual void init();
 
   protected:
 

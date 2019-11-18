@@ -46,7 +46,6 @@ at: http://www.arm.com/ResearchEnablement/SystemModeling
 """
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 from m5.objects import *
 
@@ -178,7 +177,7 @@ def let(bindings, expr):
 
         defns = []
         # Then apply them to the produced new env
-        for i in range(0, len(bindings)):
+        for i in xrange(0, len(bindings)):
             name, binding_expr = bindings[i]
             defns.append(binding_expr(new_env))
 
@@ -1444,7 +1443,7 @@ class HPI(MinorCPU):
 
     enableIdling = True
 
-    branchPred = HPI_BP()
+    branchPred = HPI_BP(numThreads = Parent.numThreads)
 
     itb = HPI_ITB()
     dtb = HPI_DTB()

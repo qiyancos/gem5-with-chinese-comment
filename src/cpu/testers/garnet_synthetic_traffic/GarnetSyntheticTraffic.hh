@@ -34,9 +34,9 @@
 #include <set>
 
 #include "base/statistics.hh"
+#include "mem/mem_object.hh"
 #include "mem/port.hh"
 #include "params/GarnetSyntheticTraffic.hh"
-#include "sim/clocked_object.hh"
 #include "sim/eventq.hh"
 #include "sim/sim_exit.hh"
 #include "sim/sim_object.hh"
@@ -53,19 +53,19 @@ enum TrafficType {BIT_COMPLEMENT_ = 0,
                   NUM_TRAFFIC_PATTERNS_};
 
 class Packet;
-class GarnetSyntheticTraffic : public ClockedObject
+class GarnetSyntheticTraffic : public MemObject
 {
   public:
     typedef GarnetSyntheticTrafficParams Params;
     GarnetSyntheticTraffic(const Params *p);
 
-    void init() override;
+    virtual void init();
 
     // main simulation loop (one cycle)
     void tick();
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    virtual BaseMasterPort &getMasterPort(const std::string &if_name,
+                                          PortID idx = InvalidPortID);
 
     /**
      * Print state of address in memory system via PrintReq (for

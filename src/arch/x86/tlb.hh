@@ -106,9 +106,9 @@ namespace X86ISA
         Stats::Scalar rdMisses;
         Stats::Scalar wrMisses;
 
-        Fault translateInt(const RequestPtr &req, ThreadContext *tc);
+        Fault translateInt(RequestPtr req, ThreadContext *tc);
 
-        Fault translate(const RequestPtr &req, ThreadContext *tc,
+        Fault translate(RequestPtr req, ThreadContext *tc,
                 Translation *translation, Mode mode,
                 bool &delayedResponse, bool timing);
 
@@ -123,9 +123,9 @@ namespace X86ISA
         }
 
         Fault translateAtomic(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+            RequestPtr req, ThreadContext *tc, Mode mode) override;
         void translateTiming(
-            const RequestPtr &req, ThreadContext *tc,
+            RequestPtr req, ThreadContext *tc,
             Translation *translation, Mode mode) override;
 
         /**
@@ -141,7 +141,7 @@ namespace X86ISA
          * @param mode Request type (read/write/execute).
          * @return A fault on failure, NoFault otherwise.
          */
-        Fault finalizePhysical(const RequestPtr &req, ThreadContext *tc,
+        Fault finalizePhysical(RequestPtr req, ThreadContext *tc,
                                Mode mode) const override;
 
         TlbEntry *insert(Addr vpn, const TlbEntry &entry);
@@ -156,16 +156,16 @@ namespace X86ISA
         void unserialize(CheckpointIn &cp) override;
 
         /**
-         * Get the table walker port. This is used for
+         * Get the table walker master port. This is used for
          * migrating port connections during a CPU takeOverFrom()
          * call. For architectures that do not have a table walker,
          * NULL is returned, hence the use of a pointer rather than a
          * reference. For X86 this method will always return a valid
          * port pointer.
          *
-         * @return A pointer to the walker port
+         * @return A pointer to the walker master port
          */
-        Port *getTableWalkerPort() override;
+        BaseMasterPort *getMasterPort() override;
     };
 }
 

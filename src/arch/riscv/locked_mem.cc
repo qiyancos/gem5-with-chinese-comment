@@ -6,5 +6,7 @@
 
 namespace RiscvISA
 {
-    std::unordered_map<int, std::stack<Addr>> locked_addrs;
+
+std::stack<Addr> locked_addrs;
+
 }

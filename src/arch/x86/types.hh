@@ -199,10 +199,6 @@ namespace X86ISA
     //The intermediate structure used by the x86 decoder.
     struct ExtMachInst
     {
-        void reset() {
-            memset(static_cast<void *>(this), 0, sizeof(*this));
-        }
-
         //Prefixes
         LegacyPrefixVector legacy;
         Rex rex;

@@ -90,11 +90,7 @@ class EmbeddedPyBind
     EmbeddedPyBind(const char *_name,
                    void (*init_func)(pybind11::module &));
 
-#if PY_MAJOR_VERSION >= 3
-    static PyObject *initAll();
-#else
     static void initAll();
-#endif
 
   private:
     void (*initFunc)(pybind11::module &);
@@ -109,8 +105,8 @@ class EmbeddedPyBind
     static std::map<std::string, EmbeddedPyBind *> &getMap();
 };
 
-void registerNativeModules();
-
+int initM5Python();
 int m5Main(int argc, char **argv);
+PyMODINIT_FUNC initm5(void);
 
 #endif // __SIM_INIT_HH__

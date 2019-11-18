@@ -75,7 +75,7 @@ class EmulationPageTable : public Serializable
     EmulationPageTable(
             const std::string &__name, uint64_t _pid, Addr _pageSize) :
             pageSize(_pageSize), offsetMask(mask(floorLog2(_pageSize))),
-            _pid(_pid), _name(__name), shared(false)
+            _pid(_pid), _name(__name)
     {
         assert(isPowerOf2(pageSize));
     }
@@ -96,10 +96,7 @@ class EmulationPageTable : public Serializable
         ReadOnly    = 8,
     };
 
-    // flag which marks the page table as shared among software threads
-    bool shared;
-
-    virtual void initState() {};
+    virtual void initState(ThreadContext* tc) {};
 
     // for DPRINTF compatibility
     const std::string name() const { return _name; }
@@ -154,7 +151,7 @@ class EmulationPageTable : public Serializable
      * field of req.
      * @param req The memory request.
      */
-    Fault translate(const RequestPtr &req);
+    Fault translate(RequestPtr req);
 
     void getMappings(std::vector<std::pair<Addr, Addr>> *addr_mappings);
 

@@ -44,11 +44,6 @@ let {{
     decoder_output = ''
     exec_output = ''
 
-    zeroSveVecRegUpperPartCode = '''
-        ArmISA::ISA::zeroSveVecRegUpperPart(%s,
-            ArmStaticInst::getCurSveVecLen<uint64_t>(xc->tcBase()));
-    '''
-
     def mkMemAccMicroOp(name):
         global header_output, decoder_output, exec_output
         SPAlignmentCheckCodeNeon = '''
@@ -150,8 +145,6 @@ let {{
                 'ea_code' : simd64EnabledCheckCode + eaCode,
             },
             [ 'IsMicroop', 'IsMemRef', 'IsLoad' ])
-        loadIop.snippets["memacc_code"] += zeroSveVecRegUpperPartCode % \
-            "AA64FpDest"
         storeIop = InstObjParams(name + 'st',
                 'MicroNeonStore64',
                 'MicroNeonMemOp',

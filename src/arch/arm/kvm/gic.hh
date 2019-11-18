@@ -44,7 +44,7 @@
 #include "arch/arm/system.hh"
 #include "cpu/kvm/device.hh"
 #include "cpu/kvm/vm.hh"
-#include "dev/arm/gic_v2.hh"
+#include "dev/arm/gic_pl390.hh"
 #include "dev/platform.hh"
 
 /**
@@ -168,7 +168,7 @@ class KvmKernelGicV2 : public BaseGicRegisters
 
 struct MuxingKvmGicParams;
 
-class MuxingKvmGic : public GicV2
+class MuxingKvmGic : public Pl390
 {
   public: // SimObject / Serializable / Drainable
     MuxingKvmGic(const MuxingKvmGicParams *p);
@@ -182,14 +182,14 @@ class MuxingKvmGic : public GicV2
     Tick read(PacketPtr pkt) override;
     Tick write(PacketPtr pkt) override;
 
-  public: // GicV2
+  public: // Pl390
     void sendInt(uint32_t num) override;
     void clearInt(uint32_t num) override;
 
     void sendPPInt(uint32_t num, uint32_t cpu) override;
     void clearPPInt(uint32_t num, uint32_t cpu) override;
 
-  protected: // GicV2
+  protected: // Pl390
     void updateIntState(int hint) override;
 
   protected:
@@ -203,8 +203,8 @@ class MuxingKvmGic : public GicV2
     bool usingKvm;
 
     /** Multiplexing implementation */
-    void fromGicV2ToKvm();
-    void fromKvmToGicV2();
+    void fromPl390ToKvm();
+    void fromKvmToPl390();
 
     void copyGicState(BaseGicRegisters* from, BaseGicRegisters* to);
 

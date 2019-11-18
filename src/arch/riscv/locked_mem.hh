@@ -49,7 +49,6 @@
 #define __ARCH_RISCV_LOCKED_MEM_HH__
 
 #include <stack>
-#include <unordered_map>
 
 #include "arch/registers.hh"
 #include "base/logging.hh"
@@ -68,28 +67,24 @@ const int WARN_FAILURE = 10000;
 
 // RISC-V allows multiple locks per hart, but each SC has to unlock the most
 // recent one, so we use a stack here.
-extern std::unordered_map<int, std::stack<Addr>> locked_addrs;
+extern std::stack<Addr> locked_addrs;
 
 template <class XC> inline void
 handleLockedSnoop(XC *xc, PacketPtr pkt, Addr cacheBlockMask)
 {
-    std::stack<Addr>& locked_addr_stack = locked_addrs[xc->contextId()];
-
-    if (locked_addr_stack.empty())
+    if (locked_addrs.empty())
         return;
     Addr snoop_addr = pkt->getAddr() & cacheBlockMask;
     DPRINTF(LLSC, "Locked snoop on address %x.\n", snoop_addr);
-    if ((locked_addr_stack.top() & cacheBlockMask) == snoop_addr)
-        locked_addr_stack.pop();
+    if ((locked_addrs.top() & cacheBlockMask) == snoop_addr)
+        locked_addrs.pop();
 }
 
 
 template <class XC> inline void
-handleLockedRead(XC *xc, const RequestPtr &req)
+handleLockedRead(XC *xc, Request *req)
 {
-    std::stack<Addr>& locked_addr_stack = locked_addrs[xc->contextId()];
-
-    locked_addr_stack.push(req->getPaddr() & ~0xF);
+    locked_addrs.push(req->getPaddr() & ~0xF);
     DPRINTF(LLSC, "[cid:%d]: Reserved address %x.\n",
             req->contextId(), req->getPaddr() & ~0xF);
 }
@@ -99,25 +94,23 @@ handleLockedSnoopHit(XC *xc)
 {}
 
 template <class XC> inline bool
-handleLockedWrite(XC *xc, const RequestPtr &req, Addr cacheBlockMask)
+handleLockedWrite(XC *xc, Request *req, Addr cacheBlockMask)
 {
-    std::stack<Addr>& locked_addr_stack = locked_addrs[xc->contextId()];
-
     // Normally RISC-V uses zero to indicate success and nonzero to indicate
     // failure (right now only 1 is reserved), but in gem5 zero indicates
     // failure and one indicates success, so here we conform to that (it should
     // be switched in the instruction's implementation)
 
     DPRINTF(LLSC, "[cid:%d]: locked_addrs empty? %s.\n", req->contextId(),
-            locked_addr_stack.empty() ? "yes" : "no");
-    if (!locked_addr_stack.empty()) {
+            locked_addrs.empty() ? "yes" : "no");
+    if (!locked_addrs.empty()) {
         DPRINTF(LLSC, "[cid:%d]: addr = %x.\n", req->contextId(),
                 req->getPaddr() & ~0xF);
         DPRINTF(LLSC, "[cid:%d]: last locked addr = %x.\n", req->contextId(),
-                locked_addr_stack.top());
+                locked_addrs.top());
     }
-    if (locked_addr_stack.empty()
-            || locked_addr_stack.top() != ((req->getPaddr() & ~0xF))) {
+    if (locked_addrs.empty()
+            || locked_addrs.top() != ((req->getPaddr() & ~0xF))) {
         req->setExtraData(0);
         int stCondFailures = xc->readStCondFailures();
         xc->setStCondFailures(++stCondFailures);

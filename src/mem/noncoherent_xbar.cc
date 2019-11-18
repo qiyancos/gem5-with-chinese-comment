@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, 2018 ARM Limited
+ * Copyright (c) 2011-2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -88,6 +88,8 @@ NoncoherentXBar::NoncoherentXBar(const NoncoherentXBarParams *p)
         respLayers.push_back(new RespLayer(*bp, *this,
                                            csprintf(".respLayer%d", i)));
     }
+
+    clearPortCache();
 }
 
 NoncoherentXBar::~NoncoherentXBar()
@@ -108,7 +110,7 @@ NoncoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
     assert(!pkt->isExpressSnoop());
 
     // determine the destination based on the address
-    PortID master_port_id = findPort(pkt->getAddrRange());
+    PortID master_port_id = findPort(pkt->getAddr());
 
     // test if the layer should be considered occupied for the current
     // port
@@ -243,8 +245,7 @@ NoncoherentXBar::recvReqRetry(PortID master_port_id)
 }
 
 Tick
-NoncoherentXBar::recvAtomicBackdoor(PacketPtr pkt, PortID slave_port_id,
-                                    MemBackdoorPtr *backdoor)
+NoncoherentXBar::recvAtomic(PacketPtr pkt, PortID slave_port_id)
 {
     DPRINTF(NoncoherentXBar, "recvAtomic: packet src %s addr 0x%x cmd %s\n",
             slavePorts[slave_port_id]->name(), pkt->getAddr(),
@@ -254,7 +255,7 @@ NoncoherentXBar::recvAtomicBackdoor(PacketPtr pkt, PortID slave_port_id,
     unsigned int pkt_cmd = pkt->cmdToIndex();
 
     // determine the destination port
-    PortID master_port_id = findPort(pkt->getAddrRange());
+    PortID master_port_id = findPort(pkt->getAddr());
 
     // stats updates for the request
     pktCount[slave_port_id][master_port_id]++;
@@ -262,9 +263,7 @@ NoncoherentXBar::recvAtomicBackdoor(PacketPtr pkt, PortID slave_port_id,
     transDist[pkt_cmd]++;
 
     // forward the request to the appropriate destination
-    auto master = masterPorts[master_port_id];
-    Tick response_latency = backdoor ?
-        master->sendAtomicBackdoor(pkt, *backdoor) : master->sendAtomic(pkt);
+    Tick response_latency = masterPorts[master_port_id]->sendAtomic(pkt);
 
     // add the response data
     if (pkt->isResponse()) {
@@ -298,7 +297,7 @@ NoncoherentXBar::recvFunctional(PacketPtr pkt, PortID slave_port_id)
         // if we find a response that has the data, then the
         // downstream caches/memories may be out of date, so simply stop
         // here
-        if (p->trySatisfyFunctional(pkt)) {
+        if (p->checkFunctional(pkt)) {
             if (pkt->needsResponse())
                 pkt->makeResponse();
             return;
@@ -306,7 +305,7 @@ NoncoherentXBar::recvFunctional(PacketPtr pkt, PortID slave_port_id)
     }
 
     // determine the destination port
-    PortID dest_id = findPort(pkt->getAddrRange());
+    PortID dest_id = findPort(pkt->getAddr());
 
     // forward the request to the appropriate destination
     masterPorts[dest_id]->sendFunctional(pkt);

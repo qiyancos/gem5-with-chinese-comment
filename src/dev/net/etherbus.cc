@@ -51,7 +51,7 @@
 using namespace std;
 
 EtherBus::EtherBus(const Params *p)
-    : SimObject(p), ticksPerByte(p->speed), loopback(p->loopback),
+    : EtherObject(p), ticksPerByte(p->speed), loopback(p->loopback),
       event([this]{ txDone(); }, "ethernet bus completion"),
       sender(0), dump(p->dump)
 {
@@ -81,8 +81,8 @@ EtherBus::txDone()
     packet = 0;
 }
 
-Port &
-EtherBus::getPort(const std::string &if_name, PortID idx)
+EtherInt*
+EtherBus::getEthPort(const std::string &if_name, int idx)
 {
     panic("Etherbus doesn't work\n");
 }

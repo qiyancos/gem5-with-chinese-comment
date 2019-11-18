@@ -52,8 +52,7 @@ class MrsOp : public PredOp
         PredOp(mnem, _machInst, __opClass), dest(_dest)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class MsrBase : public PredOp
@@ -79,8 +78,7 @@ class MsrImmOp : public MsrBase
         MsrBase(mnem, _machInst, __opClass, _byteMask), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class MsrRegOp : public MsrBase
@@ -93,8 +91,7 @@ class MsrRegOp : public MsrBase
         MsrBase(mnem, _machInst, __opClass, _byteMask), op1(_op1)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class MrrcOp : public PredOp
@@ -112,8 +109,7 @@ class MrrcOp : public PredOp
         dest2(_dest2), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class McrrOp : public PredOp
@@ -131,8 +127,7 @@ class McrrOp : public PredOp
         dest(_dest), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class ImmOp : public PredOp
@@ -145,8 +140,7 @@ class ImmOp : public PredOp
         PredOp(mnem, _machInst, __opClass), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegImmOp : public PredOp
@@ -160,8 +154,7 @@ class RegImmOp : public PredOp
         PredOp(mnem, _machInst, __opClass), dest(_dest), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegRegOp : public PredOp
@@ -175,8 +168,7 @@ class RegRegOp : public PredOp
         PredOp(mnem, _machInst, __opClass), dest(_dest), op1(_op1)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegImmRegOp : public PredOp
@@ -192,8 +184,7 @@ class RegImmRegOp : public PredOp
         dest(_dest), imm(_imm), op1(_op1)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegRegRegImmOp : public PredOp
@@ -211,8 +202,7 @@ class RegRegRegImmOp : public PredOp
         dest(_dest), op1(_op1), op2(_op2), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegRegRegRegOp : public PredOp
@@ -230,8 +220,7 @@ class RegRegRegRegOp : public PredOp
         dest(_dest), op1(_op1), op2(_op2), op3(_op3)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegRegRegOp : public PredOp
@@ -247,8 +236,7 @@ class RegRegRegOp : public PredOp
         dest(_dest), op1(_op1), op2(_op2)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegRegImmOp : public PredOp
@@ -265,8 +253,7 @@ class RegRegImmOp : public PredOp
         dest(_dest), op1(_op1), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class MiscRegRegImmOp : public PredOp
@@ -283,8 +270,7 @@ class MiscRegRegImmOp : public PredOp
         dest(_dest), op1(_op1), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegMiscRegImmOp : public PredOp
@@ -301,8 +287,7 @@ class RegMiscRegImmOp : public PredOp
         dest(_dest), op1(_op1), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegImmImmOp : public PredOp
@@ -318,8 +303,7 @@ class RegImmImmOp : public PredOp
         dest(_dest), imm1(_imm1), imm2(_imm2)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegRegImmImmOp : public PredOp
@@ -337,8 +321,7 @@ class RegRegImmImmOp : public PredOp
         dest(_dest), op1(_op1), imm1(_imm1), imm2(_imm2)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class RegImmRegShiftOp : public PredOp
@@ -358,8 +341,7 @@ class RegImmRegShiftOp : public PredOp
         shiftAmt(_shiftAmt), shiftType(_shiftType)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class UnknownOp : public PredOp
@@ -370,50 +352,7 @@ class UnknownOp : public PredOp
         PredOp(mnem, _machInst, __opClass)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
-};
-
-/**
- * Certain mrc/mcr instructions act as nops or flush the pipe based on what
- * register the instruction is trying to access. This inst/class exists so that
- * we can still check for hyp traps, as the normal nop instruction
- * does not.
- */
-class McrMrcMiscInst : public ArmStaticInst
-{
-  protected:
-    uint64_t iss;
-    MiscRegIndex miscReg;
-
-  public:
-    McrMrcMiscInst(const char *_mnemonic, ExtMachInst _machInst,
-                   uint64_t _iss, MiscRegIndex _miscReg);
-
-    Fault execute(ExecContext *xc,
-                  Trace::InstRecord *traceData) const override;
-
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
-
-};
-
-/**
- * This class is also used for IMPLEMENTATION DEFINED registers, whose mcr/mrc
- * behaviour is trappable even for unimplemented registers.
- */
-class McrMrcImplDefined : public McrMrcMiscInst
-{
-  public:
-    McrMrcImplDefined(const char *_mnemonic, ExtMachInst _machInst,
-                      uint64_t _iss, MiscRegIndex _miscReg);
-
-    Fault execute(ExecContext *xc,
-                  Trace::InstRecord *traceData) const override;
-
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
-
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013,2017-2018 ARM Limited
+ * Copyright (c) 2012-2013,2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -81,7 +81,7 @@ namespace ContextSwitchTaskId {
 
 class Request;
 
-typedef std::shared_ptr<Request> RequestPtr;
+typedef Request* RequestPtr;
 typedef uint16_t MasterID;
 
 class Request
@@ -257,7 +257,7 @@ class Request
     };
 
   private:
-    typedef uint16_t PrivateFlagsType;
+    typedef uint8_t PrivateFlagsType;
     typedef ::Flags<PrivateFlagsType> PrivateFlags;
 
     enum : PrivateFlagsType {
@@ -275,9 +275,6 @@ class Request
         VALID_CONTEXT_ID     = 0x00000020,
         /** Whether or not the sc result is valid. */
         VALID_EXTRA_DATA     = 0x00000080,
-        /** Whether or not the stream ID and substream ID is valid. */
-        VALID_STREAM_ID      = 0x00000100,
-        VALID_SUBSTREAM_ID   = 0x00000200,
         /**
          * These flags are *not* cleared when a Request object is reused
          * (assigned a new address).
@@ -320,9 +317,6 @@ class Request
      */
     unsigned _size;
 
-    /** Byte-enable mask for writes. */
-    std::vector<bool> _byteEnable;
-
     /** The requestor ID which is unique in the system for all ports
      * that are capable of issuing a transaction
      */
@@ -349,27 +343,8 @@ class Request
      */
     uint32_t _taskId;
 
-    union {
-        struct {
-            /**
-             * The stream ID uniquely identifies a device behind the
-             * SMMU/IOMMU Each transaction arriving at the SMMU/IOMMU is
-             * associated with exactly one stream ID.
-             */
-            uint32_t  _streamId;
-
-            /**
-             * The substream ID identifies an "execution context" within a
-             * device behind an SMMU/IOMMU. It's intended to map 1-to-1 to
-             * PCIe PASID (Process Address Space ID). The presence of a
-             * substream ID is optional.
-             */
-            uint32_t _substreamId;
-        };
-
-        /** The address space ID. */
-        uint64_t _asid;
-    };
+    /** The address space ID. */
+    int _asid;
 
     /** The virtual address of the request. */
     Addr _vaddr;
@@ -456,8 +431,8 @@ class Request
         privateFlags.set(VALID_PC);
     }
 
-    Request(uint64_t asid, Addr vaddr, unsigned size, Flags flags,
-            MasterID mid, Addr pc, ContextID cid)
+    Request(int asid, Addr vaddr, unsigned size, Flags flags, MasterID mid,
+            Addr pc, ContextID cid)
         : _paddr(0), _size(0), _masterId(invldMasterId), _time(0),
           _taskId(ContextSwitchTaskId::Unknown), _asid(0), _vaddr(0),
           _extraData(0), _contextId(0), _pc(0),
@@ -468,31 +443,12 @@ class Request
         setContext(cid);
     }
 
-    Request(uint64_t asid, Addr vaddr, unsigned size, Flags flags,
-            MasterID mid, Addr pc, ContextID cid,
-            AtomicOpFunctor *atomic_op)
+    Request(int asid, Addr vaddr, unsigned size, Flags flags, MasterID mid,
+            Addr pc, ContextID cid, AtomicOpFunctor *atomic_op)
+        : atomicOpFunctor(atomic_op)
     {
-        setVirt(asid, vaddr, size, flags, mid, pc, atomic_op);
+        setVirt(asid, vaddr, size, flags, mid, pc);
         setContext(cid);
-    }
-
-    Request(const Request& other)
-        : _paddr(other._paddr), _size(other._size),
-          _masterId(other._masterId),
-          _flags(other._flags),
-          _memSpaceConfigFlags(other._memSpaceConfigFlags),
-          privateFlags(other.privateFlags),
-          _time(other._time),
-          _taskId(other._taskId), _asid(other._asid), _vaddr(other._vaddr),
-          _extraData(other._extraData), _contextId(other._contextId),
-          _pc(other._pc), _reqInstSeqNum(other._reqInstSeqNum),
-          translateDelta(other.translateDelta),
-          accessDelta(other.accessDelta), depth(other.depth)
-    {
-        if (other.atomicOpFunctor)
-            atomicOpFunctor = (other.atomicOpFunctor)->clone();
-        else
-            atomicOpFunctor = nullptr;
     }
 
     ~Request()
@@ -512,28 +468,13 @@ class Request
         privateFlags.set(VALID_CONTEXT_ID);
     }
 
-    void
-    setStreamId(uint32_t sid)
-    {
-        _streamId = sid;
-        privateFlags.set(VALID_STREAM_ID);
-    }
-
-    void
-    setSubStreamId(uint32_t ssid)
-    {
-        assert(privateFlags.isSet(VALID_STREAM_ID));
-        _substreamId = ssid;
-        privateFlags.set(VALID_SUBSTREAM_ID);
-    }
-
     /**
      * Set up a virtual (e.g., CPU) request in a previously
      * allocated Request object.
      */
     void
-    setVirt(uint64_t asid, Addr vaddr, unsigned size, Flags flags,
-            MasterID mid, Addr pc, AtomicOpFunctor *amo_op = nullptr)
+    setVirt(int asid, Addr vaddr, unsigned size, Flags flags, MasterID mid,
+            Addr pc)
     {
         _asid = asid;
         _vaddr = vaddr;
@@ -549,7 +490,6 @@ class Request
         depth = 0;
         accessDelta = 0;
         translateDelta = 0;
-        atomicOpFunctor = amo_op;
     }
 
     /**
@@ -570,27 +510,16 @@ class Request
      * Generate two requests as if this request had been split into two
      * pieces. The original request can't have been translated already.
      */
-    // TODO: this function is still required by TimingSimpleCPU - should be
-    // removed once TimingSimpleCPU will support arbitrarily long multi-line
-    // mem. accesses
     void splitOnVaddr(Addr split_addr, RequestPtr &req1, RequestPtr &req2)
     {
         assert(privateFlags.isSet(VALID_VADDR));
         assert(privateFlags.noneSet(VALID_PADDR));
         assert(split_addr > _vaddr && split_addr < _vaddr + _size);
-        req1 = std::make_shared<Request>(*this);
-        req2 = std::make_shared<Request>(*this);
+        req1 = new Request(*this);
+        req2 = new Request(*this);
         req1->_size = split_addr - _vaddr;
         req2->_vaddr = split_addr;
         req2->_size = _size - req1->_size;
-        if (!_byteEnable.empty()) {
-            req1->_byteEnable = std::vector<bool>(
-                _byteEnable.begin(),
-                _byteEnable.begin() + req1->_size);
-            req2->_byteEnable = std::vector<bool>(
-                _byteEnable.begin() + req1->_size,
-                _byteEnable.end());
-        }
     }
 
     /**
@@ -640,19 +569,6 @@ class Request
     {
         assert(privateFlags.isSet(VALID_SIZE));
         return _size;
-    }
-
-    const std::vector<bool>&
-    getByteEnable() const
-    {
-        return _byteEnable;
-    }
-
-    void
-    setByteEnable(const std::vector<bool>& be)
-    {
-        assert(be.empty() || be.size() == _size);
-        _byteEnable = be;
     }
 
     /** Accessor for time. */
@@ -738,7 +654,7 @@ class Request
     }
 
     /** Accessor function for asid.*/
-    uint64_t
+    int
     getAsid() const
     {
         assert(privateFlags.isSet(VALID_VADDR));
@@ -747,7 +663,7 @@ class Request
 
     /** Accessor function for asid.*/
     void
-    setAsid(uint64_t asid)
+    setAsid(int asid)
     {
         _asid = asid;
     }
@@ -795,26 +711,6 @@ class Request
     {
         assert(privateFlags.isSet(VALID_CONTEXT_ID));
         return _contextId;
-    }
-
-    uint32_t
-    streamId() const
-    {
-        assert(privateFlags.isSet(VALID_STREAM_ID));
-        return _streamId;
-    }
-
-    bool
-    hasSubstreamId() const
-    {
-        return privateFlags.isSet(VALID_SUBSTREAM_ID);
-    }
-
-    uint32_t
-    substreamId() const
-    {
-        assert(privateFlags.isSet(VALID_SUBSTREAM_ID));
-        return _substreamId;
     }
 
     void
@@ -887,9 +783,7 @@ class Request
     bool isUncacheable() const { return _flags.isSet(UNCACHEABLE); }
     bool isStrictlyOrdered() const { return _flags.isSet(STRICT_ORDER); }
     bool isInstFetch() const { return _flags.isSet(INST_FETCH); }
-    bool isPrefetch() const { return (_flags.isSet(PREFETCH) ||
-                                      _flags.isSet(PF_EXCLUSIVE)); }
-    bool isPrefetchEx() const { return _flags.isSet(PF_EXCLUSIVE); }
+    bool isPrefetch() const { return _flags.isSet(PREFETCH); }
     bool isLLSC() const { return _flags.isSet(LLSC); }
     bool isPriv() const { return _flags.isSet(PRIVILEGED); }
     bool isLockedRMW() const { return _flags.isSet(LOCKED_RMW); }

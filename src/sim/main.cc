@@ -45,24 +45,13 @@ main(int argc, char **argv)
     // Initialize m5 special signal handling.
     initSignals();
 
-#if PY_MAJOR_VERSION >= 3
-    std::unique_ptr<wchar_t[], decltype(&PyMem_RawFree)> program(
-        Py_DecodeLocale(argv[0], NULL),
-        &PyMem_RawFree);
-    Py_SetProgramName(program.get());
-#else
     Py_SetProgramName(argv[0]);
-#endif
-
-    // Register native modules with Python's init system before
-    // initializing the interpreter.
-    registerNativeModules();
 
     // initialize embedded Python interpreter
     Py_Initialize();
 
     // Initialize the embedded m5 python library
-    ret = EmbeddedPython::initAll();
+    ret = initM5Python();
 
     if (ret == 0) {
         // start m5

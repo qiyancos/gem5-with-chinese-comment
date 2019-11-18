@@ -226,7 +226,7 @@ let {{
         cpsr.c = CondCodesC;
         cpsr.v = CondCodesV;
         cpsr.ge = CondCodesGE;
-        Dest = cpsr & (cpsr.mode == MODE_USER ? ApsrMask : CpsrMask);
+        Dest = cpsr & 0xF8FF03DF
     '''
 
     mrsCpsrIop = InstObjParams("mrs", "MrsCpsr", "MrsOp",
@@ -688,15 +688,7 @@ let {{
     decoder_output += RegRegRegRegOpConstructor.subst(usada8Iop)
     exec_output += PredOpExecute.subst(usada8Iop)
 
-    bkptCode = '''
-        uint16_t imm16;
-        if (!machInst.thumb)
-            imm16 = ((bits(machInst, 19, 8) << 4) | bits(machInst, 3, 0));
-        else
-            imm16 = bits(machInst, 7, 0);
-
-        return softwareBreakpoint32(xc, imm16);
-    '''
+    bkptCode = 'return std::make_shared<PrefetchAbort>(PC, ArmFault::DebugEvent);\n'
     bkptIop = InstObjParams("bkpt", "BkptInst", "PredOp", bkptCode)
     header_output += BasicDeclare.subst(bkptIop)
     decoder_output += BasicConstructor.subst(bkptIop)
@@ -883,11 +875,11 @@ let {{
     Dest = MiscOp1;
     '''
 
-    mrc14Iop = InstObjParams("mrc", "Mrc14", "RegMiscRegImmOp",
+    mrc14Iop = InstObjParams("mrc", "Mrc14", "RegRegImmOp",
                              { "code": mrc14code,
                                "predicate_test": predicateTest }, [])
-    header_output += RegMiscRegImmOpDeclare.subst(mrc14Iop)
-    decoder_output += RegMiscRegImmOpConstructor.subst(mrc14Iop)
+    header_output += RegRegImmOpDeclare.subst(mrc14Iop)
+    decoder_output += RegRegImmOpConstructor.subst(mrc14Iop)
     exec_output += PredOpExecute.subst(mrc14Iop)
 
 
@@ -907,12 +899,12 @@ let {{
     }
     MiscDest = Op1;
     '''
-    mcr14Iop = InstObjParams("mcr", "Mcr14", "MiscRegRegImmOp",
+    mcr14Iop = InstObjParams("mcr", "Mcr14", "RegRegImmOp",
                              { "code": mcr14code,
                                "predicate_test": predicateTest },
                                ["IsSerializeAfter","IsNonSpeculative"])
-    header_output += MiscRegRegImmOpDeclare.subst(mcr14Iop)
-    decoder_output += MiscRegRegImmOpConstructor.subst(mcr14Iop)
+    header_output += RegRegImmOpDeclare.subst(mcr14Iop)
+    decoder_output += RegRegImmOpConstructor.subst(mcr14Iop)
     exec_output += PredOpExecute.subst(mcr14Iop)
 
     mrc15code = '''
@@ -920,9 +912,8 @@ let {{
     MiscRegIndex miscReg = (MiscRegIndex)
                            xc->tcBase()->flattenRegId(RegId(MiscRegClass,
                                                       preFlatOp1)).index();
-
-    bool hypTrap = mcrMrc15TrapToHyp(miscReg, xc->tcBase(), imm);
-
+    bool hypTrap = mcrMrc15TrapToHyp(miscReg, Hcr, Cpsr, Scr, Hdcr, Hstr,
+                                     Hcptr, imm);
     bool can_read, undefined;
     std::tie(can_read, undefined) = canReadCoprocReg(miscReg, Scr, Cpsr);
     // if we're in non secure PL1 mode then we can trap regargless of whether
@@ -953,9 +944,8 @@ let {{
     MiscRegIndex miscReg = (MiscRegIndex)
                        xc->tcBase()->flattenRegId(RegId(MiscRegClass,
                                                   preFlatDest)).index();
-
-    bool hypTrap = mcrMrc15TrapToHyp(miscReg, xc->tcBase(), imm);
-
+    bool hypTrap  = mcrMrc15TrapToHyp(miscReg, Hcr, Cpsr, Scr, Hdcr, Hstr,
+                                      Hcptr, imm);
     bool can_write, undefined;
     std::tie(can_write, undefined) = canWriteCoprocReg(miscReg, Scr, Cpsr);
 
@@ -1094,9 +1084,8 @@ let {{
         int preFlatDest = snsBankedIndex(dest, xc->tcBase());
         MiscRegIndex miscReg = (MiscRegIndex) xc->tcBase()->flattenRegId(
             RegId(MiscRegClass, preFlatDest)).index();
-
-        bool hypTrap = mcrMrc15TrapToHyp(miscReg, xc->tcBase(), imm);
-
+        bool hypTrap  = mcrMrc15TrapToHyp(miscReg, Hcr, Cpsr, Scr, Hdcr, Hstr,
+                                          Hcptr, imm);
         bool can_write, undefined;
         std::tie(can_write, undefined) = canWriteCoprocReg(miscReg, Scr, Cpsr);
 
@@ -1193,8 +1182,8 @@ let {{
 
     isbCode = '''
         // If the barrier is due to a CP15 access check for hyp traps
-        if ((imm != 0) && mcrMrc15TrapToHyp(MISCREG_CP15ISB,
-            xc->tcBase(), imm)) {
+        if ((imm != 0) && mcrMrc15TrapToHyp(MISCREG_CP15ISB, Hcr, Cpsr, Scr,
+            Hdcr, Hstr, Hcptr, imm)) {
             return std::make_shared<HypervisorTrap>(machInst, imm,
                 EC_TRAPPED_CP15_MCR_MRC);
         }
@@ -1209,8 +1198,8 @@ let {{
 
     dsbCode = '''
         // If the barrier is due to a CP15 access check for hyp traps
-        if ((imm != 0) && mcrMrc15TrapToHyp(MISCREG_CP15DSB,
-            xc->tcBase(), imm)) {
+        if ((imm != 0) && mcrMrc15TrapToHyp(MISCREG_CP15DSB, Hcr, Cpsr, Scr,
+            Hdcr, Hstr, Hcptr, imm)) {
             return std::make_shared<HypervisorTrap>(machInst, imm,
                 EC_TRAPPED_CP15_MCR_MRC);
         }
@@ -1225,8 +1214,8 @@ let {{
 
     dmbCode = '''
         // If the barrier is due to a CP15 access check for hyp traps
-        if ((imm != 0) && mcrMrc15TrapToHyp(MISCREG_CP15DMB,
-            xc->tcBase(), imm)) {
+        if ((imm != 0) && mcrMrc15TrapToHyp(MISCREG_CP15DMB, Hcr, Cpsr, Scr,
+            Hdcr, Hstr, Hcptr, imm)) {
             return std::make_shared<HypervisorTrap>(machInst, imm,
                 EC_TRAPPED_CP15_MCR_MRC);
         }

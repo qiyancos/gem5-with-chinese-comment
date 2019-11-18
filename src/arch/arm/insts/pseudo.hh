@@ -56,11 +56,9 @@ class DecoderFaultInst : public ArmStaticInst
   public:
     DecoderFaultInst(ExtMachInst _machInst);
 
-    Fault execute(ExecContext *xc,
-                  Trace::InstRecord *traceData) const override;
+    Fault execute(ExecContext *xc, Trace::InstRecord *traceData) const;
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 /**
@@ -82,11 +80,10 @@ class FailUnimplemented : public ArmStaticInst
     FailUnimplemented(const char *_mnemonic, ExtMachInst _machInst,
                       const std::string& _fullMnemonic);
 
-    Fault execute(ExecContext *xc,
-                  Trace::InstRecord *traceData) const override;
+    Fault execute(ExecContext *xc, Trace::InstRecord *traceData) const;
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string
+    generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 /**
@@ -112,26 +109,50 @@ class WarnUnimplemented : public ArmStaticInst
     WarnUnimplemented(const char *_mnemonic, ExtMachInst _machInst,
                       const std::string& _fullMnemonic);
 
-    Fault execute(ExecContext *xc,
-                  Trace::InstRecord *traceData) const override;
+    Fault execute(ExecContext *xc, Trace::InstRecord *traceData) const;
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string
+    generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 /**
- * This class is modelling instructions which are not going to be
- * executed since they are flagged as Illegal Execution Instructions
- * (PSTATE.IL = 1 or CPSR.IL = 1).
- * The sole purpose of this instruction is to generate an appropriate
- * fault when executed.
+ * Certain mrc/mcr instructions act as nops or flush the pipe based on what
+ * register the instruction is trying to access. This inst/class exists so that
+ * we can still check for hyp traps, as the normal nop instruction
+ * does not.
  */
-class IllegalExecInst : public ArmStaticInst
+class McrMrcMiscInst : public ArmStaticInst
 {
+  protected:
+    uint64_t iss;
+    MiscRegIndex miscReg;
+
   public:
-    IllegalExecInst(ExtMachInst _machInst);
+    McrMrcMiscInst(const char *_mnemonic, ExtMachInst _machInst,
+                   uint64_t _iss, MiscRegIndex _miscReg);
 
     Fault execute(ExecContext *xc, Trace::InstRecord *traceData) const;
+
+    std::string
+    generateDisassembly(Addr pc, const SymbolTable *symtab) const;
+
+};
+
+/**
+ * This class is also used for IMPLEMENTATION DEFINED registers, whose mcr/mrc
+ * behaviour is trappable even for unimplemented registers.
+ */
+class McrMrcImplDefined : public McrMrcMiscInst
+{
+  public:
+    McrMrcImplDefined(const char *_mnemonic, ExtMachInst _machInst,
+                      uint64_t _iss, MiscRegIndex _miscReg);
+
+    Fault execute(ExecContext *xc, Trace::InstRecord *traceData) const;
+
+    std::string
+    generateDisassembly(Addr pc, const SymbolTable *symtab) const;
+
 };
 
 #endif

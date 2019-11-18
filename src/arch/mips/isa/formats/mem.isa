@@ -54,8 +54,8 @@ output header {{
         {
         }
 
-        std::string generateDisassembly(
-                Addr pc, const SymbolTable *symtab) const override;
+        std::string
+        generateDisassembly(Addr pc, const SymbolTable *symtab) const;
     };
 
      /**
@@ -71,8 +71,8 @@ output header {{
         {
         }
 
-        std::string generateDisassembly(
-                Addr pc, const SymbolTable *symtab) const override;
+        std::string
+        generateDisassembly(Addr pc, const SymbolTable *symtab) const;
     };
 }};
 
@@ -109,19 +109,21 @@ output exec {{
         switch (packet->getSize())
         {
           case 1:
-            return packet->getLE<uint8_t>();
+            return packet->get<uint8_t>();
 
           case 2:
-            return packet->getLE<uint16_t>();
+            return packet->get<uint16_t>();
 
           case 4:
-            return packet->getLE<uint32_t>();
+            return packet->get<uint32_t>();
 
           case 8:
-            return packet->getLE<uint64_t>();
+            return packet->get<uint64_t>();
 
           default:
-            panic("bad store data size = %d", packet->getSize());
+            std::cerr << "bad store data size = " << packet->getSize() << std::endl;
+
+            assert(0);
             return 0;
         }
     }
@@ -140,10 +142,9 @@ def template LoadStoreDeclare {{
         /// Constructor.
         %(class_name)s(ExtMachInst machInst);
 
-        Fault execute(ExecContext *, Trace::InstRecord *) const override;
-        Fault initiateAcc(ExecContext *, Trace::InstRecord *) const override;
-        Fault completeAcc(Packet *, ExecContext *,
-                          Trace::InstRecord *) const override;
+        Fault execute(ExecContext *, Trace::InstRecord *) const;
+        Fault initiateAcc(ExecContext *, Trace::InstRecord *) const;
+        Fault completeAcc(Packet *, ExecContext *, Trace::InstRecord *) const;
     };
 }};
 

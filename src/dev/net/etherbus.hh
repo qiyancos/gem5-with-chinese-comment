@@ -35,6 +35,7 @@
 #ifndef __DEV_NET_ETHERBUS_HH__
 #define __DEV_NET_ETHERBUS_HH__
 
+#include "dev/net/etherobject.hh"
 #include "dev/net/etherpkt.hh"
 #include "params/EtherBus.hh"
 #include "sim/eventq.hh"
@@ -42,7 +43,7 @@
 
 class EtherDump;
 class EtherInt;
-class EtherBus : public SimObject
+class EtherBus : public EtherObject
 {
   protected:
     typedef std::list<EtherInt *> devlist_t;
@@ -71,8 +72,7 @@ class EtherBus : public SimObject
     void reg(EtherInt *dev);
     bool busy() const { return (bool)packet; }
     bool send(EtherInt *sender, EthPacketPtr &packet);
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    virtual EtherInt *getEthPort(const std::string &if_name, int idx);
 };
 
 #endif // __DEV_NET_ETHERBUS_HH__

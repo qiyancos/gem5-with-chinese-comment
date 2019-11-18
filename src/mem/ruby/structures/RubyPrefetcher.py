@@ -27,10 +27,9 @@
 # Authors: Nilay Vaish
 
 from m5.SimObject import SimObject
+from System import System
 from m5.params import *
 from m5.proxy import *
-
-from m5.objects.System import System
 
 class Prefetcher(SimObject):
     type = 'Prefetcher'

@@ -1,4 +1,4 @@
-# Copyright (c) 2010-2013, 2016, 2019 ARM Limited
+# Copyright (c) 2010-2013, 2016 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -42,7 +42,6 @@
 #          Brad Beckmann
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 import optparse
 import sys
@@ -64,9 +63,16 @@ from common import Simulation
 from common import CacheConfig
 from common import MemConfig
 from common import CpuConfig
-from common import BPConfig
 from common.Caches import *
 from common import Options
+
+
+# Check if KVM support has been enabled, we might need to do VM
+# configuration if that's the case.
+have_kvm_support = 'BaseKvmCPU' in globals()
+def is_kvm_cpu(cpu_class):
+    return have_kvm_support and cpu_class != None and \
+        issubclass(cpu_class, BaseKvmCPU)
 
 def cmd_line_template():
     if options.command_line and options.command_line_file:
@@ -89,13 +95,14 @@ def build_test_system(np):
     elif buildEnv['TARGET_ISA'] == "sparc":
         test_sys = makeSparcSystem(test_mem_mode, bm[0], cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == "x86":
-        test_sys = makeLinuxX86System(test_mem_mode, np, bm[0], options.ruby,
-                                      cmdline=cmdline)
+        test_sys = makeLinuxX86System(test_mem_mode, options.num_cpus, bm[0],
+                options.ruby, cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == "arm":
-        test_sys = makeArmSystem(test_mem_mode, options.machine_type, np,
-                                 bm[0], options.dtb_filename,
+        test_sys = makeArmSystem(test_mem_mode, options.machine_type,
+                                 options.num_cpus, bm[0], options.dtb_filename,
                                  bare_metal=options.bare_metal,
                                  cmdline=cmdline,
+                                 ignore_dtb=options.generate_dtb,
                                  external_memory=
                                    options.external_memory_system,
                                  ruby=options.ruby,
@@ -125,9 +132,6 @@ def build_test_system(np):
 
     if options.kernel is not None:
         test_sys.kernel = binary(options.kernel)
-    else:
-        print("Error: a kernel must be provided to run in full system mode")
-        sys.exit(1)
 
     if options.script is not None:
         test_sys.readfile = options.script
@@ -142,9 +146,9 @@ def build_test_system(np):
 
     # For now, assign all the CPUs to the same clock domain
     test_sys.cpu = [TestCPUClass(clk_domain=test_sys.cpu_clk_domain, cpu_id=i)
-                    for i in range(np)]
+                    for i in xrange(np)]
 
-    if CpuConfig.is_kvm_cpu(TestCPUClass) or CpuConfig.is_kvm_cpu(FutureClass):
+    if is_kvm_cpu(TestCPUClass) or is_kvm_cpu(FutureClass):
         test_sys.kvm_vm = KvmVM()
 
     if options.ruby:
@@ -192,25 +196,26 @@ def build_test_system(np):
             test_sys.iobridge.master = test_sys.membus.slave
 
         # Sanity check
+        if options.fastmem:
+            if TestCPUClass != AtomicSimpleCPU:
+                fatal("Fastmem can only be used with atomic CPU!")
+            if (options.caches or options.l2cache):
+                fatal("You cannot use fastmem in combination with caches!")
+
         if options.simpoint_profile:
-            if not CpuConfig.is_noncaching_cpu(TestCPUClass):
-                fatal("SimPoint generation should be done with atomic cpu")
+            if not options.fastmem:
+                # Atomic CPU checked with fastmem option already
+                fatal("SimPoint generation should be done with atomic cpu and fastmem")
             if np > 1:
                 fatal("SimPoint generation not supported with more than one CPUs")
 
-        for i in range(np):
+        for i in xrange(np):
+            if options.fastmem:
+                test_sys.cpu[i].fastmem = True
             if options.simpoint_profile:
                 test_sys.cpu[i].addSimPointProbe(options.simpoint_interval)
             if options.checker:
                 test_sys.cpu[i].addCheckerCpu()
-            if options.bp_type:
-                bpClass = BPConfig.get(options.bp_type)
-                test_sys.cpu[i].branchPred = bpClass()
-            if options.indirect_bp_type:
-                IndirectBPClass = \
-                    BPConfig.get_indirect(options.indirect_bp_type)
-                test_sys.cpu[i].branchPred.indirectBranchPred = \
-                    IndirectBPClass()
             test_sys.cpu[i].createThreads()
 
         # If elastic tracing is enabled when not restoring from checkpoint and
@@ -239,8 +244,7 @@ def build_drive_system(np):
 
     cmdline = cmd_line_template()
     if buildEnv['TARGET_ISA'] == 'alpha':
-        drive_sys = makeLinuxAlphaSystem(drive_mem_mode, bm[1],
-                                         cmdline=cmdline)
+        drive_sys = makeLinuxAlphaSystem(drive_mem_mode, bm[1], cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == 'mips':
         drive_sys = makeLinuxMipsSystem(drive_mem_mode, bm[1], cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == 'sparc':
@@ -250,7 +254,8 @@ def build_drive_system(np):
                                        cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == 'arm':
         drive_sys = makeArmSystem(drive_mem_mode, options.machine_type, np,
-                                  bm[1], options.dtb_filename, cmdline=cmdline)
+                                  bm[1], options.dtb_filename, cmdline=cmdline,
+                                  ignore_dtb=options.generate_dtb)
 
     # Create a top-level voltage domain
     drive_sys.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
@@ -272,13 +277,12 @@ def build_drive_system(np):
     drive_sys.cpu.createThreads()
     drive_sys.cpu.createInterruptController()
     drive_sys.cpu.connectAllPorts(drive_sys.membus)
+    if options.fastmem:
+        drive_sys.cpu.fastmem = True
     if options.kernel is not None:
         drive_sys.kernel = binary(options.kernel)
-    else:
-        print("Error: a kernel must be provided to run in full system mode")
-        sys.exit(1)
 
-    if CpuConfig.is_kvm_cpu(DriveCPUClass):
+    if is_kvm_cpu(DriveCPUClass):
         drive_sys.kvm_vm = KvmVM()
 
     drive_sys.iobridge = Bridge(delay='50ns',
@@ -290,7 +294,7 @@ def build_drive_system(np):
     # memory bus
     drive_sys.mem_ctrls = [DriveMemClass(range = r)
                            for r in drive_sys.mem_ranges]
-    for i in range(len(drive_sys.mem_ctrls)):
+    for i in xrange(len(drive_sys.mem_ctrls)):
         drive_sys.mem_ctrls[i].port = drive_sys.membus.master
 
     drive_sys.init_param = options.init_param
@@ -365,18 +369,31 @@ if options.timesync:
 if options.frame_capture:
     VncServer.frame_capture = True
 
-if buildEnv['TARGET_ISA'] == "arm" and not options.bare_metal \
-        and not options.dtb_filename:
+if buildEnv['TARGET_ISA'] == "arm" and options.generate_dtb:
+    # Sanity checks
+    if options.dtb_filename:
+        fatal("--generate-dtb and --dtb-filename cannot be specified at the"\
+             "same time.")
+
     if options.machine_type not in ["VExpress_GEM5", "VExpress_GEM5_V1"]:
         warn("Can only correctly generate a dtb for VExpress_GEM5_V1 " \
              "platforms, unless custom hardware models have been equipped "\
              "with generation functionality.")
 
     # Generate a Device Tree
+    def create_dtb_for_system(system, filename):
+        state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
+        rootNode = system.generateDeviceTree(state)
+
+        fdt = Fdt()
+        fdt.add_rootnode(rootNode)
+        dtb_filename = os.path.join(m5.options.outdir, filename)
+        return fdt.writeDtbFile(dtb_filename)
+
     for sysname in ('system', 'testsys', 'drivesys'):
         if hasattr(root, sysname):
             sys = getattr(root, sysname)
-            sys.generateDtb(m5.options.outdir, '%s.dtb' % sysname)
+            sys.dtb_filename = create_dtb_for_system(sys, '%s.dtb' % sysname)
 
 Simulation.setWorkCountOptions(test_sys, options)
 Simulation.run(options, root, test_sys, FutureClass)

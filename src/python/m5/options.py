@@ -26,9 +26,6 @@
 #
 # Authors: Nathan Binkert
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 import optparse
 import sys
 
@@ -132,7 +129,7 @@ class OptionParser(dict):
     def parse_args(self):
         opts,args = self._optparse.parse_args()
 
-        for key,val in opts.__dict__.items():
+        for key,val in opts.__dict__.iteritems():
             if val is not None or key not in self:
                 self[key] = val
 

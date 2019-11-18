@@ -49,8 +49,8 @@ output header {{
         {
         }
 
-        std::string generateDisassembly(
-                Addr pc, const SymbolTable *symtab) const override;
+        std::string
+        generateDisassembly(Addr pc, const SymbolTable *symtab) const;
     };
 }};
 
@@ -93,8 +93,8 @@ output header {{
         CallPalBase(const char *mnem, ExtMachInst _machInst,
                     OpClass __opClass);
 
-        std::string generateDisassembly(
-                Addr pc, const SymbolTable *symtab) const override;
+        std::string
+        generateDisassembly(Addr pc, const SymbolTable *symtab) const;
     };
 }};
 
@@ -157,8 +157,8 @@ output header {{
         /// Constructor
         HwLoadStore(const char *mnem, ExtMachInst _machInst, OpClass __opClass);
 
-        std::string generateDisassembly(
-                Addr pc, const SymbolTable *symtab) const override;
+        std::string
+        generateDisassembly(Addr pc, const SymbolTable *symtab) const;
     };
 }};
 
@@ -239,8 +239,8 @@ output header {{
         {
         }
 
-        std::string generateDisassembly(
-                Addr pc, const SymbolTable *symtab) const override;
+        std::string
+        generateDisassembly(Addr pc, const SymbolTable *symtab) const;
     };
 }};
 

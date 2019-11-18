@@ -30,7 +30,7 @@
 from m5.params import *
 from m5.proxy import *
 from m5.SimObject import SimObject
-from m5.objects.BasicLink import BasicIntLink, BasicExtLink
+from BasicLink import BasicIntLink, BasicExtLink
 
 class SimpleExtLink(BasicExtLink):
     type = 'SimpleExtLink'

@@ -226,10 +226,8 @@ let {{
 
                     if self.function_call:
                         flags.append("IsCall")
-                        flags.append("IsUncondControl")
                     if self.function_return:
                         flags.append("IsReturn")
-                        flags.append("IsUncondControl")
                 else:
                     flags.append("IsDelayedCommit")
 
@@ -335,7 +333,7 @@ let {{
     noModRMString = "env.setSeg(machInst);\n"
     def genMacroop(Name, env):
         blocks = OutputBlocks()
-        if not Name in macroopDict:
+        if not macroopDict.has_key(Name):
             raise Exception, "Unrecognized instruction: %s" % Name
         macroop = macroopDict[Name]
         if not macroop.declared:

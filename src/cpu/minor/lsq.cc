@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014,2017-2018 ARM Limited
+ * Copyright (c) 2013-2014,2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -44,17 +44,30 @@
 
 #include "arch/locked_mem.hh"
 #include "arch/mmapped_ipr.hh"
-#include "base/logging.hh"
 #include "cpu/minor/cpu.hh"
 #include "cpu/minor/exec_context.hh"
 #include "cpu/minor/execute.hh"
 #include "cpu/minor/pipeline.hh"
-#include "cpu/utils.hh"
 #include "debug/Activity.hh"
 #include "debug/MinorMem.hh"
 
 namespace Minor
 {
+
+/** Returns the offset of addr into an aligned a block of size block_size */
+static Addr
+addrBlockOffset(Addr addr, unsigned int block_size)
+{
+    return addr & (block_size - 1);
+}
+
+/** Returns true if the given [addr .. addr+size-1] transfer needs to be
+ *  fragmented across a block size of block_size */
+static bool
+transferNeedsBurst(Addr addr, unsigned int size, unsigned int block_size)
+{
+    return (addrBlockOffset(addr, block_size) + size) > block_size;
+}
 
 LSQ::LSQRequest::LSQRequest(LSQ &port_, MinorDynInstPtr inst_, bool isLoad_,
     PacketDataPtr data_, uint64_t *res_) :
@@ -65,57 +78,12 @@ LSQ::LSQRequest::LSQRequest(LSQ &port_, MinorDynInstPtr inst_, bool isLoad_,
     data(data_),
     packet(NULL),
     request(),
+    fault(NoFault),
     res(res_),
     skipped(false),
     issuedToMemory(false),
-    isTranslationDelayed(false),
     state(NotIssued)
-{
-    request = std::make_shared<Request>();
-}
-
-void
-LSQ::LSQRequest::tryToSuppressFault()
-{
-    SimpleThread &thread = *port.cpu.threads[inst->id.threadId];
-    TheISA::PCState old_pc = thread.pcState();
-    ExecContext context(port.cpu, thread, port.execute, inst);
-    Fault M5_VAR_USED fault = inst->translationFault;
-
-    // Give the instruction a chance to suppress a translation fault
-    inst->translationFault = inst->staticInst->initiateAcc(&context, nullptr);
-    if (inst->translationFault == NoFault) {
-        DPRINTFS(MinorMem, (&port),
-                 "Translation fault suppressed for inst:%s\n", *inst);
-    } else {
-        assert(inst->translationFault == fault);
-    }
-    thread.pcState(old_pc);
-}
-
-void
-LSQ::LSQRequest::completeDisabledMemAccess()
-{
-    DPRINTFS(MinorMem, (&port), "Complete disabled mem access for inst:%s\n",
-             *inst);
-
-    SimpleThread &thread = *port.cpu.threads[inst->id.threadId];
-    TheISA::PCState old_pc = thread.pcState();
-
-    ExecContext context(port.cpu, thread, port.execute, inst);
-
-    context.setMemAccPredicate(false);
-    inst->staticInst->completeAcc(nullptr, &context, inst->traceData);
-
-    thread.pcState(old_pc);
-}
-
-void
-LSQ::LSQRequest::disableMemAccess()
-{
-    port.cpu.threads[inst->id.threadId]->setMemAccPredicate(false);
-    DPRINTFS(MinorMem, (&port), "Disable mem access for inst:%s\n", *inst);
-}
+{ }
 
 LSQ::AddrRangeCoverage
 LSQ::LSQRequest::containsAddrRangeOf(
@@ -142,8 +110,8 @@ LSQ::LSQRequest::containsAddrRangeOf(
 LSQ::AddrRangeCoverage
 LSQ::LSQRequest::containsAddrRangeOf(LSQRequestPtr other_request)
 {
-    return containsAddrRangeOf(request->getPaddr(), request->getSize(),
-        other_request->request->getPaddr(), other_request->request->getSize());
+    return containsAddrRangeOf(request.getPaddr(), request.getSize(),
+        other_request->request.getPaddr(), other_request->request.getSize());
 }
 
 bool
@@ -260,29 +228,19 @@ LSQ::clearMemBarrier(MinorDynInstPtr inst)
 }
 
 void
-LSQ::SingleDataRequest::finish(const Fault &fault_, const RequestPtr &request_,
+LSQ::SingleDataRequest::finish(const Fault &fault_, RequestPtr request_,
                                ThreadContext *tc, BaseTLB::Mode mode)
 {
+    fault = fault_;
+
     port.numAccessesInDTLB--;
 
     DPRINTFS(MinorMem, (&port), "Received translation response for"
-             " request: %s delayed:%d %s\n", *inst, isTranslationDelayed,
-             fault_ != NoFault ? fault_->name() : "");
+        " request: %s\n", *inst);
 
-    if (fault_ != NoFault) {
-        inst->translationFault = fault_;
-        if (isTranslationDelayed) {
-            tryToSuppressFault();
-            if (inst->translationFault == NoFault) {
-                completeDisabledMemAccess();
-                setState(Complete);
-            }
-        }
-        setState(Translated);
-    } else {
-        setState(Translated);
-        makePacket();
-    }
+    makePacket();
+
+    setState(Translated);
     port.tryToSendToTransfers(this);
 
     /* Let's try and wake up the processor for the next cycle */
@@ -295,23 +253,16 @@ LSQ::SingleDataRequest::startAddrTranslation()
     ThreadContext *thread = port.cpu.getContext(
         inst->id.threadId);
 
-    const auto &byteEnable = request->getByteEnable();
-    if (byteEnable.size() == 0 ||
-        isAnyActiveElement(byteEnable.cbegin(), byteEnable.cend())) {
-        port.numAccessesInDTLB++;
+    port.numAccessesInDTLB++;
 
-        setState(LSQ::LSQRequest::InTranslation);
+    setState(LSQ::LSQRequest::InTranslation);
 
-        DPRINTFS(MinorMem, (&port), "Submitting DTLB request\n");
-        /* Submit the translation request.  The response will come through
-         *  finish/markDelayed on the LSQRequest as it bears the Translation
-         *  interface */
-        thread->getDTBPtr()->translateTiming(
-            request, thread, this, (isLoad ? BaseTLB::Read : BaseTLB::Write));
-    } else {
-        disableMemAccess();
-        setState(LSQ::LSQRequest::Complete);
-    }
+    DPRINTFS(MinorMem, (&port), "Submitting DTLB request\n");
+    /* Submit the translation request.  The response will come through
+     *  finish/markDelayed on the LSQRequest as it bears the Translation
+     *  interface */
+    thread->getDTBPtr()->translateTiming(
+        &request, thread, this, (isLoad ? BaseTLB::Read : BaseTLB::Write));
 }
 
 void
@@ -324,9 +275,11 @@ LSQ::SingleDataRequest::retireResponse(PacketPtr packet_)
 }
 
 void
-LSQ::SplitDataRequest::finish(const Fault &fault_, const RequestPtr &request_,
+LSQ::SplitDataRequest::finish(const Fault &fault_, RequestPtr request_,
                               ThreadContext *tc, BaseTLB::Mode mode)
 {
+    fault = fault_;
+
     port.numAccessesInDTLB--;
 
     unsigned int M5_VAR_USED expected_fragment_index =
@@ -336,9 +289,7 @@ LSQ::SplitDataRequest::finish(const Fault &fault_, const RequestPtr &request_,
     numTranslatedFragments++;
 
     DPRINTFS(MinorMem, (&port), "Received translation response for fragment"
-             " %d of request: %s delayed:%d %s\n", expected_fragment_index,
-             *inst, isTranslationDelayed,
-             fault_ != NoFault ? fault_->name() : "");
+        " %d of request: %s\n", expected_fragment_index, *inst);
 
     assert(request_ == fragmentRequests[expected_fragment_index]);
 
@@ -346,33 +297,18 @@ LSQ::SplitDataRequest::finish(const Fault &fault_, const RequestPtr &request_,
      *  tryToSendToTransfers does take */
     port.cpu.wakeupOnEvent(Pipeline::ExecuteStageId);
 
-    if (fault_ != NoFault) {
+    if (fault != NoFault) {
         /* tryToSendToTransfers will handle the fault */
-        inst->translationFault = fault_;
 
         DPRINTFS(MinorMem, (&port), "Faulting translation for fragment:"
             " %d of request: %s\n",
             expected_fragment_index, *inst);
 
-        if (expected_fragment_index > 0 || isTranslationDelayed)
-            tryToSuppressFault();
-        if (expected_fragment_index == 0) {
-            if (isTranslationDelayed && inst->translationFault == NoFault) {
-                completeDisabledMemAccess();
-                setState(Complete);
-            } else {
-                setState(Translated);
-            }
-        } else if (inst->translationFault == NoFault) {
-            setState(Translated);
-            numTranslatedFragments--;
-            makeFragmentPackets();
-        } else {
-            setState(Translated);
-        }
+        setState(Translated);
         port.tryToSendToTransfers(this);
     } else if (numTranslatedFragments == numFragments) {
         makeFragmentPackets();
+
         setState(Translated);
         port.tryToSendToTransfers(this);
     } else {
@@ -401,6 +337,12 @@ LSQ::SplitDataRequest::SplitDataRequest(LSQ &port_, MinorDynInstPtr inst_,
 
 LSQ::SplitDataRequest::~SplitDataRequest()
 {
+    for (auto i = fragmentRequests.begin();
+        i != fragmentRequests.end(); i++)
+    {
+        delete *i;
+    }
+
     for (auto i = fragmentPackets.begin();
          i != fragmentPackets.end(); i++)
     {
@@ -411,14 +353,12 @@ LSQ::SplitDataRequest::~SplitDataRequest()
 void
 LSQ::SplitDataRequest::makeFragmentRequests()
 {
-    Addr base_addr = request->getVaddr();
-    unsigned int whole_size = request->getSize();
+    Addr base_addr = request.getVaddr();
+    unsigned int whole_size = request.getSize();
     unsigned int line_width = port.lineWidth;
 
     unsigned int fragment_size;
     Addr fragment_addr;
-
-    std::vector<bool> fragment_write_byte_en;
 
     /* Assume that this transfer is across potentially many block snap
      * boundaries:
@@ -464,9 +404,6 @@ LSQ::SplitDataRequest::makeFragmentRequests()
     /* Just past the last address in the request */
     Addr end_addr = base_addr + whole_size;
 
-    auto& byte_enable = request->getByteEnable();
-    unsigned int num_disabled_fragments = 0;
-
     for (unsigned int fragment_index = 0; fragment_index < numFragments;
          fragment_index++)
     {
@@ -486,62 +423,36 @@ LSQ::SplitDataRequest::makeFragmentRequests()
             }
         }
 
-        RequestPtr fragment = std::make_shared<Request>();
-        bool disabled_fragment = false;
+        Request *fragment = new Request();
 
-        fragment->setContext(request->contextId());
-        if (byte_enable.empty()) {
-            fragment->setVirt(0 /* asid */,
-                fragment_addr, fragment_size, request->getFlags(),
-                request->masterId(),
-                request->getPC());
-        } else {
-            // Set up byte-enable mask for the current fragment
-            auto it_start = byte_enable.begin() +
-                (fragment_addr - base_addr);
-            auto it_end = byte_enable.begin() +
-                (fragment_addr - base_addr) + fragment_size;
-            if (isAnyActiveElement(it_start, it_end)) {
-                fragment->setVirt(0 /* asid */,
-                    fragment_addr, fragment_size, request->getFlags(),
-                    request->masterId(),
-                    request->getPC());
-                fragment->setByteEnable(std::vector<bool>(it_start, it_end));
-            } else {
-                disabled_fragment = true;
-            }
-        }
+        fragment->setContext(request.contextId());
+        fragment->setVirt(0 /* asid */,
+            fragment_addr, fragment_size, request.getFlags(),
+            request.masterId(),
+            request.getPC());
 
-        if (!disabled_fragment) {
-            DPRINTFS(MinorMem, (&port), "Generating fragment addr: 0x%x"
-                " size: %d (whole request addr: 0x%x size: %d) %s\n",
-                fragment_addr, fragment_size, base_addr, whole_size,
-                (is_last_fragment ? "last fragment" : ""));
-
-            fragmentRequests.push_back(fragment);
-        } else {
-            num_disabled_fragments++;
-        }
+        DPRINTFS(MinorMem, (&port), "Generating fragment addr: 0x%x size: %d"
+            " (whole request addr: 0x%x size: %d) %s\n",
+            fragment_addr, fragment_size, base_addr, whole_size,
+            (is_last_fragment ? "last fragment" : ""));
 
         fragment_addr += fragment_size;
+
+        fragmentRequests.push_back(fragment);
     }
-    assert(numFragments >= num_disabled_fragments);
-    numFragments -= num_disabled_fragments;
 }
 
 void
 LSQ::SplitDataRequest::makeFragmentPackets()
 {
-    assert(numTranslatedFragments > 0);
-    Addr base_addr = request->getVaddr();
+    Addr base_addr = request.getVaddr();
 
     DPRINTFS(MinorMem, (&port), "Making packets for request: %s\n", *inst);
 
-    for (unsigned int fragment_index = 0;
-         fragment_index < numTranslatedFragments;
+    for (unsigned int fragment_index = 0; fragment_index < numFragments;
          fragment_index++)
     {
-        RequestPtr fragment = fragmentRequests[fragment_index];
+        Request *fragment = fragmentRequests[fragment_index];
 
         DPRINTFS(MinorMem, (&port), "Making packet %d for request: %s"
             " (%d, 0x%x)\n",
@@ -565,49 +476,45 @@ LSQ::SplitDataRequest::makeFragmentPackets()
         assert(fragment->hasPaddr());
 
         PacketPtr fragment_packet =
-            makePacketForRequest(fragment, isLoad, this, request_data);
+            makePacketForRequest(*fragment, isLoad, this, request_data);
 
         fragmentPackets.push_back(fragment_packet);
         /* Accumulate flags in parent request */
-        request->setFlags(fragment->getFlags());
+        request.setFlags(fragment->getFlags());
     }
 
     /* Might as well make the overall/response packet here */
     /* Get the physical address for the whole request/packet from the first
      *  fragment */
-    request->setPaddr(fragmentRequests[0]->getPaddr());
+    request.setPaddr(fragmentRequests[0]->getPaddr());
     makePacket();
 }
 
 void
 LSQ::SplitDataRequest::startAddrTranslation()
 {
+    setState(LSQ::LSQRequest::InTranslation);
+
     makeFragmentRequests();
 
-    if (numFragments > 0) {
-        setState(LSQ::LSQRequest::InTranslation);
-        numInTranslationFragments = 0;
-        numTranslatedFragments = 0;
+    numInTranslationFragments = 0;
+    numTranslatedFragments = 0;
 
-        /* @todo, just do these in sequence for now with
-         * a loop of:
-         * do {
-         *  sendNextFragmentToTranslation ; translateTiming ; finish
-         * } while (numTranslatedFragments != numFragments);
-         */
+    /* @todo, just do these in sequence for now with
+     * a loop of:
+     * do {
+     *  sendNextFragmentToTranslation ; translateTiming ; finish
+     * } while (numTranslatedFragments != numFragments);
+     */
 
-        /* Do first translation */
-        sendNextFragmentToTranslation();
-    } else {
-        disableMemAccess();
-        setState(LSQ::LSQRequest::Complete);
-    }
+    /* Do first translation */
+    sendNextFragmentToTranslation();
 }
 
 PacketPtr
 LSQ::SplitDataRequest::getHeadPacket()
 {
-    assert(numIssuedFragments < numTranslatedFragments);
+    assert(numIssuedFragments < numFragments);
 
     return fragmentPackets[numIssuedFragments];
 }
@@ -615,7 +522,7 @@ LSQ::SplitDataRequest::getHeadPacket()
 void
 LSQ::SplitDataRequest::stepToNextPacket()
 {
-    assert(numIssuedFragments < numTranslatedFragments);
+    assert(numIssuedFragments < numFragments);
 
     numIssuedFragments++;
 }
@@ -623,14 +530,14 @@ LSQ::SplitDataRequest::stepToNextPacket()
 void
 LSQ::SplitDataRequest::retireResponse(PacketPtr response)
 {
-    assert(inst->translationFault == NoFault);
-    assert(numRetiredFragments < numTranslatedFragments);
+    assert(numRetiredFragments < numFragments);
 
     DPRINTFS(MinorMem, (&port), "Retiring fragment addr: 0x%x size: %d"
-        " offset: 0x%x (retired fragment num: %d)\n",
+        " offset: 0x%x (retired fragment num: %d) %s\n",
         response->req->getVaddr(), response->req->getSize(),
-        request->getVaddr() - response->req->getVaddr(),
-        numRetiredFragments);
+        request.getVaddr() - response->req->getVaddr(),
+        numRetiredFragments,
+        (fault == NoFault ? "" : fault->name()));
 
     numRetiredFragments++;
 
@@ -649,13 +556,13 @@ LSQ::SplitDataRequest::retireResponse(PacketPtr response)
                 /* For a split transfer, a Packet must be constructed
                  *  to contain all returning data.  This is that packet's
                  *  data */
-                data = new uint8_t[request->getSize()];
+                data = new uint8_t[request.getSize()];
             }
 
             /* Populate the portion of the overall response data represented
              *  by the response fragment */
             std::memcpy(
-                data + (response->req->getVaddr() - request->getVaddr()),
+                data + (response->req->getVaddr() - request.getVaddr()),
                 response->getConstPtr<uint8_t>(),
                 response->req->getSize());
         }
@@ -669,7 +576,7 @@ LSQ::SplitDataRequest::retireResponse(PacketPtr response)
             packet->makeResponse();
     }
 
-    if (numRetiredFragments == numTranslatedFragments)
+    if (numRetiredFragments == numFragments)
         setState(Complete);
 
     if (!skipped && isComplete()) {
@@ -678,18 +585,18 @@ LSQ::SplitDataRequest::retireResponse(PacketPtr response)
         DPRINTFS(MinorMem, (&port), "Retired packet isRead: %d isWrite: %d"
              " needsResponse: %d packetSize: %s requestSize: %s responseSize:"
              " %s\n", packet->isRead(), packet->isWrite(),
-             packet->needsResponse(), packet->getSize(), request->getSize(),
+             packet->needsResponse(), packet->getSize(), request.getSize(),
              response->getSize());
 
         /* A request can become complete by several paths, this is a sanity
          *  check to make sure the packet's data is created */
         if (!data) {
-            data = new uint8_t[request->getSize()];
+            data = new uint8_t[request.getSize()];
         }
 
         if (isLoad) {
             DPRINTFS(MinorMem, (&port), "Copying read data\n");
-            std::memcpy(packet->getPtr<uint8_t>(), data, request->getSize());
+            std::memcpy(packet->getPtr<uint8_t>(), data, request.getSize());
         }
         packet->makeResponse();
     }
@@ -772,9 +679,9 @@ LSQ::StoreBuffer::canForwardDataToLoad(LSQRequestPtr request,
     while (ret == NoAddrRangeCoverage && i != slots.rend()) {
         LSQRequestPtr slot = *i;
 
-        /* Cache maintenance instructions go down via the store path but
-         * they carry no data and they shouldn't be considered
-         * for forwarding */
+        /* Cache maintenance instructions go down via the store path *
+         * but they carry no data and they shouldn't be considered for
+         * forwarding */
         if (slot->packet &&
             slot->inst->id.threadId == request->inst->id.threadId &&
             !slot->packet->req->isCacheMaintenance()) {
@@ -784,8 +691,8 @@ LSQ::StoreBuffer::canForwardDataToLoad(LSQRequestPtr request,
                 DPRINTF(MinorMem, "Forwarding: slot: %d result: %s thisAddr:"
                     " 0x%x thisSize: %d slotAddr: 0x%x slotSize: %d\n",
                     slot_index, coverage,
-                    request->request->getPaddr(), request->request->getSize(),
-                    slot->request->getPaddr(), slot->request->getSize());
+                    request->request.getPaddr(), request->request.getSize(),
+                    slot->request.getPaddr(), slot->request.getSize());
 
                 found_slot = slot_index;
                 ret = coverage;
@@ -813,11 +720,11 @@ LSQ::StoreBuffer::forwardStoreData(LSQRequestPtr load,
     assert(store->packet);
     assert(store->containsAddrRangeOf(load) == FullAddrRangeCoverage);
 
-    Addr load_addr = load->request->getPaddr();
-    Addr store_addr = store->request->getPaddr();
+    Addr load_addr = load->request.getPaddr();
+    Addr store_addr = store->request.getPaddr();
     Addr addr_offset = load_addr - store_addr;
 
-    unsigned int load_size = load->request->getSize();
+    unsigned int load_size = load->request.getSize();
 
     DPRINTF(MinorMem, "Forwarding %d bytes for addr: 0x%x from store buffer"
         " slot: %d addr: 0x%x addressOffset: 0x%x\n",
@@ -1012,7 +919,7 @@ LSQ::tryToSendToTransfers(LSQRequestPtr request)
         return;
     }
 
-    if (request->inst->translationFault != NoFault) {
+    if (request->fault != NoFault) {
         if (request->inst->staticInst->isPrefetch()) {
             DPRINTF(MinorMem, "Not signalling fault for faulting prefetch\n");
         }
@@ -1025,11 +932,10 @@ LSQ::tryToSendToTransfers(LSQRequestPtr request)
     }
 
     bool is_load = request->isLoad;
-    bool is_llsc = request->request->isLLSC();
-    bool is_swap = request->request->isSwap();
-    bool is_atomic = request->request->isAtomic();
-    bool bufferable = !(request->request->isStrictlyOrdered() ||
-                        is_llsc || is_swap || is_atomic);
+    bool is_llsc = request->request.isLLSC();
+    bool is_swap = request->request.isSwap();
+    bool bufferable = !(request->request.isStrictlyOrdered() ||
+        is_llsc || is_swap);
 
     if (is_load) {
         if (numStoresInTransfers != 0) {
@@ -1039,7 +945,7 @@ LSQ::tryToSendToTransfers(LSQRequestPtr request)
         }
     } else {
         /* Store.  Can it be sent to the store buffer? */
-        if (bufferable && !request->request->isMmappedIpr()) {
+        if (bufferable && !request->request.isMmappedIpr()) {
             request->setState(LSQRequest::StoreToStoreBuffer);
             moveFromRequestsToTransfers(request);
             DPRINTF(MinorMem, "Moving store into transfers queue\n");
@@ -1062,16 +968,9 @@ LSQ::tryToSendToTransfers(LSQRequestPtr request)
         if (storeBuffer.canForwardDataToLoad(request, forwarding_slot) !=
             NoAddrRangeCoverage)
         {
-            // There's at least another request that targets the same
-            // address and is staying in the storeBuffer. Since our
-            // request is non-bufferable (e.g., strictly ordered or atomic),
-            // we must wait for the other request in the storeBuffer to
-            // complete before we can issue this non-bufferable request.
-            // This is to make sure that the order they access the cache is
-            // correct.
             DPRINTF(MinorMem, "Memory access can receive forwarded data"
-                " from the store buffer, but need to wait for store buffer"
-                " to drain\n");
+                " from the store buffer, need to wait for store buffer to"
+                " drain\n");
             return;
         }
     }
@@ -1124,10 +1023,10 @@ LSQ::tryToSendToTransfers(LSQRequestPtr request)
 
         /* Handle LLSC requests and tests */
         if (is_load) {
-            TheISA::handleLockedRead(&context, request->request);
+            TheISA::handleLockedRead(&context, &request->request);
         } else {
             do_access = TheISA::handleLockedWrite(&context,
-                request->request, cacheBlockMask);
+                &request->request, cacheBlockMask);
 
             if (!do_access) {
                 DPRINTF(MinorMem, "Not perfoming a memory "
@@ -1178,10 +1077,10 @@ LSQ::tryToSend(LSQRequestPtr request)
          *  so the response can be correctly handled */
         assert(packet->findNextSenderState<LSQRequest>());
 
-        if (request->request->isMmappedIpr()) {
+        if (request->request.isMmappedIpr()) {
             ThreadContext *thread =
                 cpu.getContext(cpu.contextToThread(
-                                request->request->contextId()));
+                                request->request.contextId()));
 
             if (request->isLoad) {
                 DPRINTF(MinorMem, "IPR read inst: %s\n", *(request->inst));
@@ -1226,7 +1125,8 @@ LSQ::tryToSend(LSQRequestPtr request)
                 request->setState(LSQRequest::StoreBufferIssuing);
                 break;
               default:
-                panic("Unrecognized LSQ request state %d.", request->state);
+                assert(false);
+                break;
             }
 
             state = MemoryRunning;
@@ -1248,7 +1148,8 @@ LSQ::tryToSend(LSQRequestPtr request)
                 request->setState(LSQRequest::StoreBufferNeedsRetry);
                 break;
               default:
-                panic("Unrecognized LSQ request state %d.", request->state);
+                assert(false);
+                break;
             }
         }
     }
@@ -1329,7 +1230,10 @@ LSQ::recvTimingResp(PacketPtr response)
         }
         break;
       default:
-        panic("Shouldn't be allowed to receive a response from another state");
+        /* Shouldn't be allowed to receive a response from another
+         *  state */
+        assert(false);
+        break;
     }
 
     /* We go to idle even if there are more things in the requests queue
@@ -1360,7 +1264,7 @@ LSQ::recvReqRetry()
         retryRequest->setState(LSQRequest::StoreInStoreBuffer);
         break;
       default:
-        panic("Unrecognized retry request state %d.", retryRequest->state);
+        assert(false);
     }
 
     /* Set state back to MemoryRunning so that the following
@@ -1383,7 +1287,8 @@ LSQ::recvReqRetry()
             storeBuffer.countIssuedStore(retryRequest);
             break;
           default:
-            panic("Unrecognized retry request state %d.", retryRequest->state);
+            assert(false);
+            break;
         }
 
         retryRequest = NULL;
@@ -1570,31 +1475,12 @@ LSQ::needsToTick()
     return ret;
 }
 
-Fault
+void
 LSQ::pushRequest(MinorDynInstPtr inst, bool isLoad, uint8_t *data,
                  unsigned int size, Addr addr, Request::Flags flags,
-                 uint64_t *res, AtomicOpFunctor *amo_op,
-                 const std::vector<bool>& byteEnable)
+                 uint64_t *res)
 {
-    assert(inst->translationFault == NoFault || inst->inLSQ);
-
-    if (inst->inLSQ) {
-        return inst->translationFault;
-    }
-
     bool needs_burst = transferNeedsBurst(addr, size, lineWidth);
-
-    if (needs_burst && inst->staticInst->isAtomic()) {
-        // AMO requests that access across a cache line boundary are not
-        // allowed since the cache does not guarantee AMO ops to be executed
-        // atomically in two cache lines
-        // For ISAs such as x86 that requires AMO operations to work on
-        // accesses that cross cache-line boundaries, the cache needs to be
-        // modified to support locking both cache lines to guarantee the
-        // atomicity.
-        panic("Do not expect cross-cache-line atomic memory request\n");
-    }
-
     LSQRequestPtr request;
 
     /* Copy given data into the request.  The request will pass this to the
@@ -1603,16 +1489,15 @@ LSQ::pushRequest(MinorDynInstPtr inst, bool isLoad, uint8_t *data,
 
     DPRINTF(MinorMem, "Pushing request (%s) addr: 0x%x size: %d flags:"
         " 0x%x%s lineWidth : 0x%x\n",
-        (isLoad ? "load" : "store/atomic"), addr, size, flags,
+        (isLoad ? "load" : "store"), addr, size, flags,
             (needs_burst ? " (needs burst)" : ""), lineWidth);
 
     if (!isLoad) {
-        /* Request_data becomes the property of a ...DataRequest (see below)
+        /* request_data becomes the property of a ...DataRequest (see below)
          *  and destroyed by its destructor */
         request_data = new uint8_t[size];
-        if (inst->staticInst->isAtomic() ||
-            (flags & Request::STORE_NO_DATA)) {
-            /* For atomic or store-no-data, just use zeroed data */
+        if (flags & Request::STORE_NO_DATA) {
+            /* For cache zeroing, just use zeroed data */
             std::memset(request_data, 0, size);
         } else {
             std::memcpy(request_data, data, size);
@@ -1631,18 +1516,14 @@ LSQ::pushRequest(MinorDynInstPtr inst, bool isLoad, uint8_t *data,
         inst->traceData->setMem(addr, size, flags);
 
     int cid = cpu.threads[inst->id.threadId]->getTC()->contextId();
-    request->request->setContext(cid);
-    request->request->setVirt(0 /* asid */,
+    request->request.setContext(cid);
+    request->request.setVirt(0 /* asid */,
         addr, size, flags, cpu.dataMasterId(),
         /* I've no idea why we need the PC, but give it */
-        inst->pc.instAddr(), amo_op);
-    request->request->setByteEnable(byteEnable);
+        inst->pc.instAddr());
 
     requests.push(request);
-    inst->inLSQ = true;
     request->startAddrTranslation();
-
-    return inst->translationFault;
 }
 
 void
@@ -1676,18 +1557,18 @@ LSQ::StoreBuffer::StoreBuffer(std::string name_, LSQ &lsq_,
 }
 
 PacketPtr
-makePacketForRequest(const RequestPtr &request, bool isLoad,
+makePacketForRequest(Request &request, bool isLoad,
     Packet::SenderState *sender_state, PacketDataPtr data)
 {
-    PacketPtr ret = isLoad ? Packet::createRead(request)
-                           : Packet::createWrite(request);
+    PacketPtr ret = isLoad ? Packet::createRead(&request)
+                           : Packet::createWrite(&request);
 
     if (sender_state)
         ret->pushSenderState(sender_state);
 
     if (isLoad) {
         ret->allocate();
-    } else if (!request->isCacheMaintenance()) {
+    } else if (!request.isCacheMaintenance()) {
         // CMOs are treated as stores but they don't have data. All
         // stores otherwise need to allocate for data.
         ret->dataDynamic(data);
@@ -1711,11 +1592,15 @@ LSQ::issuedMemBarrierInst(MinorDynInstPtr inst)
 void
 LSQ::LSQRequest::makePacket()
 {
-    assert(inst->translationFault == NoFault);
-
     /* Make the function idempotent */
     if (packet)
         return;
+
+    // if the translation faulted, do not create a packet
+    if (fault != NoFault) {
+        assert(packet == NULL);
+        return;
+    }
 
     packet = makePacketForRequest(request, isLoad, this, data);
     /* Null the ret data so we know not to deallocate it when the

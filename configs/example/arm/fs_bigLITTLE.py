@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2017, 2019 ARM Limited
+# Copyright (c) 2016-2017 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -41,7 +41,6 @@
 
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 import argparse
 import os
@@ -54,13 +53,13 @@ m5.util.addToPath("../../")
 
 from common import SysPaths
 from common import CpuConfig
-from common import PlatformConfig
 from common.cores.arm import ex5_big, ex5_LITTLE
 
 import devices
 from devices import AtomicCluster, KvmCluster
 
 
+default_kernel = 'vmlinux4.3.aarch64'
 default_disk = 'aarch64-ubuntu-trusty-headless.img'
 default_rcs = 'bootscript.rcS'
 
@@ -114,12 +113,8 @@ class Ex5LittleCluster(devices.CpuCluster):
         super(Ex5LittleCluster, self).__init__(system, num_cpus, cpu_clock,
                                          cpu_voltage, *cpu_config)
 
-def createSystem(caches, kernel, bootscript,
-                 machine_type="VExpress_GEM5", disks=[]):
-    platform = PlatformConfig.get(machine_type)
-    m5.util.inform("Simulated platform: %s", platform.__name__)
-
-    sys = devices.SimpleSystem(caches, default_mem_size, platform(),
+def createSystem(caches, kernel, bootscript, disks=[]):
+    sys = devices.SimpleSystem(caches, default_mem_size,
                                kernel=SysPaths.binary(kernel),
                                readfile=bootscript)
 
@@ -161,14 +156,8 @@ def addOptions(parser):
                         help="Restore from checkpoint")
     parser.add_argument("--dtb", type=str, default=None,
                         help="DTB file to load")
-    parser.add_argument("--kernel", type=str, required=True,
+    parser.add_argument("--kernel", type=str, default=default_kernel,
                         help="Linux kernel")
-    parser.add_argument("--root", type=str, default="/dev/vda1",
-                        help="Specify the kernel CLI root= argument")
-    parser.add_argument("--machine-type", type=str,
-                        choices=PlatformConfig.platform_names(),
-                        default="VExpress_GEM5",
-                        help="Hardware platform class")
     parser.add_argument("--disk", action="append", type=str, default=[],
                         help="Disks to instantiate")
     parser.add_argument("--bootscript", type=str, default=default_rcs,
@@ -193,14 +182,6 @@ def addOptions(parser):
     parser.add_argument("--sim-quantum", type=str, default="1ms",
                         help="Simulation quantum for parallel simulation. " \
                         "Default: %(default)s")
-    parser.add_argument("-P", "--param", action="append", default=[],
-        help="Set a SimObject parameter relative to the root node. "
-             "An extended Python multi range slicing syntax can be used "
-             "for arrays. For example: "
-             "'system.cpu[0,1,3:8:2].max_insts_all_threads = 42' "
-             "sets max_insts_all_threads for cpus 0, 1, 3, 5 and 7 "
-             "Direct parameters of the root object are not accessible, "
-             "only parameters of its children.")
     return parser
 
 def build(options):
@@ -213,7 +194,7 @@ def build(options):
         "norandmaps",
         "loglevel=8",
         "mem=%s" % default_mem_size,
-        "root=%s" % options.root,
+        "root=/dev/vda1",
         "rw",
         "init=%s" % options.kernel_init,
         "vmalloc=768MB",
@@ -225,7 +206,6 @@ def build(options):
     system = createSystem(options.caches,
                           options.kernel,
                           options.bootscript,
-                          options.machine_type,
                           disks=disks)
 
     root.system = system
@@ -253,7 +233,7 @@ def build(options):
 
     # Figure out the memory mode
     if options.big_cpus > 0 and options.little_cpus > 0 and \
-       system.bigCluster.memoryMode() != system.littleCluster.memoryMode():
+       system.littleCluster.memoryMode() != system.littleCluster.memoryMode():
         m5.util.panic("Memory mode missmatch among CPU clusters")
 
 
@@ -273,7 +253,16 @@ def build(options):
     if options.dtb is not None:
         system.dtb_filename = SysPaths.binary(options.dtb)
     else:
-        system.generateDtb(m5.options.outdir, 'system.dtb')
+        def create_dtb_for_system(system, filename):
+            state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
+            rootNode = system.generateDeviceTree(state)
+
+            fdt = Fdt()
+            fdt.add_rootnode(rootNode)
+            dtb_filename = os.path.join(m5.options.outdir, filename)
+            return fdt.writeDtbFile(dtb_filename)
+
+        system.dtb_filename = create_dtb_for_system(system, 'system.dtb')
 
     return root
 
@@ -341,7 +330,6 @@ def main():
     addOptions(parser)
     options = parser.parse_args()
     root = build(options)
-    root.apply_config(options.param)
     instantiate(options)
     run()
 

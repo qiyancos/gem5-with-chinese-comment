@@ -27,10 +27,9 @@
 # Authors: Brad Beckmann
 
 from m5.SimObject import SimObject
+from MemObject import MemObject
 from m5.params import *
 from m5.proxy import *
-
-from m5.objects.ClockedObject import ClockedObject
 
 class DirectedGenerator(SimObject):
     type = 'DirectedGenerator'
@@ -52,7 +51,7 @@ class InvalidateGenerator(DirectedGenerator):
     cxx_header = "cpu/testers/directedtest/InvalidateGenerator.hh"
     addr_increment_size = Param.Int(64, "address increment size")
 
-class RubyDirectedTester(ClockedObject):
+class RubyDirectedTester(MemObject):
     type = 'RubyDirectedTester'
     cxx_header = "cpu/testers/directedtest/RubyDirectedTester.hh"
     cpuPort = VectorMasterPort("the cpu ports")

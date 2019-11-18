@@ -38,16 +38,11 @@ IMPORTANT: If you modify this file, it's likely that the Learning gem5 book
 
 """
 from __future__ import print_function
-from __future__ import absolute_import
 
 # import the m5 (gem5) library created when gem5 is built
 import m5
 # import all of the SimObjects
 from m5.objects import *
-
-# Needed for running C++ threads
-m5.util.addToPath('../../')
-from common.FileSystemConfig import config_filesystem
 
 # You can import ruby_caches_MI_example to use the MI_example protocol instead
 # of the MSI protocol
@@ -84,10 +79,7 @@ system.caches.setup(system, system.cpu, [system.mem_ctrl])
 isa = str(m5.defines.buildEnv['TARGET_ISA']).lower()
 
 # Run application and use the compiled ISA to find the binary
-# grab the specific path to the binary
-thispath = os.path.dirname(os.path.realpath(__file__))
-binary = os.path.join(thispath, '../../../', 'tests/test-progs/threads/bin/',
-                      isa, 'linux/threads')
+binary = 'tests/test-progs/threads/bin/' + isa + '/linux/threads'
 
 # Create a process for a simple "multi-threaded" application
 process = Process()
@@ -98,9 +90,6 @@ process.cmd = [binary]
 for cpu in system.cpu:
     cpu.workload = process
     cpu.createThreads()
-
-# Set up the pseudo file system for the threads function above
-config_filesystem(system)
 
 # set up the root SimObject and start the simulation
 root = Root(full_system = False, system = system)

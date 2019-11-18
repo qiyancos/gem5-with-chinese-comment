@@ -51,7 +51,6 @@
 #include "arch/registers.hh"
 #include "base/types.hh"
 #include "config/the_isa.hh"
-#include "enums/SMTQueuePolicy.hh"
 
 struct DerivO3CPUParams;
 
@@ -76,12 +75,19 @@ class ROB
         ROBSquashing
     };
 
+    /** SMT ROB Sharing Policy */
+    enum ROBPolicy{
+        Dynamic,
+        Partitioned,
+        Threshold
+    };
+
   private:
     /** Per-thread ROB status. */
     Status robStatus[Impl::MaxThreads];
 
     /** ROB resource sharing policy for SMT mode. */
-    SMTQueuePolicy robPolicy;
+    ROBPolicy robPolicy;
 
   public:
     /** ROB constructor.
@@ -108,7 +114,7 @@ class ROB
      *  ROB for the new instruction.
      *  @param inst The instruction being inserted into the ROB.
      */
-    void insertInst(const DynInstPtr &inst);
+    void insertInst(DynInstPtr &inst);
 
     /** Returns pointer to the head instruction within the ROB.  There is
      *  no guarantee as to the return value if the ROB is empty.
@@ -120,7 +126,7 @@ class ROB
      *  the ROB.
      *  @return Pointer to the DynInst that is at the head of the ROB.
      */
-    const DynInstPtr &readHeadInst(ThreadID tid);
+    DynInstPtr readHeadInst(ThreadID tid);
 
     /** Returns a pointer to the instruction with the given sequence if it is
      *  in the ROB.
@@ -258,7 +264,7 @@ class ROB
      *  threadEntries to get the instructions in the ROB unless you are
      *  double checking that variable.
      */
-    size_t countInsts(ThreadID tid);
+    int countInsts(ThreadID tid);
 
     /** Registers statistics. */
     void regStats();

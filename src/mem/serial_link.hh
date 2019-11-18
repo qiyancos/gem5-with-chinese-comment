@@ -56,9 +56,8 @@
 #include <deque>
 
 #include "base/types.hh"
-#include "mem/port.hh"
+#include "mem/mem_object.hh"
 #include "params/SerialLink.hh"
-#include "sim/clocked_object.hh"
 
 /**
  * SerialLink is a simple variation of the Bridge class, with the ability to
@@ -67,7 +66,7 @@
  * whole packet to start the serialization. But the deserializer waits for the
  * complete packet to check its integrity first.
   */
-class SerialLink : public ClockedObject
+class SerialLink : public MemObject
 {
   protected:
 
@@ -289,7 +288,7 @@ class SerialLink : public ClockedObject
          *
          * @return true if we find a match
          */
-        bool trySatisfyFunctional(PacketPtr pkt);
+        bool checkFunctional(PacketPtr pkt);
 
       protected:
 
@@ -316,8 +315,10 @@ class SerialLink : public ClockedObject
 
   public:
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID);
+    virtual BaseMasterPort& getMasterPort(const std::string& if_name,
+                                          PortID idx = InvalidPortID);
+    virtual BaseSlavePort& getSlavePort(const std::string& if_name,
+                                        PortID idx = InvalidPortID);
 
     virtual void init();
 

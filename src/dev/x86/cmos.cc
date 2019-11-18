@@ -50,10 +50,10 @@ X86ISA::Cmos::read(PacketPtr pkt)
     switch(pkt->getAddr() - pioAddr)
     {
       case 0x0:
-        pkt->setLE(address);
+        pkt->set(address);
         break;
       case 0x1:
-        pkt->setLE(readRegister(address));
+        pkt->set(readRegister(address));
         break;
       default:
         panic("Read from undefined CMOS port.\n");
@@ -69,10 +69,10 @@ X86ISA::Cmos::write(PacketPtr pkt)
     switch(pkt->getAddr() - pioAddr)
     {
       case 0x0:
-        address = pkt->getLE<uint8_t>();
+        address = pkt->get<uint8_t>();
         break;
       case 0x1:
-        writeRegister(address, pkt->getLE<uint8_t>());
+        writeRegister(address, pkt->get<uint8_t>());
         break;
       default:
         panic("Write to undefined CMOS port.\n");

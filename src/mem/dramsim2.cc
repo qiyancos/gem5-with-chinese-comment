@@ -169,7 +169,7 @@ DRAMSim2::recvFunctional(PacketPtr pkt)
 
     // potentially update the packets in our response queue as well
     for (auto i = responseQueue.begin(); i != responseQueue.end(); ++i)
-        pkt->trySatisfyFunctional(*i);
+        pkt->checkFunctional(*i);
 
     pkt->popLabel();
 }
@@ -336,11 +336,11 @@ void DRAMSim2::writeComplete(unsigned id, uint64_t addr, uint64_t cycle)
         signalDrainDone();
 }
 
-Port &
-DRAMSim2::getPort(const std::string &if_name, PortID idx)
+BaseSlavePort&
+DRAMSim2::getSlavePort(const std::string &if_name, PortID idx)
 {
     if (if_name != "port") {
-        return AbstractMemory::getPort(if_name, idx);
+        return MemObject::getSlavePort(if_name, idx);
     } else {
         return port;
     }

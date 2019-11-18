@@ -167,6 +167,15 @@ RemoteGDB::RiscvGdbRegCache::getRegs(ThreadContext *context)
     for (int i = 0; i < NumIntArchRegs; i++)
         r.gpr[i] = context->readIntReg(i);
     r.pc = context->pcState().pc();
+    for (int i = 0; i < NumFloatRegs; i++)
+        r.fpr[i] = context->readFloatRegBits(i);
+
+    r.csr_base = context->readMiscReg(0);
+    r.fflags = context->readMiscReg(MISCREG_FFLAGS);
+    r.frm = context->readMiscReg(MISCREG_FRM);
+    r.fcsr = context->readMiscReg(MISCREG_FCSR);
+    for (int i = ExplicitCSRs; i < NumMiscRegs; i++)
+        r.csr[i - ExplicitCSRs] = context->readMiscReg(i);
 }
 
 void
@@ -176,6 +185,15 @@ RemoteGDB::RiscvGdbRegCache::setRegs(ThreadContext *context) const
     for (int i = 0; i < NumIntArchRegs; i++)
         context->setIntReg(i, r.gpr[i]);
     context->pcState(r.pc);
+    for (int i = 0; i < NumFloatRegs; i++)
+        context->setFloatRegBits(i, r.fpr[i]);
+
+    context->setMiscReg(0, r.csr_base);
+    context->setMiscReg(MISCREG_FFLAGS, r.fflags);
+    context->setMiscReg(MISCREG_FRM, r.frm);
+    context->setMiscReg(MISCREG_FCSR, r.fcsr);
+    for (int i = ExplicitCSRs; i < NumMiscRegs; i++)
+        context->setMiscReg(i, r.csr[i - ExplicitCSRs]);
 }
 
 BaseGdbRegCache*

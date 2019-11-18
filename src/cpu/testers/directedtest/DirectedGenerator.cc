@@ -33,7 +33,7 @@
 
 DirectedGenerator::DirectedGenerator(const Params *p)
     : SimObject(p),
-      masterId(p->system->getMasterId(this))
+      masterId(p->system->getMasterId(name()))
 {
     m_num_cpus = p->num_cpus;
     m_directed_tester = NULL;

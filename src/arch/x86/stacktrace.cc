@@ -41,176 +41,182 @@
 #include "mem/fs_translating_port_proxy.hh"
 #include "sim/system.hh"
 
+using namespace std;
 namespace X86ISA
 {
+    ProcessInfo::ProcessInfo(ThreadContext *_tc)
+        : tc(_tc)
+    {
+        Addr addr = 0;
 
-static int32_t
-readSymbol(ThreadContext *tc, const std::string name)
-{
-    PortProxy &vp = tc->getVirtProxy();
-    SymbolTable *symtab = tc->getSystemPtr()->kernelSymtab;
+        FSTranslatingPortProxy &vp = tc->getVirtProxy();
 
-    Addr addr;
-    if (!symtab->findAddress(name, addr))
-        panic("thread info not compiled into kernel\n");
+        if (!tc->getSystemPtr()->kernelSymtab->findAddress("thread_info_size", addr))
+            panic("thread info not compiled into kernel\n");
+        thread_info_size = vp.readGtoH<int32_t>(addr);
 
-    return vp.read<int32_t>(addr, GuestByteOrder);
-}
+        if (!tc->getSystemPtr()->kernelSymtab->findAddress("task_struct_size", addr))
+            panic("thread info not compiled into kernel\n");
+        task_struct_size = vp.readGtoH<int32_t>(addr);
 
-ProcessInfo::ProcessInfo(ThreadContext *_tc) : tc(_tc)
-{
-    thread_info_size = readSymbol(tc, "thread_info_size");
-    task_struct_size = readSymbol(tc, "task_struct_size");
-    task_off = readSymbol(tc, "thread_info_task");
-    pid_off = readSymbol(tc, "task_struct_pid");
-    name_off = readSymbol(tc, "task_struct_comm");
-}
+        if (!tc->getSystemPtr()->kernelSymtab->findAddress("thread_info_task", addr))
+            panic("thread info not compiled into kernel\n");
+        task_off = vp.readGtoH<int32_t>(addr);
 
-Addr
-ProcessInfo::task(Addr ksp) const
-{
-    Addr base = ksp & ~0x3fff;
-    if (base == ULL(0xfffffc0000000000))
-        return 0;
+        if (!tc->getSystemPtr()->kernelSymtab->findAddress("task_struct_pid", addr))
+            panic("thread info not compiled into kernel\n");
+        pid_off = vp.readGtoH<int32_t>(addr);
 
-    Addr tsk;
+        if (!tc->getSystemPtr()->kernelSymtab->findAddress("task_struct_comm", addr))
+            panic("thread info not compiled into kernel\n");
+        name_off = vp.readGtoH<int32_t>(addr);
+    }
 
-    PortProxy &vp = tc->getVirtProxy();
-    tsk = vp.read<Addr>(base + task_off, GuestByteOrder);
+    Addr
+    ProcessInfo::task(Addr ksp) const
+    {
+        Addr base = ksp & ~0x3fff;
+        if (base == ULL(0xfffffc0000000000))
+            return 0;
 
-    return tsk;
-}
+        Addr tsk;
 
-int
-ProcessInfo::pid(Addr ksp) const
-{
-    Addr task = this->task(ksp);
-    if (!task)
-        return -1;
+        FSTranslatingPortProxy &vp = tc->getVirtProxy();
+        tsk = vp.readGtoH<Addr>(base + task_off);
 
-    uint16_t pd;
+        return tsk;
+    }
 
-    PortProxy &vp = tc->getVirtProxy();
-    pd = vp.read<uint16_t>(task + pid_off, GuestByteOrder);
+    int
+    ProcessInfo::pid(Addr ksp) const
+    {
+        Addr task = this->task(ksp);
+        if (!task)
+            return -1;
 
-    return pd;
-}
+        uint16_t pd;
 
-std::string
-ProcessInfo::name(Addr ksp) const
-{
-    Addr task = this->task(ksp);
-    if (!task)
-        return "console";
+        FSTranslatingPortProxy &vp = tc->getVirtProxy();
+        pd = vp.readGtoH<uint16_t>(task + pid_off);
 
-    char comm[256];
-    tc->getVirtProxy().readString(comm, task + name_off, sizeof(comm));
-    if (!comm[0])
-        return "startup";
+        return pd;
+    }
 
-    return comm;
-}
+    string
+    ProcessInfo::name(Addr ksp) const
+    {
+        Addr task = this->task(ksp);
+        if (!task)
+            return "console";
 
-StackTrace::StackTrace()
-    : tc(0), stack(64)
-{
-}
+        char comm[256];
+        CopyStringOut(tc, comm, task + name_off, sizeof(comm));
+        if (!comm[0])
+            return "startup";
 
-StackTrace::StackTrace(ThreadContext *_tc, const StaticInstPtr &inst)
-    : tc(0), stack(64)
-{
-    trace(_tc, inst);
-}
+        return comm;
+    }
 
-StackTrace::~StackTrace()
-{
-}
+    StackTrace::StackTrace()
+        : tc(0), stack(64)
+    {
+    }
 
-void
-StackTrace::trace(ThreadContext *_tc, bool is_call)
-{
-}
+    StackTrace::StackTrace(ThreadContext *_tc, const StaticInstPtr &inst)
+        : tc(0), stack(64)
+    {
+        trace(_tc, inst);
+    }
 
-bool
-StackTrace::isEntry(Addr addr)
-{
-    return false;
-}
+    StackTrace::~StackTrace()
+    {
+    }
 
-bool
-StackTrace::decodeStack(MachInst inst, int &disp)
-{
-    disp = 0;
-    return true;
-}
+    void
+    StackTrace::trace(ThreadContext *_tc, bool is_call)
+    {
+    }
 
-bool
-StackTrace::decodeSave(MachInst inst, int &reg, int &disp)
-{
-    reg = 0;
-    disp = 0;
-    return true;
-}
+    bool
+    StackTrace::isEntry(Addr addr)
+    {
+        return false;
+    }
 
-/*
- * Decode the function prologue for the function we're in, and note
- * which registers are stored where, and how large the stack frame is.
- */
-bool
-StackTrace::decodePrologue(Addr sp, Addr callpc, Addr func,
-                           int &size, Addr &ra)
-{
-    size = 0;
-    ra = 0;
+    bool
+    StackTrace::decodeStack(MachInst inst, int &disp)
+    {
+        disp = 0;
+        return true;
+    }
 
-    for (Addr pc = func; pc < callpc; pc += sizeof(MachInst)) {
-        MachInst inst = tc->getVirtProxy().read<MachInst>(pc);
+    bool
+    StackTrace::decodeSave(MachInst inst, int &reg, int &disp)
+    {
+        reg = 0;
+        disp = 0;
+        return true;
+    }
 
-        int reg, disp;
-        if (decodeStack(inst, disp)) {
-            if (size) {
-                // panic("decoding frame size again");
-                return true;
-            }
-            size += disp;
-        } else if (decodeSave(inst, reg, disp)) {
-            if (!ra && reg == ReturnAddressReg) {
-                ra = tc->getVirtProxy().read<Addr>(sp + disp);
-                if (!ra) {
-                    // panic("no return address value pc=%#x\n", pc);
-                    return false;
+    /*
+     * Decode the function prologue for the function we're in, and note
+     * which registers are stored where, and how large the stack frame is.
+     */
+    bool
+    StackTrace::decodePrologue(Addr sp, Addr callpc, Addr func,
+                               int &size, Addr &ra)
+    {
+        size = 0;
+        ra = 0;
+
+        for (Addr pc = func; pc < callpc; pc += sizeof(MachInst)) {
+            MachInst inst;
+            CopyOut(tc, (uint8_t *)&inst, pc, sizeof(MachInst));
+
+            int reg, disp;
+            if (decodeStack(inst, disp)) {
+                if (size) {
+                    // panic("decoding frame size again");
+                    return true;
+                }
+                size += disp;
+            } else if (decodeSave(inst, reg, disp)) {
+                if (!ra && reg == ReturnAddressReg) {
+                    CopyOut(tc, (uint8_t *)&ra, sp + disp, sizeof(Addr));
+                    if (!ra) {
+                        // panic("no return address value pc=%#x\n", pc);
+                        return false;
+                    }
                 }
             }
         }
-    }
 
-    return true;
-}
+        return true;
+    }
 
 #if TRACING_ON
-void
-StackTrace::dump()
-{
-    StringWrap name(tc->getCpuPtr()->name());
-    SymbolTable *symtab = tc->getSystemPtr()->kernelSymtab;
+    void
+    StackTrace::dump()
+    {
+        StringWrap name(tc->getCpuPtr()->name());
+        SymbolTable *symtab = tc->getSystemPtr()->kernelSymtab;
 
-    DPRINTFN("------ Stack ------\n");
+        DPRINTFN("------ Stack ------\n");
 
-    std::string symbol;
-    for (int i = 0, size = stack.size(); i < size; ++i) {
-        Addr addr = stack[size - i - 1];
-        if (addr == user)
-            symbol = "user";
-        else if (addr == console)
-            symbol = "console";
-        else if (addr == unknown)
-            symbol = "unknown";
-        else
-            symtab->findSymbol(addr, symbol);
+        string symbol;
+        for (int i = 0, size = stack.size(); i < size; ++i) {
+            Addr addr = stack[size - i - 1];
+            if (addr == user)
+                symbol = "user";
+            else if (addr == console)
+                symbol = "console";
+            else if (addr == unknown)
+                symbol = "unknown";
+            else
+                symtab->findSymbol(addr, symbol);
 
-        DPRINTFN("%#x: %s\n", addr, symbol);
+            DPRINTFN("%#x: %s\n", addr, symbol);
+        }
     }
-}
-
 #endif
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015, 2018 ARM Limited
+ * Copyright (c) 2012-2013,2015 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -58,7 +58,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
 
     void init() override;
 
-  protected:
+  private:
 
     EventFunctionWrapper tickEvent;
 
@@ -88,7 +88,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
      * <li>Stay at PC is true.
      * </ul>
      */
-    bool isCpuDrained() const {
+    bool isDrained() {
         SimpleExecContext &t_info = *threadInfo[curThread];
 
         return t_info.thread->microPC() == 0 &&
@@ -102,8 +102,6 @@ class AtomicSimpleCPU : public BaseSimpleCPU
      * @returns true if the CPU is drained, false otherwise.
      */
     bool tryCompleteDrain();
-
-    virtual Tick sendPacket(MasterPort &port, const PacketPtr &pkt);
 
     /**
      * An AtomicCPUPort overrides the default behaviour of the
@@ -139,6 +137,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
     {
 
       public:
+
         AtomicCPUDPort(const std::string &_name, BaseSimpleCPU* _cpu)
             : AtomicCPUPort(_name, _cpu), cpu(_cpu)
         {
@@ -159,11 +158,10 @@ class AtomicSimpleCPU : public BaseSimpleCPU
     AtomicCPUPort icachePort;
     AtomicCPUDPort dcachePort;
 
-
-    RequestPtr ifetch_req;
-    RequestPtr data_read_req;
-    RequestPtr data_write_req;
-    RequestPtr data_amo_req;
+    bool fastmem;
+    Request ifetch_req;
+    Request data_read_req;
+    Request data_write_req;
 
     bool dcache_access;
     Tick dcache_latency;
@@ -195,39 +193,14 @@ class AtomicSimpleCPU : public BaseSimpleCPU
     void activateContext(ThreadID thread_num) override;
     void suspendContext(ThreadID thread_num) override;
 
-    /**
-     * Helper function used to set up the request for a single fragment of a
-     * memory access.
-     *
-     * Takes care of setting up the appropriate byte-enable mask for the
-     * fragment, given the mask for the entire memory access.
-     *
-     * @param req Pointer to the Request object to populate.
-     * @param frag_addr Start address of the fragment.
-     * @param size Total size of the memory access in bytes.
-     * @param flags Request flags.
-     * @param byte_enable Byte-enable mask for the entire memory access.
-     * @param[out] frag_size Fragment size.
-     * @param[in,out] size_left Size left to be processed in the memory access.
-     * @return True if the byte-enable mask for the fragment is not all-false.
-     */
-    bool genMemFragmentRequest(const RequestPtr& req, Addr frag_addr,
-                               int size, Request::Flags flags,
-                               const std::vector<bool>& byte_enable,
-                               int& frag_size, int& size_left) const;
-
     Fault readMem(Addr addr, uint8_t *data, unsigned size,
-                  Request::Flags flags,
-                  const std::vector<bool>& byteEnable = std::vector<bool>())
-        override;
+                  Request::Flags flags) override;
+
+    Fault initiateMemRead(Addr addr, unsigned size,
+                          Request::Flags flags) override;
 
     Fault writeMem(uint8_t *data, unsigned size,
-                   Addr addr, Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byteEnable = std::vector<bool>())
-        override;
-
-    Fault amoMem(Addr addr, uint8_t* data, unsigned size,
-                 Request::Flags flags, AtomicOpFunctor *amo_op) override;
+                   Addr addr, Request::Flags flags, uint64_t *res) override;
 
     void regProbePoints() override;
 

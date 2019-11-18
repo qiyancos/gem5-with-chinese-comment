@@ -58,7 +58,7 @@
 #include "arch/isa_traits.hh"
 #include "arch/microcode_rom.hh"
 #include "base/statistics.hh"
-#include "sim/clocked_object.hh"
+#include "mem/mem_object.hh"
 #include "sim/eventq.hh"
 #include "sim/full_system.hh"
 #include "sim/insttracer.hh"
@@ -106,7 +106,7 @@ class CPUProgressEvent : public Event
     virtual const char *description() const;
 };
 
-class BaseCPU : public ClockedObject
+class BaseCPU : public MemObject
 {
   protected:
 
@@ -175,12 +175,12 @@ class BaseCPU : public ClockedObject
     uint32_t socketId() const { return _socketId; }
 
     /** Reads this CPU's unique data requestor ID */
-    MasterID dataMasterId() const { return _dataMasterId; }
+    MasterID dataMasterId() { return _dataMasterId; }
     /** Reads this CPU's unique instruction requestor ID */
-    MasterID instMasterId() const { return _instMasterId; }
+    MasterID instMasterId() { return _instMasterId; }
 
     /**
-     * Get a port on this CPU. All CPUs have a data and
+     * Get a master port on this CPU. All CPUs have a data and
      * instruction port, and this method uses getDataPort and
      * getInstPort of the subclasses to resolve the two ports.
      *
@@ -189,8 +189,8 @@ class BaseCPU : public ClockedObject
      *
      * @return a reference to the port with the given name
      */
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    BaseMasterPort &getMasterPort(const std::string &if_name,
+                                  PortID idx = InvalidPortID) override;
 
     /** Get cpu task id */
     uint32_t taskId() const { return _taskId; }
@@ -287,9 +287,7 @@ class BaseCPU : public ClockedObject
    virtual ThreadContext *getContext(int tn) { return threadContexts[tn]; }
 
    /// Get the number of thread contexts available
-   unsigned numContexts() {
-       return static_cast<unsigned>(threadContexts.size());
-   }
+   unsigned numContexts() { return threadContexts.size(); }
 
     /// Convert ContextID to threadID
     ThreadID contextToThread(ContextID cid)
@@ -401,7 +399,7 @@ class BaseCPU : public ClockedObject
      * uniform data format for all CPU models and promotes better code
      * reuse.
      *
-     * @param cp The stream to serialize to.
+     * @param os The stream to serialize to.
      */
     void serialize(CheckpointOut &cp) const override;
 
@@ -414,13 +412,14 @@ class BaseCPU : public ClockedObject
      * promotes better code reuse.
 
      * @param cp The checkpoint use.
+     * @param section The section name of this object.
      */
     void unserialize(CheckpointIn &cp) override;
 
     /**
      * Serialize a single thread.
      *
-     * @param cp The stream to serialize to.
+     * @param os The stream to serialize to.
      * @param tid ID of the current thread.
      */
     virtual void serializeThread(CheckpointOut &cp, ThreadID tid) const {};
@@ -429,6 +428,7 @@ class BaseCPU : public ClockedObject
      * Unserialize one thread.
      *
      * @param cp The checkpoint use.
+     * @param section The section name of this thread.
      * @param tid ID of the current thread.
      */
     virtual void unserializeThread(CheckpointIn &cp, ThreadID tid) {};
@@ -487,9 +487,8 @@ class BaseCPU : public ClockedObject
      * instruction.
      *
      * @param inst Instruction that just committed
-     * @param pc PC of the instruction that just committed
      */
-    virtual void probeInstCommit(const StaticInstPtr &inst, Addr pc);
+    virtual void probeInstCommit(const StaticInstPtr &inst);
 
    protected:
     /**
@@ -510,7 +509,6 @@ class BaseCPU : public ClockedObject
      * instructions may call notify once for the entire bundle.
      */
     ProbePoints::PMUUPtr ppRetiredInsts;
-    ProbePoints::PMUUPtr ppRetiredInstsPC;
 
     /** Retired load instructions */
     ProbePoints::PMUUPtr ppRetiredLoads;

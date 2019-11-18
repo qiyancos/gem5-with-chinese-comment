@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013, 2015-2019 ARM Limited
+# Copyright (c) 2012-2013, 2015-2016 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -40,9 +40,8 @@ from m5.params import *
 from m5.proxy import *
 from m5.SimObject import SimObject
 
-from m5.objects.ArmPMU import ArmPMU
-from m5.objects.ArmSystem import SveVectorLength
-from m5.objects.ISACommon import VecRegRenameMode
+from ArmPMU import ArmPMU
+from ISACommon import VecRegRenameMode
 
 # Enum for DecoderFlavour
 class DecoderFlavour(Enum): vals = ['Generic']
@@ -88,6 +87,10 @@ class ArmISA(SimObject):
     id_aa64afr1_el1 = Param.UInt64(0x0000000000000000,
         "AArch64 Auxiliary Feature Register 1")
 
+    # Initial vector register rename mode
+    vecRegRenameMode = Param.VecRegRenameMode('Full',
+        "Initial rename mode for vecregs")
+
     # 1 CTX CMPs | 2 WRPs | 2 BRPs | !PMU | !Trace | Debug v8-A
     id_aa64dfr0_el1 = Param.UInt64(0x0000000000101006,
         "AArch64 Debug Feature Register 0")
@@ -105,19 +108,6 @@ class ArmISA(SimObject):
     # 4K | 64K | !16K | !BigEndEL0 | !SNSMem | !BigEnd | 8b ASID | 40b PA
     id_aa64mmfr0_el1 = Param.UInt64(0x0000000000f00002,
         "AArch64 Memory Model Feature Register 0")
-    # PAN | HPDS
-    id_aa64mmfr1_el1 = Param.UInt64(0x0000000000101000,
+    # Reserved for future expansion
+    id_aa64mmfr1_el1 = Param.UInt64(0x0000000000000000,
         "AArch64 Memory Model Feature Register 1")
-    id_aa64mmfr2_el1 = Param.UInt64(0x0000000000000000,
-        "AArch64 Memory Model Feature Register 2")
-
-    # Any access (read/write) to an unimplemented
-    # Implementation Defined registers is not causing an Undefined Instruction.
-    # It is rather executed as a NOP.
-    impdef_nop = Param.Bool(False,
-        "Any access to a MISCREG_IMPDEF_UNIMPL register is executed as NOP")
-
-    # This is required because in SE mode a generic System SimObject is
-    # allocated, instead of an ArmSystem
-    sve_vl_se = Param.SveVectorLength(1,
-        "SVE vector length in quadwords (128-bit), SE-mode only")

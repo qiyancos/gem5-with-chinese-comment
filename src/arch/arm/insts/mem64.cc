@@ -64,11 +64,7 @@ void
 Memory64::startDisassembly(std::ostream &os) const
 {
     printMnemonic(os, "", false);
-    if (isDataPrefetch()||isInstPrefetch()){
-        printPFflags(os, dest);
-    }else{
-        printIntReg(os, dest);
-    }
+    printIntReg(os, dest);
     ccprintf(os, ", [");
     printIntReg(os, base);
 }

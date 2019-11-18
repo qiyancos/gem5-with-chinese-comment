@@ -32,12 +32,8 @@ Import('*')
 
 SimObject('ReplacementPolicies.py')
 
-Source('bip_rp.cc')
-Source('brrip_rp.cc')
+Source('base.cc')
 Source('fifo_rp.cc')
-Source('lfu_rp.cc')
 Source('lru_rp.cc')
 Source('mru_rp.cc')
 Source('random_rp.cc')
-Source('second_chance_rp.cc')
-Source('tree_plru_rp.cc')

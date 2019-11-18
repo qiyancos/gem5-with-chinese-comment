@@ -52,7 +52,7 @@ m5Syscall(ThreadContext *tc)
     Fault fault;
     tc->syscall(tc->readIntReg(INTREG_RAX), &fault);
 
-    RegVal rflags = tc->readMiscReg(MISCREG_RFLAGS);
+    MiscReg rflags = tc->readMiscReg(MISCREG_RFLAGS);
     rflags &= ~(1 << 16);
     tc->setMiscReg(MISCREG_RFLAGS, rflags);
 }
@@ -68,13 +68,13 @@ m5PageFault(ThreadContext *tc)
 
     Process *p = tc->getProcessPtr();
     if (!p->fixupStackFault(tc->readMiscReg(MISCREG_CR2))) {
-        PortProxy &proxy = tc->getVirtProxy();
+        SETranslatingPortProxy proxy = tc->getMemProxy();
         // at this point we should have 6 values on the interrupt stack
         int size = 6;
         uint64_t is[size];
         // reading the interrupt handler stack
-        proxy.readBlob(ISTVirtAddr + PageBytes - size * sizeof(uint64_t),
-                       &is, sizeof(is));
+        proxy.readBlob(ISTVirtAddr + PageBytes - size*sizeof(uint64_t),
+                       (uint8_t *)&is, sizeof(is));
         panic("Page fault at addr %#x\n\tInterrupt handler stack:\n"
                 "\tss: %#x\n"
                 "\trsp: %#x\n"

@@ -52,13 +52,10 @@ message InstHeader {
 
 message Inst {
   required uint64 pc = 1;
-
-  // Either inst or inst_bytes must be used, but never both. That should be
-  // enforced by the oneof keyword, but that's not supported in all versions
-  // of protobuf syntax we need to work with for now.
-  optional fixed32 inst = 2;
-  optional bytes inst_bytes = 9;
-
+  oneof inst_oneof {
+    fixed32 inst = 2;
+    bytes inst_bytes = 9;
+  }
   optional uint32 nodeid = 3;
   optional uint32 cpuid = 4;
   optional fixed64 tick = 5;
@@ -101,8 +98,6 @@ message Inst {
   }
 
   optional InstType type = 6; // add, mul, fp add, load, store, simd add, …
-
-  // Deprecated:
   optional uint32 inst_flags = 7; // execution mode information
 
   // If the operation does one or more memory accesses

@@ -34,7 +34,6 @@
 #include "mem/ruby/network/garnet2.0/RoutingUnit.hh"
 
 #include "base/cast.hh"
-#include "base/logging.hh"
 #include "mem/ruby/network/garnet2.0/InputUnit.hh"
 #include "mem/ruby/network/garnet2.0/Router.hh"
 #include "mem/ruby/slicc_interface/Message.hh"
@@ -225,7 +224,7 @@ RoutingUnit::outportComputeXY(RouteInfo route,
         // x_hops == 0 and y_hops == 0
         // this is not possible
         // already checked that in outportCompute() function
-        panic("x_hops == y_hops == 0");
+        assert(0);
     }
 
     return m_outports_dirn2idx[outport_dirn];
@@ -238,5 +237,6 @@ RoutingUnit::outportComputeCustom(RouteInfo route,
                                  int inport,
                                  PortDirection inport_dirn)
 {
-    panic("%s placeholder executed", __FUNCTION__);
+    assert(0);
+    return -1;
 }

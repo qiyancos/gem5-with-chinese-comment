@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2017 ARM Limited
+# Copyright (c) 2010 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -41,8 +41,7 @@
 from m5.SimObject import SimObject
 from m5.defines import buildEnv
 from m5.params import *
-
-from m5.objects.FuncUnit import *
+from FuncUnit import *
 
 class IntALU(FUDesc):
     opList = [ OpDesc(opClass='IntAlu') ]
@@ -86,7 +85,6 @@ class SIMD_Unit(FUDesc):
                OpDesc(opClass='SimdMultAcc'),
                OpDesc(opClass='SimdShift'),
                OpDesc(opClass='SimdShiftAcc'),
-               OpDesc(opClass='SimdDiv'),
                OpDesc(opClass='SimdSqrt'),
                OpDesc(opClass='SimdFloatAdd'),
                OpDesc(opClass='SimdFloatAlu'),
@@ -96,17 +94,8 @@ class SIMD_Unit(FUDesc):
                OpDesc(opClass='SimdFloatMisc'),
                OpDesc(opClass='SimdFloatMult'),
                OpDesc(opClass='SimdFloatMultAcc'),
-               OpDesc(opClass='SimdFloatSqrt'),
-               OpDesc(opClass='SimdReduceAdd'),
-               OpDesc(opClass='SimdReduceAlu'),
-               OpDesc(opClass='SimdReduceCmp'),
-               OpDesc(opClass='SimdFloatReduceAdd'),
-               OpDesc(opClass='SimdFloatReduceCmp') ]
+               OpDesc(opClass='SimdFloatSqrt') ]
     count = 4
-
-class PredALU(FUDesc):
-    opList = [ OpDesc(opClass='SimdPredAlu') ]
-    count = 1
 
 class ReadPort(FUDesc):
     opList = [ OpDesc(opClass='MemRead'),

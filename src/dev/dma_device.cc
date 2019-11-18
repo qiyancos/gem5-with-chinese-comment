@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, 2017, 2019 ARM Limited
+ * Copyright (c) 2012, 2015, 2017 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -51,17 +51,13 @@
 #include "debug/DMA.hh"
 #include "debug/Drain.hh"
 #include "mem/port_proxy.hh"
-#include "sim/clocked_object.hh"
 #include "sim/system.hh"
 
-DmaPort::DmaPort(ClockedObject *dev, System *s,
-                 uint32_t sid, uint32_t ssid)
+DmaPort::DmaPort(MemObject *dev, System *s)
     : MasterPort(dev->name() + ".dma", dev),
-      device(dev), sys(s), masterId(s->getMasterId(dev)),
+      device(dev), sys(s), masterId(s->getMasterId(dev->name())),
       sendEvent([this]{ sendDma(); }, dev->name()),
-      pendingCount(0), inRetry(false),
-      defaultSid(sid),
-      defaultSSid(ssid)
+      pendingCount(0), inRetry(false)
 { }
 
 void
@@ -99,7 +95,8 @@ DmaPort::handleResp(PacketPtr pkt, Tick delay)
         delete state;
     }
 
-    // delete the packet
+    // delete the request that we created and also the packet
+    delete pkt->req;
     delete pkt;
 
     // we might be drained at this point, if so signal the drain event
@@ -120,7 +117,7 @@ DmaPort::recvTimingResp(PacketPtr pkt)
 }
 
 DmaDevice::DmaDevice(const Params *p)
-    : PioDevice(p), dmaPort(this, sys, p->sid, p->ssid)
+    : PioDevice(p), dmaPort(this, sys)
 { }
 
 void
@@ -151,8 +148,7 @@ DmaPort::recvReqRetry()
 
 RequestPtr
 DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
-                   uint8_t *data, uint32_t sid, uint32_t ssid, Tick delay,
-                   Request::Flags flag)
+                   uint8_t *data, Tick delay, Request::Flags flag)
 {
     // one DMA request sender state for every action, that is then
     // split into many requests and packets based on the block size,
@@ -169,13 +165,7 @@ DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
             event ? event->scheduled() : -1);
     for (ChunkGenerator gen(addr, size, sys->cacheLineSize());
          !gen.done(); gen.next()) {
-
-        req = std::make_shared<Request>(
-            gen.addr(), gen.size(), flag, masterId);
-
-        req->setStreamId(sid);
-        req->setSubStreamId(ssid);
-
+        req = new Request(gen.addr(), gen.size(), flag, masterId);
         req->taskId(ContextSwitchTaskId::DMA);
         PacketPtr pkt = new Packet(req, cmd);
 
@@ -196,14 +186,6 @@ DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
     sendDma();
 
     return req;
-}
-
-RequestPtr
-DmaPort::dmaAction(Packet::Command cmd, Addr addr, int size, Event *event,
-                   uint8_t *data, Tick delay, Request::Flags flag)
-{
-    return dmaAction(cmd, addr, size, event, data,
-                     defaultSid, defaultSSid, delay, flag);
 }
 
 void
@@ -278,14 +260,18 @@ DmaPort::sendDma()
         panic("Unknown memory mode.");
 }
 
-Port &
-DmaDevice::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort &
+DmaDevice::getMasterPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "dma") {
         return dmaPort;
     }
-    return PioDevice::getPort(if_name, idx);
+    return PioDevice::getMasterPort(if_name, idx);
 }
+
+
+
+
 
 DmaReadFifo::DmaReadFifo(DmaPort &_port, size_t size,
                          unsigned max_req_size,

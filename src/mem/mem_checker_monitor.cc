@@ -43,13 +43,14 @@
 
 #include <memory>
 
-#include "base/logging.hh"
 #include "base/output.hh"
 #include "base/trace.hh"
 #include "debug/MemCheckerMonitor.hh"
 
+using namespace std;
+
 MemCheckerMonitor::MemCheckerMonitor(Params* params)
-    : SimObject(params),
+    : MemObject(params),
       masterPort(name() + "-master", *this),
       slavePort(name() + "-slave", *this),
       warnOnly(params->warn_only),
@@ -73,15 +74,23 @@ MemCheckerMonitor::init()
         fatal("Communication monitor is not connected on both sides.\n");
 }
 
-Port &
-MemCheckerMonitor::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort&
+MemCheckerMonitor::getMasterPort(const std::string& if_name, PortID idx)
 {
     if (if_name == "master" || if_name == "mem_side") {
         return masterPort;
-    } else if (if_name == "slave" || if_name == "cpu_side") {
+    } else {
+        return MemObject::getMasterPort(if_name, idx);
+    }
+}
+
+BaseSlavePort&
+MemCheckerMonitor::getSlavePort(const std::string& if_name, PortID idx)
+{
+    if (if_name == "slave" || if_name == "cpu_side") {
         return slavePort;
     } else {
-        return SimObject::getPort(if_name, idx);
+        return MemObject::getSlavePort(if_name, idx);
     }
 }
 
@@ -122,13 +131,15 @@ MemCheckerMonitor::recvFunctionalSnoop(PacketPtr pkt)
 Tick
 MemCheckerMonitor::recvAtomic(PacketPtr pkt)
 {
-    panic("Atomic not supported");
+    assert(false && "Atomic not supported");
+    return masterPort.sendAtomic(pkt);
 }
 
 Tick
 MemCheckerMonitor::recvAtomicSnoop(PacketPtr pkt)
 {
-    panic("Atomic not supported");
+    assert(false && "Atomic not supported");
+    return slavePort.sendAtomicSnoop(pkt);
 }
 
 bool
@@ -155,7 +166,7 @@ MemCheckerMonitor::recvTimingReq(PacketPtr pkt)
         // write. For reads, we have no data yet, so it doesn't make sense to
         // allocate.
         pkt_data.reset(new uint8_t[size]);
-        pkt->writeData(pkt_data.get());
+        memcpy(pkt_data.get(), pkt->getConstPtr<uint8_t*>(), size);
     }
 
     // If a cache miss is served by a cache, a monitor near the memory
@@ -244,7 +255,7 @@ MemCheckerMonitor::recvTimingResp(PacketPtr pkt)
         // a read. For writes, we have already given the MemChecker the data on
         // the request, so it doesn't make sense to allocate on write.
         pkt_data.reset(new uint8_t[size]);
-        pkt->writeData(pkt_data.get());
+        memcpy(pkt_data.get(), pkt->getConstPtr<uint8_t*>(), size);
     }
 
     if (is_read || is_write) {

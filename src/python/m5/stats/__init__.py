@@ -71,11 +71,7 @@ def _url_factory(func):
 
     @wraps(func)
     def wrapper(url):
-        try:
-            from urllib.parse import parse_qs
-        except ImportError:
-            # Python 2 fallback
-            from urlparse import parse_qs
+        from urlparse import parse_qs
         from ast import literal_eval
 
         qs = parse_qs(url.query, keep_blank_values=True)
@@ -139,11 +135,7 @@ def addStatVisitor(url):
 
     """
 
-    try:
-        from urllib.parse import urlsplit
-    except ImportError:
-        # Python 2 fallback
-        from urlparse import urlsplit
+    from urlparse import urlsplit
 
     parsed = urlsplit(url)
 
@@ -177,7 +169,12 @@ def enable():
         if not (stat.flags & flags.display):
             stat.name = "__Stat%06d" % stat.id
 
-    stats_list.sort(key=lambda s: s.name.split('.'))
+    def less(stat1, stat2):
+        v1 = stat1.name.split('.')
+        v2 = stat2.name.split('.')
+        return v1 < v2
+
+    stats_list.sort(less)
     for stat in stats_list:
         stats_dict[stat.name] = stat
         stat.enable()

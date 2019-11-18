@@ -51,7 +51,6 @@
 #include <string>
 
 #include "base/cprintf.hh"
-#include "base/logging.hh"
 #include "base/types.hh"
 
 using namespace std;
@@ -239,7 +238,7 @@ cksum(const TcpPtr &tcp)
     } else if (Ip6Ptr(tcp.packet())) {
         return __tu_cksum6(Ip6Ptr(tcp.packet()));
     } else {
-        panic("Unrecognized IP packet format");
+        assert(0);
     }
     // Should never reach here
     return 0;
@@ -253,7 +252,7 @@ cksum(const UdpPtr &udp)
     } else if (Ip6Ptr(udp.packet())) {
         return __tu_cksum6(Ip6Ptr(udp.packet()));
     } else {
-        panic("Unrecognized IP packet format");
+        assert(0);
     }
     return 0;
 }

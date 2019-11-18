@@ -49,28 +49,28 @@ ProcessInfo::ProcessInfo(ThreadContext *_tc)
     : tc(_tc)
 {
     Addr addr = 0;
-    PortProxy &vp = tc->getVirtProxy();
+    FSTranslatingPortProxy &vp = tc->getVirtProxy();
     SymbolTable *symtab = tc->getSystemPtr()->kernelSymtab;
 
     if (!symtab->findAddress("thread_info_size", addr))
         panic("thread info not compiled into kernel\n");
-    thread_info_size = vp.read<int32_t>(addr, GuestByteOrder);
+    thread_info_size = vp.readGtoH<int32_t>(addr);
 
     if (!symtab->findAddress("task_struct_size", addr))
         panic("thread info not compiled into kernel\n");
-    task_struct_size = vp.read<int32_t>(addr, GuestByteOrder);
+    task_struct_size = vp.readGtoH<int32_t>(addr);
 
     if (!symtab->findAddress("thread_info_task", addr))
         panic("thread info not compiled into kernel\n");
-    task_off = vp.read<int32_t>(addr, GuestByteOrder);
+    task_off = vp.readGtoH<int32_t>(addr);
 
     if (!symtab->findAddress("task_struct_pid", addr))
         panic("thread info not compiled into kernel\n");
-    pid_off = vp.read<int32_t>(addr, GuestByteOrder);
+    pid_off = vp.readGtoH<int32_t>(addr);
 
     if (!symtab->findAddress("task_struct_comm", addr))
         panic("thread info not compiled into kernel\n");
-    name_off = vp.read<int32_t>(addr, GuestByteOrder);
+    name_off = vp.readGtoH<int32_t>(addr);
 }
 
 Addr
@@ -82,8 +82,8 @@ ProcessInfo::task(Addr ksp) const
 
     Addr tsk;
 
-    PortProxy &vp = tc->getVirtProxy();
-    tsk = vp.read<Addr>(base + task_off, GuestByteOrder);
+    FSTranslatingPortProxy &vp = tc->getVirtProxy();
+    tsk = vp.readGtoH<Addr>(base + task_off);
 
     return tsk;
 }
@@ -97,8 +97,8 @@ ProcessInfo::pid(Addr ksp) const
 
     uint16_t pd;
 
-    PortProxy &vp = tc->getVirtProxy();
-    pd = vp.read<uint16_t>(task + pid_off, GuestByteOrder);
+    FSTranslatingPortProxy &vp = tc->getVirtProxy();
+    pd = vp.readGtoH<uint16_t>(task + pid_off);
 
     return pd;
 }
@@ -111,7 +111,7 @@ ProcessInfo::name(Addr ksp) const
         return "console";
 
     char comm[256];
-    tc->getVirtProxy().readString(comm, task + name_off, sizeof(comm));
+    CopyStringOut(tc, comm, task + name_off, sizeof(comm));
     if (!comm[0])
         return "startup";
 
@@ -143,7 +143,7 @@ StackTrace::trace(ThreadContext *_tc, bool is_call)
     bool usermode =
         (tc->readMiscRegNoEffect(IPR_DTB_CM) & 0x18) != 0;
 
-    Addr pc = tc->pcState().npc();
+    Addr pc = tc->pcState().pc();
     bool kernel = sys->kernelStart <= pc && pc <= sys->kernelEnd;
 
     if (usermode) {
@@ -311,7 +311,8 @@ StackTrace::decodePrologue(Addr sp, Addr callpc, Addr func, int &size,
     ra = 0;
 
     for (Addr pc = func; pc < callpc; pc += sizeof(MachInst)) {
-        MachInst inst = tc->getVirtProxy().read<MachInst>(pc);
+        MachInst inst;
+        CopyOut(tc, (uint8_t *)&inst, pc, sizeof(MachInst));
 
         int reg, disp;
         if (decodeStack(inst, disp)) {
@@ -322,7 +323,7 @@ StackTrace::decodePrologue(Addr sp, Addr callpc, Addr func, int &size,
             size += disp;
         } else if (decodeSave(inst, reg, disp)) {
             if (!ra && reg == ReturnAddressReg) {
-                ra = tc->getVirtProxy().read<Addr>(sp + disp);
+                CopyOut(tc, (uint8_t *)&ra, sp + disp, sizeof(Addr));
                 if (!ra) {
                     // panic("no return address value pc=%#x\n", pc);
                     return false;

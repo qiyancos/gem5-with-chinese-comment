@@ -49,6 +49,7 @@
 
 #include "arch/x86/intmessage.hh"
 #include "arch/x86/x86_traits.hh"
+#include "mem/mem_object.hh"
 #include "mem/mport.hh"
 #include "params/X86IntLine.hh"
 #include "params/X86IntSinkPin.hh"
@@ -67,7 +68,7 @@ class IntDevice
         IntDevice * device;
 
       public:
-        IntSlavePort(const std::string& _name, SimObject* _parent,
+        IntSlavePort(const std::string& _name, MemObject* _parent,
                      IntDevice* dev) :
             MessageSlavePort(_name, _parent), device(dev)
         {
@@ -91,7 +92,7 @@ class IntDevice
         IntDevice* device;
         Tick latency;
       public:
-        IntMasterPort(const std::string& _name, SimObject* _parent,
+        IntMasterPort(const std::string& _name, MemObject* _parent,
                       IntDevice* dev, Tick _latency) :
             MessageMasterPort(_name, _parent), device(dev), latency(_latency)
         {
@@ -111,7 +112,7 @@ class IntDevice
     IntMasterPort intMasterPort;
 
   public:
-    IntDevice(SimObject * parent, Tick latency = 0) :
+    IntDevice(MemObject * parent, Tick latency = 0) :
         intMasterPort(parent->name() + ".int_master", parent, this, latency)
     {
     }

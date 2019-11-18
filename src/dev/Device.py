@@ -42,10 +42,9 @@
 from m5.params import *
 from m5.proxy import *
 from m5.util.fdthelper import *
+from MemObject import MemObject
 
-from m5.objects.ClockedObject import ClockedObject
-
-class PioDevice(ClockedObject):
+class PioDevice(MemObject):
     type = 'PioDevice'
     cxx_header = "dev/io_device.hh"
     abstract = True
@@ -83,13 +82,6 @@ class DmaDevice(PioDevice):
     cxx_header = "dev/dma_device.hh"
     abstract = True
     dma = MasterPort("DMA port")
-
-    sid = Param.Unsigned(0,
-        "Stream identifier used by an IOMMU to distinguish amongst "
-        "several devices attached to it")
-    ssid = Param.Unsigned(0,
-        "Substream identifier used by an IOMMU to distinguish amongst "
-        "several devices attached to it")
 
 
 class IsaFake(BasicPioDevice):

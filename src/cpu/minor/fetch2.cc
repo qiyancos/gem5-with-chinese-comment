@@ -420,8 +420,6 @@ Fetch2::evaluate()
                         loadInstructions++;
                     else if (decoded_inst->isStore())
                         storeInstructions++;
-                    else if (decoded_inst->isAtomic())
-                        amoInstructions++;
                     else if (decoded_inst->isVector())
                         vecInstructions++;
                     else if (decoded_inst->isFloating())
@@ -634,11 +632,6 @@ Fetch2::regStats()
     storeInstructions
         .name(name() + ".store_instructions")
         .desc("Number of memory store instructions successfully decoded")
-        .flags(total);
-
-    amoInstructions
-        .name(name() + ".amo_instructions")
-        .desc("Number of memory atomic instructions successfully decoded")
         .flags(total);
 }
 

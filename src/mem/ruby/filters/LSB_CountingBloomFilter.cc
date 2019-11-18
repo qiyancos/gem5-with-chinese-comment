@@ -28,13 +28,21 @@
 
 #include "mem/ruby/filters/LSB_CountingBloomFilter.hh"
 
-#include "base/bitfield.hh"
-#include "params/LSB_CountingBloomFilter.hh"
+#include "base/intmath.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
-LSB_CountingBloomFilter::LSB_CountingBloomFilter(
-    const LSB_CountingBloomFilterParams* p)
-    : AbstractBloomFilter(p), maxValue(p->max_value)
+using namespace std;
+
+LSB_CountingBloomFilter::LSB_CountingBloomFilter(int head, int tail)
 {
+    m_filter_size = head;
+    m_filter_size_bits = floorLog2(m_filter_size);
+
+    m_count = tail;
+    m_count_bits = floorLog2(m_count);
+
+    m_filter.resize(m_filter_size);
+    clear();
 }
 
 LSB_CountingBloomFilter::~LSB_CountingBloomFilter()
@@ -42,35 +50,102 @@ LSB_CountingBloomFilter::~LSB_CountingBloomFilter()
 }
 
 void
+LSB_CountingBloomFilter::clear()
+{
+    for (int i = 0; i < m_filter_size; i++) {
+        m_filter[i] = 0;
+    }
+}
+
+void
+LSB_CountingBloomFilter::increment(Addr addr)
+{
+    int i = get_index(addr);
+    if (m_filter[i] < m_count)
+        m_filter[i] += 1;
+}
+
+
+void
+LSB_CountingBloomFilter::decrement(Addr addr)
+{
+    int i = get_index(addr);
+    if (m_filter[i] > 0)
+        m_filter[i] -= 1;
+}
+
+void
+LSB_CountingBloomFilter::merge(AbstractBloomFilter * other_filter)
+{
+    // TODO
+}
+
+void
 LSB_CountingBloomFilter::set(Addr addr)
 {
-    const int i = hash(addr);
-    if (filter[i] < maxValue)
-        filter[i] += 1;
+    // TODO
 }
 
 void
 LSB_CountingBloomFilter::unset(Addr addr)
 {
-    const int i = hash(addr);
-    if (filter[i] > 0)
-        filter[i] -= 1;
+    // TODO
+}
+
+bool
+LSB_CountingBloomFilter::isSet(Addr addr)
+{
+    // TODO
+    return false;
 }
 
 int
-LSB_CountingBloomFilter::getCount(Addr addr) const
+LSB_CountingBloomFilter::getCount(Addr addr)
 {
-    return filter[hash(addr)];
+    return m_filter[get_index(addr)];
 }
 
 int
-LSB_CountingBloomFilter::hash(Addr addr) const
+LSB_CountingBloomFilter::getTotalCount()
 {
-    return bits(addr, offsetBits + sizeBits - 1, offsetBits);
+    int count = 0;
+
+    for (int i = 0; i < m_filter_size; i++) {
+        count += m_filter[i];
+    }
+    return count;
 }
 
-LSB_CountingBloomFilter*
-LSB_CountingBloomFilterParams::create()
+int
+LSB_CountingBloomFilter::getIndex(Addr addr)
 {
-    return new LSB_CountingBloomFilter(this);
+    return get_index(addr);
 }
+
+void
+LSB_CountingBloomFilter::print(ostream& out) const
+{
+}
+
+int
+LSB_CountingBloomFilter::readBit(const int index)
+{
+    return 0;
+    // TODO
+}
+
+void
+LSB_CountingBloomFilter::writeBit(const int index, const int value)
+{
+    // TODO
+}
+
+int
+LSB_CountingBloomFilter::get_index(Addr addr)
+{
+    return bitSelect(addr, RubySystem::getBlockSizeBits(),
+                     RubySystem::getBlockSizeBits() +
+                     m_filter_size_bits - 1);
+}
+
+

@@ -49,10 +49,20 @@
 #include "mem/port.hh"
 
 #include "base/trace.hh"
-#include "sim/sim_object.hh"
+#include "mem/mem_object.hh"
 
-BaseMasterPort::BaseMasterPort(const std::string &name, PortID _id)
-    : Port(name, _id), _baseSlavePort(NULL)
+Port::Port(const std::string &_name, MemObject& _owner, PortID _id)
+    : portName(_name), id(_id), owner(_owner)
+{
+}
+
+Port::~Port()
+{
+}
+
+BaseMasterPort::BaseMasterPort(const std::string& name, MemObject* owner,
+                               PortID _id)
+    : Port(name, *owner, _id), _baseSlavePort(NULL)
 {
 }
 
@@ -70,8 +80,15 @@ BaseMasterPort::getSlavePort() const
     return *_baseSlavePort;
 }
 
-BaseSlavePort::BaseSlavePort(const std::string &name, PortID _id)
-    : Port(name, _id), _baseMasterPort(NULL)
+bool
+BaseMasterPort::isConnected() const
+{
+    return _baseSlavePort != NULL;
+}
+
+BaseSlavePort::BaseSlavePort(const std::string& name, MemObject* owner,
+                             PortID _id)
+    : Port(name, *owner, _id), _baseMasterPort(NULL)
 {
 }
 
@@ -89,11 +106,17 @@ BaseSlavePort::getMasterPort() const
     return *_baseMasterPort;
 }
 
+bool
+BaseSlavePort::isConnected() const
+{
+    return _baseMasterPort != NULL;
+}
+
 /**
  * Master port
  */
-MasterPort::MasterPort(const std::string& name, SimObject* _owner, PortID _id)
-    : BaseMasterPort(name, _id), _slavePort(NULL), owner(*_owner)
+MasterPort::MasterPort(const std::string& name, MemObject* owner, PortID _id)
+    : BaseMasterPort(name, owner, _id), _slavePort(NULL)
 {
 }
 
@@ -102,21 +125,24 @@ MasterPort::~MasterPort()
 }
 
 void
-MasterPort::bind(Port &peer)
+MasterPort::bind(BaseSlavePort& slave_port)
 {
-    auto *slave_port = dynamic_cast<SlavePort *>(&peer);
-    if (!slave_port) {
-        fatal("Attempt to bind port %s to non-slave port %s.",
-                name(), peer.name());
-    }
     // bind on the level of the base ports
-    _baseSlavePort = slave_port;
+    _baseSlavePort = &slave_port;
 
-    // master port keeps track of the slave port
-    _slavePort = slave_port;
-    _connected = true;
-    // slave port also keeps track of master port
-    _slavePort->slaveBind(*this);
+    // also attempt to base the slave to the appropriate type
+    SlavePort* cast_slave_port = dynamic_cast<SlavePort*>(&slave_port);
+
+    // if this port is compatible, then proceed with the binding
+    if (cast_slave_port != NULL) {
+        // master port keeps track of the slave port
+        _slavePort = cast_slave_port;
+        // slave port also keeps track of master port
+        _slavePort->bind(*this);
+    } else {
+        fatal("Master port %s cannot bind to %s\n", name(),
+              slave_port.name());
+    }
 }
 
 void
@@ -125,9 +151,8 @@ MasterPort::unbind()
     if (_slavePort == NULL)
         panic("Attempting to unbind master port %s that is not connected\n",
               name());
-    _slavePort->slaveUnbind();
+    _slavePort->unbind();
     _slavePort = NULL;
-    _connected = false;
     _baseSlavePort = NULL;
 }
 
@@ -137,13 +162,52 @@ MasterPort::getAddrRanges() const
     return _slavePort->getAddrRanges();
 }
 
+Tick
+MasterPort::sendAtomic(PacketPtr pkt)
+{
+    assert(pkt->isRequest());
+    return _slavePort->recvAtomic(pkt);
+}
+
+void
+MasterPort::sendFunctional(PacketPtr pkt)
+{
+    assert(pkt->isRequest());
+    return _slavePort->recvFunctional(pkt);
+}
+
+bool
+MasterPort::sendTimingReq(PacketPtr pkt)
+{
+    assert(pkt->isRequest());
+    return _slavePort->recvTimingReq(pkt);
+}
+
+bool
+MasterPort::tryTiming(PacketPtr pkt) const
+{
+  assert(pkt->isRequest());
+  return _slavePort->tryTiming(pkt);
+}
+
+bool
+MasterPort::sendTimingSnoopResp(PacketPtr pkt)
+{
+    assert(pkt->isResponse());
+    return _slavePort->recvTimingSnoopResp(pkt);
+}
+
+void
+MasterPort::sendRetryResp()
+{
+    _slavePort->recvRespRetry();
+}
+
 void
 MasterPort::printAddr(Addr a)
 {
-    auto req = std::make_shared<Request>(
-        a, 1, 0, Request::funcMasterId);
-
-    Packet pkt(req, MemCmd::PrintReq);
+    Request req(a, 1, 0, Request::funcMasterId);
+    Packet pkt(&req, MemCmd::PrintReq);
     Packet::PrintReqState prs(std::cerr);
     pkt.senderState = &prs;
 
@@ -153,9 +217,8 @@ MasterPort::printAddr(Addr a)
 /**
  * Slave port
  */
-SlavePort::SlavePort(const std::string& name, SimObject* _owner, PortID id)
-    : BaseSlavePort(name, id), _masterPort(NULL), defaultBackdoorWarned(false),
-    owner(*_owner)
+SlavePort::SlavePort(const std::string& name, MemObject* owner, PortID id)
+    : BaseSlavePort(name, owner, id), _masterPort(NULL)
 {
 }
 
@@ -164,27 +227,55 @@ SlavePort::~SlavePort()
 }
 
 void
-SlavePort::slaveUnbind()
+SlavePort::unbind()
 {
     _baseMasterPort = NULL;
     _masterPort = NULL;
-    _connected = false;
 }
 
 void
-SlavePort::slaveBind(MasterPort& master_port)
+SlavePort::bind(MasterPort& master_port)
 {
     _baseMasterPort = &master_port;
     _masterPort = &master_port;
-    _connected = true;
 }
 
 Tick
-SlavePort::recvAtomicBackdoor(PacketPtr pkt, MemBackdoorPtr &backdoor)
+SlavePort::sendAtomicSnoop(PacketPtr pkt)
 {
-    if (!defaultBackdoorWarned) {
-        warn("Port %s doesn't support requesting a back door.", name());
-        defaultBackdoorWarned = true;
-    }
-    return recvAtomic(pkt);
+    assert(pkt->isRequest());
+    return _masterPort->recvAtomicSnoop(pkt);
+}
+
+void
+SlavePort::sendFunctionalSnoop(PacketPtr pkt)
+{
+    assert(pkt->isRequest());
+    return _masterPort->recvFunctionalSnoop(pkt);
+}
+
+bool
+SlavePort::sendTimingResp(PacketPtr pkt)
+{
+    assert(pkt->isResponse());
+    return _masterPort->recvTimingResp(pkt);
+}
+
+void
+SlavePort::sendTimingSnoopReq(PacketPtr pkt)
+{
+    assert(pkt->isRequest());
+    _masterPort->recvTimingSnoopReq(pkt);
+}
+
+void
+SlavePort::sendRetryReq()
+{
+    _masterPort->recvReqRetry();
+}
+
+void
+SlavePort::sendRetrySnoopResp()
+{
+    _masterPort->recvRetrySnoopResp();
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2013, 2019 ARM Limited
+ * Copyright (c) 2010-2013 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -447,9 +447,6 @@ uint32_t unsignedRSqrtEstimate(uint32_t op);
 float fpRecipEstimate(FPSCR &fpscr, float op);
 uint32_t unsignedRecipEstimate(uint32_t op);
 
-FPSCR
-fpStandardFPSCRValue(const FPSCR &fpscr);
-
 class VfpMacroOp : public PredMacroOp
 {
   public:
@@ -893,8 +890,7 @@ class FpCondCompRegOp : public FpOp
         op1(_op1), op2(_op2), condCode(_condCode), defCc(_defCc)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class FpCondSelOp : public FpOp
@@ -910,8 +906,7 @@ class FpCondSelOp : public FpOp
         dest(_dest), op1(_op1), op2(_op2), condCode(_condCode)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class FpRegRegOp : public FpOp
@@ -928,8 +923,7 @@ class FpRegRegOp : public FpOp
         setVfpMicroFlags(mode, flags);
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class FpRegImmOp : public FpOp
@@ -946,8 +940,7 @@ class FpRegImmOp : public FpOp
         setVfpMicroFlags(mode, flags);
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class FpRegRegImmOp : public FpOp
@@ -965,8 +958,7 @@ class FpRegRegImmOp : public FpOp
         setVfpMicroFlags(mode, flags);
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class FpRegRegRegOp : public FpOp
@@ -984,8 +976,7 @@ class FpRegRegRegOp : public FpOp
         setVfpMicroFlags(mode, flags);
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class FpRegRegRegCondOp : public FpOp
@@ -1006,8 +997,7 @@ class FpRegRegRegCondOp : public FpOp
         setVfpMicroFlags(mode, flags);
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class FpRegRegRegRegOp : public FpOp
@@ -1027,8 +1017,7 @@ class FpRegRegRegRegOp : public FpOp
         setVfpMicroFlags(mode, flags);
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class FpRegRegRegImmOp : public FpOp
@@ -1049,8 +1038,7 @@ class FpRegRegRegImmOp : public FpOp
         setVfpMicroFlags(mode, flags);
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 }

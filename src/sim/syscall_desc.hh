@@ -56,7 +56,7 @@ class SyscallReturn;
 class ThreadContext;
 
 SyscallReturn unimplementedFunc(SyscallDesc *desc, int num,
-                                ThreadContext *tc);
+    Process *p, ThreadContext *tc);
 
 /**
  * This class provides the wrapper interface for the system call
@@ -68,7 +68,7 @@ class SyscallDesc {
   public:
     /** Typedef the function pointer here to clean up code below */
     typedef SyscallReturn (*SyscallExecutor)(SyscallDesc*, int num,
-                                             ThreadContext*);
+                                             Process*, ThreadContext*);
 
     SyscallDesc(const char *name,
                 SyscallExecutor sys_exec=unimplementedFunc, int flags=0)
@@ -98,7 +98,8 @@ class SyscallDesc {
      * @param proc Handle for the owning Process to pass information
      * @param tc Handle for owning ThreadContext to pass information
      */
-    void doSyscall(int callnum, ThreadContext *tc, Fault *fault);
+    void doSyscall(int callnum, Process *proc, ThreadContext *tc,
+                   Fault *fault);
 
     /**
      * Return false if WarnOnce is set and a warning has already been issued.

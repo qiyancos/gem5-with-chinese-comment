@@ -32,7 +32,7 @@
 from m5.SimObject import SimObject
 from m5.params import *
 
-from m5.objects.BaseTLB import BaseTLB
+from BaseTLB import BaseTLB
 
 class MipsTLB(BaseTLB):
     type = 'MipsTLB'

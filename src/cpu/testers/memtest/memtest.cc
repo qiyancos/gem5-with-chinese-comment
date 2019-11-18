@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019 ARM Limited
+ * Copyright (c) 2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -48,6 +48,7 @@
 #include "base/statistics.hh"
 #include "base/trace.hh"
 #include "debug/MemTest.hh"
+#include "mem/mem_object.hh"
 #include "sim/sim_exit.hh"
 #include "sim/stats.hh"
 #include "sim/system.hh"
@@ -84,7 +85,7 @@ MemTest::sendPkt(PacketPtr pkt) {
 }
 
 MemTest::MemTest(const Params *p)
-    : ClockedObject(p),
+    : MemObject(p),
       tickEvent([this]{ tick(); }, name()),
       noRequestEvent([this]{ noRequest(); }, name()),
       noResponseEvent([this]{ noResponse(); }, name()),
@@ -95,7 +96,7 @@ MemTest::MemTest(const Params *p)
       percentReads(p->percent_reads),
       percentFunctional(p->percent_functional),
       percentUncacheable(p->percent_uncacheable),
-      masterId(p->system->getMasterId(this)),
+      masterId(p->system->getMasterId(name())),
       blockSize(p->system->cacheLineSize()),
       blockAddrMask(blockSize - 1),
       progressInterval(p->progress_interval),
@@ -120,21 +121,22 @@ MemTest::MemTest(const Params *p)
     // kick things into action
     schedule(tickEvent, curTick());
     schedule(noRequestEvent, clockEdge(progressCheck));
+    schedule(noResponseEvent, clockEdge(progressCheck));
 }
 
-Port &
-MemTest::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort &
+MemTest::getMasterPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "port")
         return port;
     else
-        return ClockedObject::getPort(if_name, idx);
+        return MemObject::getMasterPort(if_name, idx);
 }
 
 void
 MemTest::completeRequest(PacketPtr pkt, bool functional)
 {
-    const RequestPtr &req = pkt->req;
+    Request *req = pkt->req;
     assert(req->getSize() == 1);
 
     // this address is no longer outstanding
@@ -185,21 +187,19 @@ MemTest::completeRequest(PacketPtr pkt, bool functional)
         }
     }
 
+    delete pkt->req;
+
     // the packet will delete the data
     delete pkt;
 
-    // finally shift the response timeout forward if we are still
-    // expecting responses; deschedule it otherwise
-    if (outstandingAddrs.size() != 0)
-        reschedule(noResponseEvent, clockEdge(progressCheck));
-    else if (noResponseEvent.scheduled())
-        deschedule(noResponseEvent);
+    // finally shift the response timeout forward
+    reschedule(noResponseEvent, clockEdge(progressCheck), true);
 }
 
 void
 MemTest::regStats()
 {
-    ClockedObject::regStats();
+    MemObject::regStats();
 
     using namespace Stats;
 
@@ -246,7 +246,7 @@ MemTest::tick()
 
     bool do_functional = (random_mt.random(0, 100) < percentFunctional) &&
         !uncacheable;
-    RequestPtr req = std::make_shared<Request>(paddr, 1, flags, masterId);
+    Request *req = new Request(paddr, 1, flags, masterId);
     req->setContext(id);
 
     outstandingAddrs.insert(paddr);
@@ -306,10 +306,6 @@ MemTest::tick()
     } else {
         DPRINTF(MemTest, "Waiting for retry\n");
     }
-
-    // Schedule noResponseEvent now if we are expecting a response
-    if (!noResponseEvent.scheduled() && (outstandingAddrs.size() != 0))
-        schedule(noResponseEvent, clockEdge(progressCheck));
 }
 
 void
@@ -334,7 +330,6 @@ MemTest::recvRetry()
         retryPkt = nullptr;
         // kick things into action again
         schedule(tickEvent, clockEdge(interval));
-        reschedule(noRequestEvent, clockEdge(progressCheck), true);
     }
 }
 

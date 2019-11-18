@@ -53,6 +53,7 @@
 
 #include <gem5/asm/generic/m5ops.h>
 
+#include "arch/kernel_stats.hh"
 #include "arch/pseudo_inst.hh"
 #include "arch/utility.hh"
 #include "arch/vtophys.hh"
@@ -67,7 +68,6 @@
 #include "debug/Quiesce.hh"
 #include "debug/WorkItems.hh"
 #include "dev/net/dist_iface.hh"
-#include "kern/kernel_stats.hh"
 #include "params/BaseCPU.hh"
 #include "sim/full_system.hh"
 #include "sim/initparam_keys.hh"
@@ -377,8 +377,9 @@ addsymbol(ThreadContext *tc, Addr addr, Addr symbolAddr)
     if (!FullSystem)
         panicFsOnlyPseudoInst("addSymbol");
 
-    std::string symbol;
-    tc->getVirtProxy().readString(symbol, symbolAddr);
+    char symb[100];
+    CopyStringOut(tc, symb, symbolAddr, 100);
+    std::string symbol(symb);
 
     DPRINTF(Loader, "Loaded symbol: %s @ %#llx\n", symbol, addr);
 
@@ -524,7 +525,7 @@ readfile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset)
     }
 
     close(fd);
-    tc->getVirtProxy().writeBlob(vaddr, buf, result);
+    CopyIn(tc, vaddr, buf, result);
     delete [] buf;
     return result;
 }
@@ -537,8 +538,10 @@ writefile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset,
             vaddr, len, offset, filename_addr);
 
     // copy out target filename
+    char fn[100];
     std::string filename;
-    tc->getVirtProxy().readString(filename, filename_addr);
+    CopyStringOut(tc, fn, filename_addr, 100);
+    filename = std::string(fn);
 
     OutputStream *out;
     if (offset == 0) {
@@ -560,7 +563,7 @@ writefile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset,
 
     // copy out data and write to file
     char *buf = new char[len];
-    tc->getVirtProxy().readBlob(vaddr, buf, len);
+    CopyOut(tc, buf, vaddr, len);
     os->write(buf, len);
     if (os->fail() || os->bad())
         panic("Error while doing writefile!\n");

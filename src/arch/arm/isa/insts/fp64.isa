@@ -1,6 +1,6 @@
 // -*- mode:c++ -*-
 
-// Copyright (c) 2012-2013, 2016-2018 ARM Limited
+// Copyright (c) 2012-2013, 2016 ARM Limited
 // All rights reserved
 //
 // The license below extends only to copyright in the software and shall
@@ -44,11 +44,6 @@ let {{
     decoder_output = ""
     exec_output = ""
 
-    zeroSveVecRegUpperPartCode = '''
-        ArmISA::ISA::zeroSveVecRegUpperPart(%s,
-            ArmStaticInst::getCurSveVecLen<uint64_t>(xc->tcBase()));
-    '''
-
     fmovImmSCode = vfp64EnabledCheckCode + '''
         AA64FpDestP0_uw = bits(imm, 31, 0);
         AA64FpDestP1_uw = 0;
@@ -58,7 +53,6 @@ let {{
     fmovImmSIop = InstObjParams("fmov", "FmovImmS", "FpRegImmOp",
                                 { "code": fmovImmSCode,
                                   "op_class": "FloatMiscOp" }, [])
-    fmovImmSIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
     header_output  += FpRegImmOpDeclare.subst(fmovImmSIop);
     decoder_output += FpRegImmOpConstructor.subst(fmovImmSIop);
     exec_output    += BasicExecute.subst(fmovImmSIop);
@@ -72,7 +66,6 @@ let {{
     fmovImmDIop = InstObjParams("fmov", "FmovImmD", "FpRegImmOp",
                                 { "code": fmovImmDCode,
                                   "op_class": "FloatMiscOp" }, [])
-    fmovImmDIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
     header_output  += FpRegImmOpDeclare.subst(fmovImmDIop);
     decoder_output += AA64FpRegImmOpConstructor.subst(fmovImmDIop);
     exec_output    += BasicExecute.subst(fmovImmDIop);
@@ -86,7 +79,6 @@ let {{
     fmovRegSIop = InstObjParams("fmov", "FmovRegS", "FpRegRegOp",
                                 { "code": fmovRegSCode,
                                   "op_class": "FloatMiscOp" }, [])
-    fmovRegSIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
     header_output  += FpRegRegOpDeclare.subst(fmovRegSIop);
     decoder_output += AA64FpRegRegOpConstructor.subst(fmovRegSIop);
     exec_output    += BasicExecute.subst(fmovRegSIop);
@@ -100,7 +92,6 @@ let {{
     fmovRegDIop = InstObjParams("fmov", "FmovRegD", "FpRegRegOp",
                                 { "code": fmovRegDCode,
                                   "op_class": "FloatMiscOp" }, [])
-    fmovRegDIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
     header_output  += FpRegRegOpDeclare.subst(fmovRegDIop);
     decoder_output += AA64FpRegRegOpConstructor.subst(fmovRegDIop);
     exec_output    += BasicExecute.subst(fmovRegDIop);
@@ -114,8 +105,6 @@ let {{
     fmovCoreRegWIop = InstObjParams("fmov", "FmovCoreRegW", "FpRegRegOp",
                                     { "code": fmovCoreRegWCode,
                                       "op_class": "FloatMiscOp" }, [])
-    fmovCoreRegWIop.snippets["code"] += zeroSveVecRegUpperPartCode % \
-        "AA64FpDest"
     header_output  += FpRegRegOpDeclare.subst(fmovCoreRegWIop);
     decoder_output += AA64FpRegRegOpConstructor.subst(fmovCoreRegWIop);
     exec_output    += BasicExecute.subst(fmovCoreRegWIop);
@@ -129,8 +118,6 @@ let {{
     fmovCoreRegXIop = InstObjParams("fmov", "FmovCoreRegX", "FpRegRegOp",
                                     { "code": fmovCoreRegXCode,
                                       "op_class": "FloatMiscOp" }, [])
-    fmovCoreRegXIop.snippets["code"] += zeroSveVecRegUpperPartCode % \
-        "AA64FpDest"
     header_output  += FpRegRegOpDeclare.subst(fmovCoreRegXIop);
     decoder_output += AA64FpRegRegOpConstructor.subst(fmovCoreRegXIop);
     exec_output    += BasicExecute.subst(fmovCoreRegXIop);
@@ -144,8 +131,6 @@ let {{
     fmovUCoreRegXIop = InstObjParams("fmov", "FmovUCoreRegX", "FpRegRegOp",
                                     { "code": fmovUCoreRegXCode,
                                       "op_class": "FloatMiscOp" }, [])
-    fmovUCoreRegXIop.snippets["code"] += zeroSveVecRegUpperPartCode % \
-        "AA64FpDest"
     header_output  += FpRegRegOpDeclare.subst(fmovUCoreRegXIop);
     decoder_output += AA64FpRegRegOpConstructor.subst(fmovUCoreRegXIop);
     exec_output    += BasicExecute.subst(fmovUCoreRegXIop);
@@ -186,34 +171,6 @@ let {{
     header_output = ""
     decoder_output = ""
     exec_output = ""
-
-    halfIntConvCode = vfp64EnabledCheckCode + '''
-        FPSCR fpscr = (FPSCR) FpscrExc;
-        uint16_t cOp1  = AA64FpOp1P0_uw;
-        uint16_t cDest = %(op)s;
-        AA64FpDestP0_uw = cDest;
-        AA64FpDestP1_uw = 0;
-        AA64FpDestP2_uw = 0;
-        AA64FpDestP3_uw = 0;
-        FpscrExc = fpscr;
-    '''
-
-    halfIntConvCode2 = vfp64EnabledCheckCode + '''
-        FPSCR fpscr = (FPSCR) FpscrExc;
-        uint16_t cOp1  = AA64FpOp1P0_uw;
-        uint16_t cOp2  = AA64FpOp2P0_uw;
-        uint16_t cDest = %(op)s;
-        AA64FpDestP0_uw = cDest;
-        AA64FpDestP1_uw = 0;
-        AA64FpDestP2_uw = 0;
-        AA64FpDestP3_uw = 0;
-        FpscrExc = fpscr;
-    '''
-
-    halfBinOp = "binaryOp(fpscr, AA64FpOp1P0, AA64FpOp2P0," + \
-                "%(func)s, fpscr.fz, fpscr.dn, fpscr.rMode)"
-    halfUnaryOp = "unaryOp(fpscr, AA64FpOp1P0," + \
-                  "%(func)s, fpscr.fz, fpscr.rMode)"
 
     singleIntConvCode = vfp64EnabledCheckCode + '''
         FPSCR fpscr = (FPSCR) FpscrExc;
@@ -275,33 +232,13 @@ let {{
                 fpscr.fz, fpscr.rMode)
     '''
 
-    def buildTernaryFpOp(name, opClass, hOp, sOp, dOp):
+    def buildTernaryFpOp(name, opClass, sOp, dOp):
         global header_output, decoder_output, exec_output
-        for suffix in "D", "S", "H":
+        for isDouble in True, False:
             code = vfp64EnabledCheckCode + '''
                 FPSCR fpscr = (FPSCR) FpscrExc;
             '''
-            if suffix == "H":
-                code += '''
-                    uint16_t cOp1 = AA64FpOp1P0_uw;
-                    uint16_t cOp2 = AA64FpOp2P0_uw;
-                    uint16_t cOp3 = AA64FpOp3P0_uw;
-                    uint16_t cDest;
-                ''' "cDest = " + hOp + ";" + '''
-                    AA64FpDestP0_uw = cDest;
-                    AA64FpDestP1_uw = 0;
-                '''
-            elif suffix == "S":
-                code += '''
-                    uint32_t cOp1 = AA64FpOp1P0_uw;
-                    uint32_t cOp2 = AA64FpOp2P0_uw;
-                    uint32_t cOp3 = AA64FpOp3P0_uw;
-                    uint32_t cDest;
-                ''' "cDest = " + sOp + ";" + '''
-                    AA64FpDestP0_uw = cDest;
-                    AA64FpDestP1_uw = 0;
-                '''
-            elif suffix == "D":
+            if isDouble:
                 code += '''
                     uint64_t cOp1 = AA64FpOp1P0_uw | (uint64_t)AA64FpOp1P1_uw << 32;
                     uint64_t cOp2 = AA64FpOp2P0_uw | (uint64_t)AA64FpOp2P1_uw << 32;
@@ -311,164 +248,135 @@ let {{
                     AA64FpDestP0_uw = cDest;
                     AA64FpDestP1_uw = cDest >> 32;
                 '''
+            else:
+                code += '''
+                    uint32_t cOp1 = AA64FpOp1P0_uw;
+                    uint32_t cOp2 = AA64FpOp2P0_uw;
+                    uint32_t cOp3 = AA64FpOp3P0_uw;
+                    uint32_t cDest;
+                ''' "cDest = " + sOp + ";" + '''
+                    AA64FpDestP0_uw = cDest;
+                    AA64FpDestP1_uw = 0;
+                '''
             code += '''
                 AA64FpDestP2_uw = 0;
                 AA64FpDestP3_uw = 0;
                 FpscrExc = fpscr;
             '''
 
-            iop = InstObjParams(name.lower(), name + suffix,
+            iop = InstObjParams(name.lower(), name + ("D" if isDouble else "S"),
                                 "FpRegRegRegRegOp",
                                 { "code": code, "op_class": opClass }, [])
-            iop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
 
             header_output  += AA64FpRegRegRegRegOpDeclare.subst(iop)
             decoder_output += AA64FpRegRegRegRegOpConstructor.subst(iop)
             exec_output    += BasicExecute.subst(iop)
 
     buildTernaryFpOp("FMAdd", "FloatMultAccOp",
-                     "fplibMulAdd<uint16_t>(cOp3, cOp1, cOp2, fpscr)",
                      "fplibMulAdd<uint32_t>(cOp3, cOp1, cOp2, fpscr)",
                      "fplibMulAdd<uint64_t>(cOp3, cOp1, cOp2, fpscr)" )
     buildTernaryFpOp("FMSub", "FloatMultAccOp",
-        "fplibMulAdd<uint16_t>(cOp3, fplibNeg<uint32_t>(cOp1), cOp2, fpscr)",
-        "fplibMulAdd<uint32_t>(cOp3, fplibNeg<uint32_t>(cOp1), cOp2, fpscr)",
-        "fplibMulAdd<uint64_t>(cOp3, fplibNeg<uint64_t>(cOp1), cOp2, fpscr)" )
+                     "fplibMulAdd<uint32_t>(cOp3, fplibNeg<uint32_t>(cOp1), cOp2, fpscr)",
+                     "fplibMulAdd<uint64_t>(cOp3, fplibNeg<uint64_t>(cOp1), cOp2, fpscr)" )
     buildTernaryFpOp("FNMAdd", "FloatMultAccOp",
-                     "fplibMulAdd<uint16_t>(fplibNeg<uint16_t>(cOp3), " +
-                     "fplibNeg<uint16_t>(cOp1), cOp2, fpscr)",
-                     "fplibMulAdd<uint32_t>(fplibNeg<uint32_t>(cOp3), " +
-                     "fplibNeg<uint32_t>(cOp1), cOp2, fpscr)",
-                     "fplibMulAdd<uint64_t>(fplibNeg<uint64_t>(cOp3), " +
-                     "fplibNeg<uint64_t>(cOp1), cOp2, fpscr)" )
+                     "fplibMulAdd<uint32_t>(fplibNeg<uint32_t>(cOp3), fplibNeg<uint32_t>(cOp1), cOp2, fpscr)",
+                     "fplibMulAdd<uint64_t>(fplibNeg<uint64_t>(cOp3), fplibNeg<uint64_t>(cOp1), cOp2, fpscr)" )
     buildTernaryFpOp("FNMSub", "FloatMultAccOp",
-        "fplibMulAdd<uint16_t>(fplibNeg<uint32_t>(cOp3), cOp1, cOp2, fpscr)",
-        "fplibMulAdd<uint32_t>(fplibNeg<uint32_t>(cOp3), cOp1, cOp2, fpscr)",
-        "fplibMulAdd<uint64_t>(fplibNeg<uint64_t>(cOp3), cOp1, cOp2, fpscr)" )
+                     "fplibMulAdd<uint32_t>(fplibNeg<uint32_t>(cOp3), cOp1, cOp2, fpscr)",
+                     "fplibMulAdd<uint64_t>(fplibNeg<uint64_t>(cOp3), cOp1, cOp2, fpscr)" )
 
-    def buildBinFpOp(name, Name, base, opClass, halfOp, singleOp, doubleOp):
+    def buildBinFpOp(name, Name, base, opClass, singleOp, doubleOp):
         global header_output, decoder_output, exec_output
-
-        code = halfIntConvCode2 % { "op": halfOp }
-        hIop = InstObjParams(name, Name + "H", base,
-                { "code": code,
-                  "op_class": opClass }, [])
-        hIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
 
         code = singleIntConvCode2 % { "op": singleOp }
         sIop = InstObjParams(name, Name + "S", base,
                 { "code": code,
                   "op_class": opClass }, [])
-        sIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
 
         code = doubleIntConvCode2 % { "op": doubleOp }
         dIop = InstObjParams(name, Name + "D", base,
                 { "code": code,
                   "op_class": opClass }, [])
-        dIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
 
         declareTempl     = eval(         base + "Declare");
         constructorTempl = eval("AA64" + base + "Constructor");
 
-        for iop in hIop, sIop, dIop:
+        for iop in sIop, dIop:
             header_output  += declareTempl.subst(iop)
             decoder_output += constructorTempl.subst(iop)
             exec_output    += BasicExecute.subst(iop)
 
     buildBinFpOp("fadd", "FAdd", "FpRegRegRegOp", "FloatAddOp",
-                 "fplibAdd<uint16_t>(cOp1, cOp2, fpscr)",
                  "fplibAdd<uint32_t>(cOp1, cOp2, fpscr)",
                  "fplibAdd<uint64_t>(cOp1, cOp2, fpscr)")
     buildBinFpOp("fsub", "FSub", "FpRegRegRegOp", "FloatAddOp",
-                 "fplibSub<uint16_t>(cOp1, cOp2, fpscr)",
                  "fplibSub<uint32_t>(cOp1, cOp2, fpscr)",
                  "fplibSub<uint64_t>(cOp1, cOp2, fpscr)")
     buildBinFpOp("fdiv", "FDiv", "FpRegRegRegOp", "FloatDivOp",
-                 "fplibDiv<uint16_t>(cOp1, cOp2, fpscr)",
                  "fplibDiv<uint32_t>(cOp1, cOp2, fpscr)",
                  "fplibDiv<uint64_t>(cOp1, cOp2, fpscr)")
     buildBinFpOp("fmul", "FMul", "FpRegRegRegOp", "FloatMultOp",
-                 "fplibMul<uint16_t>(cOp1, cOp2, fpscr)",
                  "fplibMul<uint32_t>(cOp1, cOp2, fpscr)",
                  "fplibMul<uint64_t>(cOp1, cOp2, fpscr)")
     buildBinFpOp("fnmul", "FNMul", "FpRegRegRegOp", "FloatMultOp",
-                 "fplibNeg<uint16_t>(fplibMul<uint32_t>(cOp1, cOp2, fpscr))",
                  "fplibNeg<uint32_t>(fplibMul<uint32_t>(cOp1, cOp2, fpscr))",
                  "fplibNeg<uint64_t>(fplibMul<uint64_t>(cOp1, cOp2, fpscr))")
     buildBinFpOp("fmin", "FMin", "FpRegRegRegOp", "FloatCmpOp",
-                 "fplibMin<uint16_t>(cOp1, cOp2, fpscr)",
                  "fplibMin<uint32_t>(cOp1, cOp2, fpscr)",
                  "fplibMin<uint64_t>(cOp1, cOp2, fpscr)")
     buildBinFpOp("fmax", "FMax", "FpRegRegRegOp", "FloatCmpOp",
-                 "fplibMax<uint16_t>(cOp1, cOp2, fpscr)",
                  "fplibMax<uint32_t>(cOp1, cOp2, fpscr)",
                  "fplibMax<uint64_t>(cOp1, cOp2, fpscr)")
     buildBinFpOp("fminnm", "FMinNM", "FpRegRegRegOp", "FloatCmpOp",
-                 "fplibMinNum<uint16_t>(cOp1, cOp2, fpscr)",
                  "fplibMinNum<uint32_t>(cOp1, cOp2, fpscr)",
                  "fplibMinNum<uint64_t>(cOp1, cOp2, fpscr)")
     buildBinFpOp("fmaxnm", "FMaxNM", "FpRegRegRegOp", "FloatCmpOp",
-                 "fplibMaxNum<uint16_t>(cOp1, cOp2, fpscr)",
                  "fplibMaxNum<uint32_t>(cOp1, cOp2, fpscr)",
                  "fplibMaxNum<uint64_t>(cOp1, cOp2, fpscr)")
 
-    def buildUnaryFpOp(name, Name, base, opClass,
-                       halfOp, singleOp, doubleOp = None):
+    def buildUnaryFpOp(name, Name, base, opClass, singleOp, doubleOp = None):
         if doubleOp is None:
             doubleOp = singleOp
         global header_output, decoder_output, exec_output
 
-        code = halfIntConvCode % { "op": halfOp }
-        hIop = InstObjParams(name, Name + "H", base,
-                { "code": code,
-                  "op_class": opClass }, [])
-        hIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
         code = singleIntConvCode % { "op": singleOp }
         sIop = InstObjParams(name, Name + "S", base,
                 { "code": code,
                   "op_class": opClass }, [])
-        sIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
         code = doubleIntConvCode % { "op": doubleOp }
         dIop = InstObjParams(name, Name + "D", base,
                 { "code": code,
                   "op_class": opClass }, [])
-        dIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
 
         declareTempl     = eval(         base + "Declare");
         constructorTempl = eval("AA64" + base + "Constructor");
 
-        for iop in hIop, sIop, dIop:
+        for iop in sIop, dIop:
             header_output  += declareTempl.subst(iop)
             decoder_output += constructorTempl.subst(iop)
             exec_output    += BasicExecute.subst(iop)
 
     buildUnaryFpOp("fsqrt", "FSqrt", "FpRegRegOp", "FloatSqrtOp",
-                   "fplibSqrt<uint16_t>(cOp1, fpscr)",
-                   "fplibSqrt<uint32_t>(cOp1, fpscr)",
-                   "fplibSqrt<uint64_t>(cOp1, fpscr)")
+                   "fplibSqrt<uint32_t>(cOp1, fpscr)", "fplibSqrt<uint64_t>(cOp1, fpscr)")
 
-    def buildSimpleUnaryFpOp(name, Name, base, opClass, halfOp, singleOp,
+    def buildSimpleUnaryFpOp(name, Name, base, opClass, singleOp,
                              doubleOp = None, isIntConv = True):
         if doubleOp is None:
             doubleOp = singleOp
         global header_output, decoder_output, exec_output
 
         if isIntConv:
-            hCode = halfIntConvCode
             sCode = singleIntConvCode
             dCode = doubleIntConvCode
         else:
-            hCode = halfCode
             sCode = singleCode
             dCode = doubleCode
 
-        for code, op, suffix in [[hCode, halfOp, "H"],
-                                 [sCode, singleOp, "S"],
+        for code, op, suffix in [[sCode, singleOp, "S"],
                                  [dCode, doubleOp, "D"]]:
             iop = InstObjParams(name, Name + suffix, base,
                 { "code": code % { "op": op },
                   "op_class": opClass }, [])
-            iop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
 
             declareTempl     = eval(         base + "Declare");
             constructorTempl = eval("AA64" + base + "Constructor");
@@ -478,41 +386,30 @@ let {{
             exec_output    += BasicExecute.subst(iop)
 
     buildSimpleUnaryFpOp("fneg", "FNeg", "FpRegRegOp", "FloatMiscOp",
-                         "fplibNeg<uint16_t>(cOp1)",
-                         "fplibNeg<uint32_t>(cOp1)",
-                         "fplibNeg<uint64_t>(cOp1)")
+                         "fplibNeg<uint32_t>(cOp1)", "fplibNeg<uint64_t>(cOp1)")
     buildSimpleUnaryFpOp("fabs", "FAbs", "FpRegRegOp", "FloatMiscOp",
-                         "fplibAbs<uint16_t>(cOp1)",
-                         "fplibAbs<uint32_t>(cOp1)",
-                         "fplibAbs<uint64_t>(cOp1)")
+                         "fplibAbs<uint32_t>(cOp1)", "fplibAbs<uint64_t>(cOp1)")
     buildSimpleUnaryFpOp("frintn", "FRIntN", "FpRegRegOp", "FloatMiscOp",
-        "fplibRoundInt<uint16_t>(cOp1, FPRounding_TIEEVEN, false, fpscr)",
-        "fplibRoundInt<uint32_t>(cOp1, FPRounding_TIEEVEN, false, fpscr)",
-        "fplibRoundInt<uint64_t>(cOp1, FPRounding_TIEEVEN, false, fpscr)")
+                         "fplibRoundInt<uint32_t>(cOp1, FPRounding_TIEEVEN, false, fpscr)",
+                         "fplibRoundInt<uint64_t>(cOp1, FPRounding_TIEEVEN, false, fpscr)")
     buildSimpleUnaryFpOp("frintp", "FRIntP", "FpRegRegOp", "FloatMiscOp",
-        "fplibRoundInt<uint16_t>(cOp1, FPRounding_POSINF, false, fpscr)",
-        "fplibRoundInt<uint32_t>(cOp1, FPRounding_POSINF, false, fpscr)",
-        "fplibRoundInt<uint64_t>(cOp1, FPRounding_POSINF, false, fpscr)")
+                         "fplibRoundInt<uint32_t>(cOp1, FPRounding_POSINF, false, fpscr)",
+                         "fplibRoundInt<uint64_t>(cOp1, FPRounding_POSINF, false, fpscr)")
     buildSimpleUnaryFpOp("frintm", "FRIntM", "FpRegRegOp", "FloatMiscOp",
-        "fplibRoundInt<uint16_t>(cOp1, FPRounding_NEGINF, false, fpscr)",
-        "fplibRoundInt<uint32_t>(cOp1, FPRounding_NEGINF, false, fpscr)",
-        "fplibRoundInt<uint64_t>(cOp1, FPRounding_NEGINF, false, fpscr)")
+                         "fplibRoundInt<uint32_t>(cOp1, FPRounding_NEGINF, false, fpscr)",
+                         "fplibRoundInt<uint64_t>(cOp1, FPRounding_NEGINF, false, fpscr)")
     buildSimpleUnaryFpOp("frintz", "FRIntZ", "FpRegRegOp", "FloatMiscOp",
-        "fplibRoundInt<uint16_t>(cOp1, FPRounding_ZERO, false, fpscr)",
-        "fplibRoundInt<uint32_t>(cOp1, FPRounding_ZERO, false, fpscr)",
-        "fplibRoundInt<uint64_t>(cOp1, FPRounding_ZERO, false, fpscr)")
+                         "fplibRoundInt<uint32_t>(cOp1, FPRounding_ZERO, false, fpscr)",
+                         "fplibRoundInt<uint64_t>(cOp1, FPRounding_ZERO, false, fpscr)")
     buildSimpleUnaryFpOp("frinta", "FRIntA", "FpRegRegOp", "FloatMiscOp",
-        "fplibRoundInt<uint16_t>(cOp1, FPRounding_TIEAWAY, false, fpscr)",
-        "fplibRoundInt<uint32_t>(cOp1, FPRounding_TIEAWAY, false, fpscr)",
-        "fplibRoundInt<uint64_t>(cOp1, FPRounding_TIEAWAY, false, fpscr)")
+                         "fplibRoundInt<uint32_t>(cOp1, FPRounding_TIEAWAY, false, fpscr)",
+                         "fplibRoundInt<uint64_t>(cOp1, FPRounding_TIEAWAY, false, fpscr)")
     buildSimpleUnaryFpOp("frinti", "FRIntI", "FpRegRegOp", "FloatMiscOp",
-        "fplibRoundInt<uint16_t>(cOp1, FPCRRounding(fpscr), false, fpscr)",
-        "fplibRoundInt<uint32_t>(cOp1, FPCRRounding(fpscr), false, fpscr)",
-        "fplibRoundInt<uint64_t>(cOp1, FPCRRounding(fpscr), false, fpscr)")
+                         "fplibRoundInt<uint32_t>(cOp1, FPCRRounding(fpscr), false, fpscr)",
+                         "fplibRoundInt<uint64_t>(cOp1, FPCRRounding(fpscr), false, fpscr)")
     buildSimpleUnaryFpOp("frintx", "FRIntX", "FpRegRegOp", "FloatMiscOp",
-        "fplibRoundInt<uint16_t>(cOp1, FPCRRounding(fpscr), true, fpscr)",
-        "fplibRoundInt<uint32_t>(cOp1, FPCRRounding(fpscr), true, fpscr)",
-        "fplibRoundInt<uint64_t>(cOp1, FPCRRounding(fpscr), true, fpscr)")
+                         "fplibRoundInt<uint32_t>(cOp1, FPCRRounding(fpscr), true, fpscr)",
+                         "fplibRoundInt<uint64_t>(cOp1, FPCRRounding(fpscr), true, fpscr)")
 }};
 
 let {{
@@ -558,9 +455,6 @@ let {{
                 fcvtIntFpDIop = InstObjParams(mnem, instName, "FpRegRegOp",
                                               { "code": fcvtIntFpDCode,
                                                 "op_class": "FloatCvtOp" }, [])
-                fcvtIntFpDIop.snippets["code"] += \
-                        zeroSveVecRegUpperPartCode % "AA64FpDest"
-
                 header_output  += FpRegRegOpDeclare.subst(fcvtIntFpDIop);
                 decoder_output += AA64FpRegRegOpConstructor.subst(fcvtIntFpDIop);
                 exec_output    += BasicExecute.subst(fcvtIntFpDIop);
@@ -623,7 +517,6 @@ let {{
     fcvtFpSFpDIop = InstObjParams("fcvt", "FCvtFpSFpD", "FpRegRegOp",
                                      { "code": fcvtFpSFpDCode,
                                        "op_class": "FloatCvtOp" }, [])
-    fcvtFpSFpDIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
     header_output  += FpRegRegOpDeclare.subst(fcvtFpSFpDIop);
     decoder_output += AA64FpRegRegOpConstructor.subst(fcvtFpSFpDIop);
     exec_output    += BasicExecute.subst(fcvtFpSFpDIop);
@@ -641,7 +534,6 @@ let {{
     fcvtFpDFpSIop = InstObjParams("fcvt", "FcvtFpDFpS", "FpRegRegOp",
                                  {"code":     fcvtFpDFpSCode,
                                   "op_class": "FloatCvtOp" }, [])
-    fcvtFpDFpSIop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
     header_output  += FpRegRegOpDeclare.subst(fcvtFpDFpSIop);
     decoder_output += AA64FpRegRegOpConstructor.subst(fcvtFpDFpSIop);
     exec_output    += BasicExecute.subst(fcvtFpDFpSIop);
@@ -674,8 +566,6 @@ let {{
         fcvtFpHFpIop = InstObjParams("fcvt", instName, "FpRegRegOp",
                                      { "code": code,
                                        "op_class": "FloatCvtOp" }, [])
-        fcvtFpHFpIop.snippets["code"] += zeroSveVecRegUpperPartCode % \
-                "AA64FpDest"
         header_output  += FpRegRegOpDeclare.subst(fcvtFpHFpIop);
         decoder_output += AA64FpRegRegOpConstructor.subst(fcvtFpHFpIop);
         exec_output    += BasicExecute.subst(fcvtFpHFpIop);
@@ -699,8 +589,6 @@ let {{
         fcvtFpFpHIop = InstObjParams("fcvt", instName, "FpRegRegOp",
                                      { "code": code,
                                        "op_class": "FloatCvtOp" }, [])
-        fcvtFpFpHIop.snippets["code"] += zeroSveVecRegUpperPartCode % \
-                "AA64FpDest"
         header_output  += FpRegRegOpDeclare.subst(fcvtFpFpHIop);
         decoder_output += AA64FpRegRegOpConstructor.subst(fcvtFpFpHIop);
         exec_output    += BasicExecute.subst(fcvtFpFpHIop);
@@ -874,8 +762,6 @@ let {{
         fcvtFixedFpIop = InstObjParams(mnem, instName, "FpRegRegImmOp",
                                        { "code":     fcvtFixedFpCode,
                                          "op_class": "FloatCvtOp" }, [])
-        fcvtFixedFpIop.snippets["code"] += zeroSveVecRegUpperPartCode % \
-                "AA64FpDest"
         header_output  += FpRegRegImmOpDeclare.subst(fcvtFixedFpIop);
         decoder_output += FpRegRegImmOpConstructor.subst(fcvtFixedFpIop);
         exec_output    += BasicExecute.subst(fcvtFixedFpIop);
@@ -922,7 +808,6 @@ let {{
         iop = InstObjParams("fcsel", "FCSel%s" %("D" if isDouble else "S"),
                             "FpCondSelOp", { "code":     code,
                                              "op_class": "FloatCvtOp" })
-        iop.snippets["code"] += zeroSveVecRegUpperPartCode % "AA64FpDest"
         header_output  += DataXCondSelDeclare.subst(iop)
         decoder_output += DataXCondSelConstructor.subst(iop)
         exec_output    += BasicExecute.subst(iop)

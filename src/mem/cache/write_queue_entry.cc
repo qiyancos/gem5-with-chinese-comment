@@ -50,13 +50,18 @@
 
 #include "mem/cache/write_queue_entry.hh"
 
+#include <algorithm>
 #include <cassert>
 #include <string>
+#include <vector>
 
 #include "base/logging.hh"
 #include "base/types.hh"
-#include "mem/cache/base.hh"
-#include "mem/request.hh"
+#include "debug/Cache.hh"
+#include "mem/cache/cache.hh"
+#include "sim/core.hh"
+
+using namespace std;
 
 inline void
 WriteQueueEntry::TargetList::add(PacketPtr pkt, Tick readyTime,
@@ -66,10 +71,10 @@ WriteQueueEntry::TargetList::add(PacketPtr pkt, Tick readyTime,
 }
 
 bool
-WriteQueueEntry::TargetList::trySatisfyFunctional(PacketPtr pkt)
+WriteQueueEntry::TargetList::checkFunctional(PacketPtr pkt)
 {
     for (auto& t : *this) {
-        if (pkt->trySatisfyFunctional(t.pkt)) {
+        if (pkt->checkFunctional(t.pkt)) {
             return true;
         }
     }
@@ -112,9 +117,6 @@ WriteQueueEntry::allocate(Addr blk_addr, unsigned blk_size, PacketPtr target,
              "a cacheable eviction or a writeclean");
 
     targets.add(target, when_ready, _order);
-
-    // All targets must refer to the same block
-    assert(target->matchBlockAddr(targets.front().pkt, blkSize));
 }
 
 void
@@ -125,44 +127,23 @@ WriteQueueEntry::deallocate()
 }
 
 bool
-WriteQueueEntry::trySatisfyFunctional(PacketPtr pkt)
+WriteQueueEntry::checkFunctional(PacketPtr pkt)
 {
     // For printing, we treat the WriteQueueEntry as a whole as single
     // entity. For other requests, we iterate over the individual
     // targets since that's where the actual data lies.
     if (pkt->isPrint()) {
-        pkt->trySatisfyFunctional(this, blkAddr, isSecure, blkSize, nullptr);
+        pkt->checkFunctional(this, blkAddr, isSecure, blkSize, nullptr);
         return false;
     } else {
-        return targets.trySatisfyFunctional(pkt);
+        return targets.checkFunctional(pkt);
     }
 }
 
 bool
-WriteQueueEntry::sendPacket(BaseCache &cache)
+WriteQueueEntry::sendPacket(Cache &cache)
 {
     return cache.sendWriteQueuePacket(this);
-}
-
-bool
-WriteQueueEntry::matchBlockAddr(const Addr addr, const bool is_secure) const
-{
-    assert(hasTargets());
-    return (blkAddr == addr) && (isSecure == is_secure);
-}
-
-bool
-WriteQueueEntry::matchBlockAddr(const PacketPtr pkt) const
-{
-    assert(hasTargets());
-    return pkt->matchBlockAddr(blkAddr, isSecure, blkSize);
-}
-
-bool
-WriteQueueEntry::conflictAddr(const QueueEntry* entry) const
-{
-    assert(hasTargets());
-    return entry->matchBlockAddr(blkAddr, isSecure);
 }
 
 void
@@ -182,7 +163,7 @@ WriteQueueEntry::print(std::ostream &os, int verbosity,
 std::string
 WriteQueueEntry::print() const
 {
-    std::ostringstream str;
+    ostringstream str;
     print(str);
     return str.str();
 }

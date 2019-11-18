@@ -145,8 +145,7 @@ class FloatOp : public PowerStaticInst
         return c;
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 } // namespace PowerISA

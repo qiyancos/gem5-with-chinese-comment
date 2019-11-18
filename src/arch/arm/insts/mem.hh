@@ -47,6 +47,22 @@
 namespace ArmISA
 {
 
+class Swap : public PredOp
+{
+  protected:
+    IntRegIndex dest;
+    IntRegIndex op1;
+    IntRegIndex base;
+
+    Swap(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
+         IntRegIndex _dest, IntRegIndex _op1, IntRegIndex _base)
+        : PredOp(mnem, _machInst, __opClass),
+          dest(_dest), op1(_op1), base(_base)
+    {}
+
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
+};
+
 class MightBeMicro : public PredOp
 {
   protected:
@@ -102,14 +118,13 @@ class RfeOp : public MightBeMicro
     }
 
     StaticInstPtr
-    fetchMicroop(MicroPC microPC) const override
+    fetchMicroop(MicroPC microPC) const
     {
         assert(uops != NULL && microPC < numMicroops);
         return uops[microPC];
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 // The address is a base register plus an immediate.
@@ -143,14 +158,13 @@ class SrsOp : public MightBeMicro
     }
 
     StaticInstPtr
-    fetchMicroop(MicroPC microPC) const override
+    fetchMicroop(MicroPC microPC) const
     {
         assert(uops != NULL && microPC < numMicroops);
         return uops[microPC];
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class Memory : public MightBeMicro
@@ -184,7 +198,7 @@ class Memory : public MightBeMicro
     }
 
     StaticInstPtr
-    fetchMicroop(MicroPC microPC) const override
+    fetchMicroop(MicroPC microPC) const
     {
         assert(uops != NULL && microPC < numMicroops);
         return uops[microPC];

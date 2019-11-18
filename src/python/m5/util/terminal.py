@@ -27,7 +27,6 @@
 # Author: Steve Reinhardt
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 import sys
 
@@ -64,7 +63,7 @@ capability_map = {
        'Normal': 'sgr0'
 }
 
-capability_names = list(capability_map.keys())
+capability_names = capability_map.keys()
 
 def null_cap_string(s, *args):
     return ''
@@ -85,7 +84,7 @@ class ColorStrings(object):
     def __init__(self, cap_string):
         for i, c in enumerate(color_names):
             setattr(self, c, cap_string('setaf', i))
-        for name, cap in capability_map.items():
+        for name, cap in capability_map.iteritems():
             setattr(self, name, cap_string(cap))
 
 termcap = ColorStrings(cap_string)

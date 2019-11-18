@@ -34,7 +34,6 @@
 
 #include "arch/sparc/isa_traits.hh"
 #include "arch/sparc/registers.hh"
-#include "base/loader/object_file.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "kern/linux/linux.hh"
@@ -44,40 +43,6 @@
 
 using namespace std;
 using namespace SparcISA;
-
-namespace
-{
-
-class SparcLinuxObjectFileLoader : public ObjectFile::Loader
-{
-  public:
-    Process *
-    load(ProcessParams *params, ObjectFile *obj_file) override
-    {
-        auto arch = obj_file->getArch();
-        auto opsys = obj_file->getOpSys();
-
-        if (arch != ObjectFile::SPARC64 && arch != ObjectFile::SPARC32)
-            return nullptr;
-
-        if (opsys == ObjectFile::UnknownOpSys) {
-            warn("Unknown operating system; assuming Linux.");
-            opsys = ObjectFile::Linux;
-        }
-
-        if (opsys != ObjectFile::Linux)
-            return nullptr;
-
-        if (arch == ObjectFile::SPARC64)
-            return new Sparc64LinuxProcess(params, obj_file);
-        else
-            return new Sparc32LinuxProcess(params, obj_file);
-    }
-};
-
-SparcLinuxObjectFileLoader loader;
-
-} // anonymous namespace
 
 SyscallDesc*
 SparcLinuxProcess::getDesc(int callnum)

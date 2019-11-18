@@ -35,7 +35,7 @@
 #
 # Authors: Matt Horsnell
 
-from m5.objects.Probe import *
+from Probe import *
 
 class SimpleTrace(ProbeListenerObject):
     type = 'SimpleTrace'

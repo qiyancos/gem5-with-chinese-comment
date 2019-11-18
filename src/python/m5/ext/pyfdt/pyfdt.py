@@ -19,9 +19,6 @@ Device Tree Blob Parser
 @author: Neil 'superna' Armstrong <superna9999@gmail.com>
 """
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 import string
 import os
 import json

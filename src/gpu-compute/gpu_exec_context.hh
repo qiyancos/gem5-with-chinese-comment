@@ -14,9 +14,9 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from this
- * software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software
+ * without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,14 +30,13 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Anthony Gutierrez
+ * Author: Anthony Gutierrez
  */
 
 #ifndef __GPU_EXEC_CONTEXT_HH__
 #define __GPU_EXEC_CONTEXT_HH__
 
 #include "arch/gpu_isa.hh"
-#include "base/types.hh"
 #include "config/the_gpu_isa.hh"
 
 class ComputeUnit;
@@ -50,8 +49,8 @@ class GPUExecContext
     Wavefront* wavefront();
     ComputeUnit* computeUnit();
 
-    RegVal readMiscReg(int opIdx) const;
-    void writeMiscReg(int opIdx, RegVal operandVal);
+    TheGpuISA::MiscReg readMiscReg(int opIdx) const;
+    void writeMiscReg(int opIdx, TheGpuISA::MiscReg operandVal);
 
   protected:
     ComputeUnit *cu;

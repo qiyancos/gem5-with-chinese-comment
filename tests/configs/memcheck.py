@@ -54,11 +54,18 @@ root = None
 def run_test(root):
         # Called from tests/run.py
 
+        # Set the working directory in case we are executing from
+        # outside gem5's source tree
+        import os
+        os.chdir(os.path.join(os.path.dirname(__file__), "../"))
+
+        # The path to this script is the only parameter. Delete it so
+        # we can execute the script that we want to execute.
         import sys
-        argv = [
-                sys.argv[0],
-                '-m %d' % maxtick,
-        ]
+        del sys.argv[1:]
+
+        # Add a specific max tick
+        sys.argv.append('-m %d' % maxtick)
 
         # Execute the script we are wrapping
-        run_config('configs/example/memcheck.py', argv=argv)
+        execfile(srcpath('configs/example/memcheck.py'), globals())

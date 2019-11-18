@@ -50,8 +50,8 @@ namespace PowerISA
 class ISA : public SimObject
 {
   protected:
-    RegVal dummy;
-    RegVal miscRegs[NumMiscRegs];
+    MiscReg dummy;
+    MiscReg miscRegs[NumMiscRegs];
 
   public:
     typedef PowerISAParams Params;
@@ -61,14 +61,14 @@ class ISA : public SimObject
     {
     }
 
-    RegVal
+    MiscReg
     readMiscRegNoEffect(int misc_reg) const
     {
         fatal("Power does not currently have any misc regs defined\n");
         return dummy;
     }
 
-    RegVal
+    MiscReg
     readMiscReg(int misc_reg, ThreadContext *tc)
     {
         fatal("Power does not currently have any misc regs defined\n");
@@ -76,13 +76,13 @@ class ISA : public SimObject
     }
 
     void
-    setMiscRegNoEffect(int misc_reg, RegVal val)
+    setMiscRegNoEffect(int misc_reg, const MiscReg &val)
     {
         fatal("Power does not currently have any misc regs defined\n");
     }
 
     void
-    setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
+    setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc)
     {
         fatal("Power does not currently have any misc regs defined\n");
     }
@@ -109,12 +109,6 @@ class ISA : public SimObject
 
     int
     flattenVecElemIndex(int reg) const
-    {
-        return reg;
-    }
-
-    int
-    flattenVecPredIndex(int reg) const
     {
         return reg;
     }

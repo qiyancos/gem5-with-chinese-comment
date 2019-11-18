@@ -41,6 +41,7 @@
 #include "mem/fs_translating_port_proxy.hh"
 #include "sim/system.hh"
 
+using namespace std;
 using namespace MipsISA;
 
 ProcessInfo::ProcessInfo(ThreadContext *_tc) : tc(_tc)
@@ -55,8 +56,8 @@ ProcessInfo::task(Addr ksp) const
 
     Addr tsk;
 
-    PortProxy &vp = tc->getVirtProxy();
-    tsk = vp.read<Addr>(base + task_off, GuestByteOrder);
+    FSTranslatingPortProxy &vp = tc->getVirtProxy();
+    tsk = vp.readGtoH<Addr>(base + task_off);
 
     return tsk;
 }
@@ -70,13 +71,13 @@ ProcessInfo::pid(Addr ksp) const
 
     uint16_t pd;
 
-    PortProxy &vp = tc->getVirtProxy();
-    pd = vp.read<uint16_t>(task + pid_off, GuestByteOrder);
+    FSTranslatingPortProxy &vp = tc->getVirtProxy();
+    pd = vp.readGtoH<uint16_t>(task + pid_off);
 
     return pd;
 }
 
-std::string
+string
 ProcessInfo::name(Addr ksp) const
 {
     Addr task = this->task(ksp);
@@ -84,7 +85,7 @@ ProcessInfo::name(Addr ksp) const
         return "console";
 
     char comm[256];
-    tc->getVirtProxy().readString(comm, task + name_off, sizeof(comm));
+    CopyStringOut(tc, comm, task + name_off, sizeof(comm));
     if (!comm[0])
         return "startup";
 
@@ -202,7 +203,8 @@ StackTrace::decodePrologue(Addr sp, Addr callpc, Addr func,
     ra = 0;
 
     for (Addr pc = func; pc < callpc; pc += sizeof(MachInst)) {
-        MachInst inst = tc->getVirtProxy().read<MachInst>(pc);
+        MachInst inst;
+        CopyOut(tc, (uint8_t *)&inst, pc, sizeof(MachInst));
 
         int reg, disp;
         if (decodeStack(inst, disp)) {
@@ -212,7 +214,7 @@ StackTrace::decodePrologue(Addr sp, Addr callpc, Addr func,
             size += disp;
         } else if (decodeSave(inst, reg, disp)) {
             if (!ra && reg == ReturnAddressReg) {
-                ra = tc->getVirtProxy().read<Addr>(sp + disp);
+                CopyOut(tc, (uint8_t *)&ra, sp + disp, sizeof(Addr));
                 if (!ra) {
                     return false;
                 }

@@ -36,9 +36,9 @@
 # Authors: Andrew Bardsley
 
 from m5.params import *
-from m5.SimObject import SimObject
+from MemObject import MemObject
 
-class ExternalSlave(SimObject):
+class ExternalSlave(MemObject):
     type = 'ExternalSlave'
     cxx_header = "mem/external_slave.hh"
 

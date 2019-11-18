@@ -110,8 +110,6 @@ class PowerModelState : public SimObject
 };
 
 /**
- * @sa \ref gem5PowerModel "gem5 Power Model"
- *
  * A PowerModel is a class containing a power model for a SimObject.
  * The PM describes the power consumption for every power state.
  */

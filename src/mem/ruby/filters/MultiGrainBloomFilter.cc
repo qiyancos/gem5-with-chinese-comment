@@ -28,14 +28,25 @@
 
 #include "mem/ruby/filters/MultiGrainBloomFilter.hh"
 
-#include "base/bitfield.hh"
-#include "params/MultiGrainBloomFilter.hh"
+#include "base/intmath.hh"
+#include "base/str.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
-MultiGrainBloomFilter::MultiGrainBloomFilter(
-    const MultiGrainBloomFilterParams* p)
-    : AbstractBloomFilter(p), pageFilter(p->page_filter_size),
-      pageFilterSizeBits(floorLog2(p->page_filter_size))
+using namespace std;
+
+MultiGrainBloomFilter::MultiGrainBloomFilter(int head, int tail)
 {
+    // head contains size of 1st bloom filter, tail contains size of
+    // 2nd bloom filter
+    m_filter_size = head;
+    m_filter_size_bits = floorLog2(m_filter_size);
+
+    m_page_filter_size = tail;
+    m_page_filter_size_bits = floorLog2(m_page_filter_size);
+
+    m_filter.resize(m_filter_size);
+    m_page_filter.resize(m_page_filter_size);
+    clear();
 }
 
 MultiGrainBloomFilter::~MultiGrainBloomFilter()
@@ -45,64 +56,126 @@ MultiGrainBloomFilter::~MultiGrainBloomFilter()
 void
 MultiGrainBloomFilter::clear()
 {
-    AbstractBloomFilter::clear();
-    for (auto& entry : pageFilter){
-        entry = 0;
+    for (int i = 0; i < m_filter_size; i++) {
+        m_filter[i] = 0;
     }
+    for (int i=0; i < m_page_filter_size; ++i){
+        m_page_filter[i] = 0;
+    }
+}
+
+void
+MultiGrainBloomFilter::increment(Addr addr)
+{
+    // Not used
+}
+
+
+void
+MultiGrainBloomFilter::decrement(Addr addr)
+{
+    // Not used
+}
+
+void
+MultiGrainBloomFilter::merge(AbstractBloomFilter *other_filter)
+{
+    // TODO
 }
 
 void
 MultiGrainBloomFilter::set(Addr addr)
 {
-    const int index = hash(addr);
-    assert(index < filter.size());
-    filter[index] = 1;
+    int i = get_block_index(addr);
+    assert(i < m_filter_size);
+    assert(get_page_index(addr) < m_page_filter_size);
+    m_filter[i] = 1;
+    m_page_filter[i] = 1;
 
-    const int page_index = pageHash(addr);
-    assert(page_index < pageFilter.size());
-    pageFilter[page_index] = 1;
+}
+
+void
+MultiGrainBloomFilter::unset(Addr addr)
+{
+    // not used
+}
+
+bool
+MultiGrainBloomFilter::isSet(Addr addr)
+{
+    int i = get_block_index(addr);
+    assert(i < m_filter_size);
+    assert(get_page_index(addr) < m_page_filter_size);
+    // we have to have both indices set
+    return (m_filter[i] && m_page_filter[i]);
 }
 
 int
-MultiGrainBloomFilter::getCount(Addr addr) const
+MultiGrainBloomFilter::getCount(Addr addr)
 {
-    const int index = hash(addr);
-    const int page_index = pageHash(addr);
-    assert(index < filter.size());
-    assert(page_index < pageFilter.size());
-    return filter[index] + pageFilter[page_index];
+    // not used
+    return 0;
 }
 
 int
-MultiGrainBloomFilter::getTotalCount() const
+MultiGrainBloomFilter::getTotalCount()
 {
-    int count = AbstractBloomFilter::getTotalCount();
+    int count = 0;
 
-    for (const auto& entry : pageFilter) {
-        count += entry;
+    for (int i = 0; i < m_filter_size; i++) {
+        count += m_filter[i];
+    }
+
+    for (int i=0; i < m_page_filter_size; ++i) {
+        count += m_page_filter[i] = 0;
     }
 
     return count;
 }
 
 int
-MultiGrainBloomFilter::hash(Addr addr) const
+MultiGrainBloomFilter::getIndex(Addr addr)
 {
-    // grap a chunk of bits after byte offset
-    return bits(addr, offsetBits + sizeBits - 1, offsetBits);
+    return 0;
+    // TODO
 }
 
 int
-MultiGrainBloomFilter::pageHash(Addr addr) const
+MultiGrainBloomFilter::readBit(const int index)
 {
-    int num_bits = offsetBits + sizeBits - 1;
+    return 0;
+    // TODO
+}
+
+void
+MultiGrainBloomFilter::writeBit(const int index, const int value)
+{
+    // TODO
+}
+
+void
+MultiGrainBloomFilter::print(ostream& out) const
+{
+}
+
+int
+MultiGrainBloomFilter::get_block_index(Addr addr)
+{
+    // grap a chunk of bits after byte offset
+    return bitSelect(addr, RubySystem::getBlockSizeBits(),
+                     RubySystem::getBlockSizeBits() +
+                     m_filter_size_bits - 1);
+}
+
+int
+MultiGrainBloomFilter::get_page_index(Addr addr)
+{
+    int bits = RubySystem::getBlockSizeBits() + m_filter_size_bits - 1;
 
     // grap a chunk of bits after first chunk
-    return bits(addr, num_bits + pageFilterSizeBits - 1, num_bits);
+    return bitSelect(addr, bits, bits + m_page_filter_size_bits - 1);
 }
 
-MultiGrainBloomFilter*
-MultiGrainBloomFilterParams::create()
-{
-    return new MultiGrainBloomFilter(this);
-}
+
+
+

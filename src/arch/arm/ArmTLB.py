@@ -40,11 +40,11 @@
 from m5.SimObject import SimObject
 from m5.params import *
 from m5.proxy import *
-from m5.objects.BaseTLB import BaseTLB
-from m5.objects.ClockedObject import ClockedObject
+from MemObject import MemObject
+from BaseTLB import BaseTLB
 
 # Basic stage 1 translation objects
-class ArmTableWalker(ClockedObject):
+class ArmTableWalker(MemObject):
     type = 'ArmTableWalker'
     cxx_class = 'ArmISA::TableWalker'
     cxx_header = "arch/arm/table_walker.hh"

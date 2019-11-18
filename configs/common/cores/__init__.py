@@ -34,6 +34,3 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Authors: Andreas Sandberg
-
-from __future__ import print_function
-from __future__ import absolute_import

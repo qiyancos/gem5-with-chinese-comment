@@ -28,8 +28,7 @@
 #          Brad Beckmann
 
 from m5.params import *
-
-from m5.objects.ClockedObject import ClockedObject
+from ClockedObject import ClockedObject
 
 class BasicRouter(ClockedObject):
     type = 'BasicRouter'

@@ -185,7 +185,7 @@ ISA::configCP()
     setMiscRegNoEffect(MISCREG_PRID, procId);
 
     // Now, create Write Mask for ProcID register
-    RegVal procIDMask = 0; // Read-Only register
+    MiscReg procIDMask = 0; // Read-Only register
     replaceBits(procIDMask, 0, 32, 0);
     setRegMask(MISCREG_PRID, procIDMask);
 
@@ -199,7 +199,7 @@ ISA::configCP()
     cfg.m = 1;
     setMiscRegNoEffect(MISCREG_CONFIG, cfg);
     // Now, create Write Mask for Config register
-    RegVal cfg_Mask = 0x7FFF0007;
+    MiscReg cfg_Mask = 0x7FFF0007;
     replaceBits(cfg_Mask, 0, 32, 0);
     setRegMask(MISCREG_CONFIG, cfg_Mask);
 
@@ -221,7 +221,7 @@ ISA::configCP()
     cfg1.m = cp.CP0_Config1_M;
     setMiscRegNoEffect(MISCREG_CONFIG1, cfg1);
     // Now, create Write Mask for Config register
-    RegVal cfg1_Mask = 0; // Read Only Register
+    MiscReg cfg1_Mask = 0; // Read Only Register
     replaceBits(cfg1_Mask, 0, 32, 0);
     setRegMask(MISCREG_CONFIG1, cfg1_Mask);
 
@@ -238,7 +238,7 @@ ISA::configCP()
     cfg2.m = cp.CP0_Config2_M;
     setMiscRegNoEffect(MISCREG_CONFIG2, cfg2);
     // Now, create Write Mask for Config register
-    RegVal cfg2_Mask = 0x7000F000; // Read Only Register
+    MiscReg cfg2_Mask = 0x7000F000; // Read Only Register
     replaceBits(cfg2_Mask, 0, 32, 0);
     setRegMask(MISCREG_CONFIG2, cfg2_Mask);
 
@@ -254,7 +254,7 @@ ISA::configCP()
     cfg3.tl = cp.CP0_Config3_TL;
     setMiscRegNoEffect(MISCREG_CONFIG3, cfg3);
     // Now, create Write Mask for Config register
-    RegVal cfg3_Mask = 0; // Read Only Register
+    MiscReg cfg3_Mask = 0; // Read Only Register
     replaceBits(cfg3_Mask, 0, 32, 0);
     setRegMask(MISCREG_CONFIG3, cfg3_Mask);
 
@@ -264,7 +264,7 @@ ISA::configCP()
     replaceBits(eBase, 31, 31, 1);
     setMiscRegNoEffect(MISCREG_EBASE, eBase);
     // Now, create Write Mask for Config register
-    RegVal EB_Mask = 0x3FFFF000;// Except Exception Base, the
+    MiscReg EB_Mask = 0x3FFFF000;// Except Exception Base, the
                                  // entire register is read only
     replaceBits(EB_Mask, 0, 32, 0);
     setRegMask(MISCREG_EBASE, EB_Mask);
@@ -274,7 +274,7 @@ ISA::configCP()
     scsCtl.hss = cp.CP0_SrsCtl_HSS;
     setMiscRegNoEffect(MISCREG_SRSCTL, scsCtl);
     // Now, create Write Mask for the SRS Ctl register
-    RegVal SC_Mask = 0x0000F3C0;
+    MiscReg SC_Mask = 0x0000F3C0;
     replaceBits(SC_Mask, 0, 32, 0);
     setRegMask(MISCREG_SRSCTL, SC_Mask);
 
@@ -284,7 +284,7 @@ ISA::configCP()
     intCtl.ippci = cp.CP0_IntCtl_IPPCI;
     setMiscRegNoEffect(MISCREG_INTCTL, intCtl);
     // Now, create Write Mask for the IntCtl register
-    RegVal IC_Mask = 0x000003E0;
+    MiscReg IC_Mask = 0x000003E0;
     replaceBits(IC_Mask, 0, 32, 0);
     setRegMask(MISCREG_INTCTL, IC_Mask);
 
@@ -293,7 +293,7 @@ ISA::configCP()
     watchHi.m = cp.CP0_WatchHi_M;
     setMiscRegNoEffect(MISCREG_WATCHHI0, watchHi);
     // Now, create Write Mask for the IntCtl register
-    RegVal wh_Mask = 0x7FFF0FFF;
+    MiscReg wh_Mask = 0x7FFF0FFF;
     replaceBits(wh_Mask, 0, 32, 0);
     setRegMask(MISCREG_WATCHHI0, wh_Mask);
 
@@ -303,14 +303,14 @@ ISA::configCP()
     perfCntCtl.w = cp.CP0_PerfCtr_W;
     setMiscRegNoEffect(MISCREG_PERFCNT0, perfCntCtl);
     // Now, create Write Mask for the IntCtl register
-    RegVal pc_Mask = 0x00007FF;
+    MiscReg pc_Mask = 0x00007FF;
     replaceBits(pc_Mask, 0, 32, 0);
     setRegMask(MISCREG_PERFCNT0, pc_Mask);
 
     // Random
     setMiscRegNoEffect(MISCREG_CP0_RANDOM, 63);
     // Now, create Write Mask for the IntCtl register
-    RegVal random_Mask = 0;
+    MiscReg random_Mask = 0;
     replaceBits(random_Mask, 0, 32, 0);
     setRegMask(MISCREG_CP0_RANDOM, random_Mask);
 
@@ -319,7 +319,7 @@ ISA::configCP()
     pageGrain.esp = cp.CP0_Config3_SP;
     setMiscRegNoEffect(MISCREG_PAGEGRAIN, pageGrain);
     // Now, create Write Mask for the IntCtl register
-    RegVal pg_Mask = 0x10000000;
+    MiscReg pg_Mask = 0x10000000;
     replaceBits(pg_Mask, 0, 32, 0);
     setRegMask(MISCREG_PAGEGRAIN, pg_Mask);
 
@@ -338,7 +338,7 @@ ISA::configCP()
 
     setMiscRegNoEffect(MISCREG_STATUS, status);
     // Now, create Write Mask for the Status register
-    RegVal stat_Mask = 0xFF78FF17;
+    MiscReg stat_Mask = 0xFF78FF17;
     replaceBits(stat_Mask, 0, 32, 0);
     setRegMask(MISCREG_STATUS, stat_Mask);
 
@@ -380,7 +380,7 @@ ISA::configCP()
     }
 
 
-    RegVal mask = 0x7FFFFFFF;
+    MiscReg mask = 0x7FFFFFFF;
 
     // Now, create Write Mask for the Index register
     replaceBits(mask, 0, 32, 0);
@@ -417,7 +417,7 @@ ISA::getVPENum(ThreadID tid) const
     return tcBind.curVPE;
 }
 
-RegVal
+MiscReg
 ISA::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 {
     unsigned reg_sel = (bankType[misc_reg] == perThreadContext)
@@ -431,7 +431,7 @@ ISA::readMiscRegNoEffect(int misc_reg, ThreadID tid) const
 //@TODO: MIPS MT's register view automatically connects
 //       Status to TCStatus depending on current thread
 //template <class TC>
-RegVal
+MiscReg
 ISA::readMiscReg(int misc_reg, ThreadContext *tc,  ThreadID tid)
 {
     unsigned reg_sel = (bankType[misc_reg] == perThreadContext)
@@ -445,12 +445,12 @@ ISA::readMiscReg(int misc_reg, ThreadContext *tc,  ThreadID tid)
 }
 
 void
-ISA::setMiscRegNoEffect(int misc_reg, RegVal val, ThreadID tid)
+ISA::setMiscRegNoEffect(int misc_reg, const MiscReg &val, ThreadID tid)
 {
     unsigned reg_sel = (bankType[misc_reg] == perThreadContext)
         ? tid : getVPENum(tid);
     DPRINTF(MipsPRA,
-            "[tid:%i] Setting (direct set) CP0 Register:%u "
+            "[tid:%i]: Setting (direct set) CP0 Register:%u "
             "Select:%u (%s) to %#x.\n",
             tid, misc_reg / 8, misc_reg % 8, miscRegNames[misc_reg], val);
 
@@ -458,12 +458,12 @@ ISA::setMiscRegNoEffect(int misc_reg, RegVal val, ThreadID tid)
 }
 
 void
-ISA::setRegMask(int misc_reg, RegVal val, ThreadID tid)
+ISA::setRegMask(int misc_reg, const MiscReg &val, ThreadID tid)
 {
     unsigned reg_sel = (bankType[misc_reg] == perThreadContext)
         ? tid : getVPENum(tid);
     DPRINTF(MipsPRA,
-            "[tid:%i] Setting CP0 Register: %u Select: %u (%s) to %#x\n",
+            "[tid:%i]: Setting CP0 Register: %u Select: %u (%s) to %#x\n",
             tid, misc_reg / 8, misc_reg % 8, miscRegNames[misc_reg], val);
     miscRegFile_WriteMask[misc_reg][reg_sel] = val;
 }
@@ -473,17 +473,18 @@ ISA::setRegMask(int misc_reg, RegVal val, ThreadID tid)
 // be overwritten. Make sure to handle those particular registers
 // with care!
 void
-ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc, ThreadID tid)
+ISA::setMiscReg(int misc_reg, const MiscReg &val,
+                    ThreadContext *tc, ThreadID tid)
 {
     int reg_sel = (bankType[misc_reg] == perThreadContext)
         ? tid : getVPENum(tid);
 
     DPRINTF(MipsPRA,
-            "[tid:%i] Setting CP0 Register:%u "
+            "[tid:%i]: Setting CP0 Register:%u "
             "Select:%u (%s) to %#x, with effect.\n",
             tid, misc_reg / 8, misc_reg % 8, miscRegNames[misc_reg], val);
 
-    RegVal cp0_val = filterCP0Write(misc_reg, reg_sel, val);
+    MiscReg cp0_val = filterCP0Write(misc_reg, reg_sel, val);
 
     miscRegFile[misc_reg][reg_sel] = cp0_val;
 
@@ -495,14 +496,14 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc, ThreadID tid)
  * since it has already been done in the calling method
  * (setRegWithEffect)
 */
-RegVal
-ISA::filterCP0Write(int misc_reg, int reg_sel, RegVal val)
+MiscReg
+ISA::filterCP0Write(int misc_reg, int reg_sel, const MiscReg &val)
 {
-    RegVal retVal = val;
+    MiscReg retVal = val;
 
     // Mask off read-only regions
     retVal &= miscRegFile_WriteMask[misc_reg][reg_sel];
-    RegVal curVal = miscRegFile[misc_reg][reg_sel];
+    MiscReg curVal = miscRegFile[misc_reg][reg_sel];
     // Mask off current alue with inverse mask (clear writeable bits)
     curVal &= (~miscRegFile_WriteMask[misc_reg][reg_sel]);
     retVal |= curVal; // Combine the two

@@ -41,21 +41,33 @@ SimpleMemobj::SimpleMemobj(SimpleMemobjParams *params) :
 {
 }
 
-Port &
-SimpleMemobj::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort&
+SimpleMemobj::getMasterPort(const std::string& if_name, PortID idx)
 {
     panic_if(idx != InvalidPortID, "This object doesn't support vector ports");
 
     // This is the name from the Python SimObject declaration (SimpleMemobj.py)
     if (if_name == "mem_side") {
         return memPort;
-    } else if (if_name == "inst_port") {
+    } else {
+        // pass it along to our super class
+        return MemObject::getMasterPort(if_name, idx);
+    }
+}
+
+BaseSlavePort&
+SimpleMemobj::getSlavePort(const std::string& if_name, PortID idx)
+{
+    panic_if(idx != InvalidPortID, "This object doesn't support vector ports");
+
+    // This is the name from the Python SimObject declaration in SimpleCache.py
+    if (if_name == "inst_port") {
         return instPort;
     } else if (if_name == "data_port") {
         return dataPort;
     } else {
         // pass it along to our super class
-        return MemObject::getPort(if_name, idx);
+        return MemObject::getSlavePort(if_name, idx);
     }
 }
 

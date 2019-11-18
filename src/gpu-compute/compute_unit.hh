@@ -14,9 +14,9 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from this
- * software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software
+ * without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,8 +30,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: John Kalamatianos,
- *          Anthony Gutierrez
+ * Author: John Kalamatianos, Anthony Gutierrez
  */
 
 #ifndef __COMPUTE_UNIT_HH__
@@ -53,8 +52,8 @@
 #include "gpu-compute/qstruct.hh"
 #include "gpu-compute/schedule_stage.hh"
 #include "gpu-compute/scoreboard_check_stage.hh"
+#include "mem/mem_object.hh"
 #include "mem/port.hh"
-#include "sim/clocked_object.hh"
 
 static const int MAX_REGS_FOR_NON_VEC_MEM_INST = 1;
 static const int MAX_WIDTH_FOR_MEM_INST = 32;
@@ -91,7 +90,7 @@ enum TLB_CACHE
     TLB_HIT_CACHE_HIT
 };
 
-class ComputeUnit : public ClockedObject
+class ComputeUnit : public MemObject
 {
   public:
     FetchStage fetchStage;
@@ -691,8 +690,8 @@ class ComputeUnit : public ClockedObject
     // port to the SQC TLB (there's a separate TLB for each I-cache)
     ITLBPort *sqcTLBPort;
 
-    Port &
-    getPort(const std::string &if_name, PortID idx) override
+    virtual BaseMasterPort&
+    getMasterPort(const std::string &if_name, PortID idx)
     {
         if (if_name == "memory_port") {
             memPort[idx] = new DataPort(csprintf("%s-port%d", name(), idx),

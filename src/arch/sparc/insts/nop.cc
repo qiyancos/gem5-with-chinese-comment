@@ -57,7 +57,7 @@ output header {{
             }
 
             std::string generateDisassembly(Addr pc,
-                    const SymbolTable *symtab) const override;
+                    const SymbolTable *symtab) const;
         };
 }};
 

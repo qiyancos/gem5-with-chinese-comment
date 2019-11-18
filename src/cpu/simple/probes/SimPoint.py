@@ -36,7 +36,7 @@
 # Authors: Curtis Dunham
 
 from m5.params import *
-from m5.objects.Probe import ProbeListenerObject
+from Probe import ProbeListenerObject
 
 class SimPoint(ProbeListenerObject):
     """Probe for collecting SimPoint Basic Block Vectors (BBVs)."""

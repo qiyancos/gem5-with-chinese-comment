@@ -46,6 +46,7 @@
 #include "mem/packet_access.hh"
 
 using namespace std;
+using namespace TheISA;
 
 void
 Uart8250::processIntrEvent(int intrBit)
@@ -107,9 +108,9 @@ Uart8250::read(PacketPtr pkt)
         case 0x0:
             if (!(LCR & 0x80)) { // read byte
                 if (device->dataAvailable())
-                    pkt->setRaw(device->readData());
+                    pkt->set(device->readData());
                 else {
-                    pkt->setRaw((uint8_t)0);
+                    pkt->set((uint8_t)0);
                     // A limited amount of these are ok.
                     DPRINTF(Uart, "empty read of RX register\n");
                 }
@@ -124,7 +125,7 @@ Uart8250::read(PacketPtr pkt)
             break;
         case 0x1:
             if (!(LCR & 0x80)) { // Intr Enable Register(IER)
-                pkt->setRaw(IER);
+                pkt->set(IER);
             } else { // DLM divisor latch MSB
                 ;
             }
@@ -133,20 +134,20 @@ Uart8250::read(PacketPtr pkt)
             DPRINTF(Uart, "IIR Read, status = %#x\n", (uint32_t)status);
 
             if (status & RX_INT) /* Rx data interrupt has a higher priority */
-                pkt->setRaw(IIR_RXID);
+                pkt->set(IIR_RXID);
             else if (status & TX_INT) {
-                pkt->setRaw(IIR_TXID);
+                pkt->set(IIR_TXID);
                 //Tx interrupts are cleared on IIR reads
                 status &= ~TX_INT;
             } else
-                pkt->setRaw(IIR_NOPEND);
+                pkt->set(IIR_NOPEND);
 
             break;
         case 0x3: // Line Control Register (LCR)
-            pkt->setRaw(LCR);
+            pkt->set(LCR);
             break;
         case 0x4: // Modem Control Register (MCR)
-            pkt->setRaw(MCR);
+            pkt->set(MCR);
             break;
         case 0x5: // Line Status Register (LSR)
             uint8_t lsr;
@@ -155,13 +156,13 @@ Uart8250::read(PacketPtr pkt)
             if (device->dataAvailable())
                 lsr = UART_LSR_DR;
             lsr |= UART_LSR_TEMT | UART_LSR_THRE;
-            pkt->setRaw(lsr);
+            pkt->set(lsr);
             break;
         case 0x6: // Modem Status Register (MSR)
-            pkt->setRaw((uint8_t)0);
+            pkt->set((uint8_t)0);
             break;
         case 0x7: // Scratch Register (SCR)
-            pkt->setRaw((uint8_t)0); // doesn't exist with at 8250.
+            pkt->set((uint8_t)0); // doesn't exist with at 8250.
             break;
         default:
             panic("Tried to access a UART port that doesn't exist\n");
@@ -183,13 +184,12 @@ Uart8250::write(PacketPtr pkt)
 
     Addr daddr = pkt->getAddr() - pioAddr;
 
-    DPRINTF(Uart, " write register %#x value %#x\n", daddr,
-            pkt->getRaw<uint8_t>());
+    DPRINTF(Uart, " write register %#x value %#x\n", daddr, pkt->get<uint8_t>());
 
     switch (daddr) {
         case 0x0:
             if (!(LCR & 0x80)) { // write byte
-                device->writeData(pkt->getRaw<uint8_t>());
+                device->writeData(pkt->get<uint8_t>());
                 platform->clearConsoleInt();
                 status &= ~TX_INT;
                 if (UART_IER_THRI & IER)
@@ -200,11 +200,10 @@ Uart8250::write(PacketPtr pkt)
             break;
         case 0x1:
             if (!(LCR & 0x80)) { // Intr Enable Register(IER)
-                IER = pkt->getRaw<uint8_t>();
+                IER = pkt->get<uint8_t>();
                 if (UART_IER_THRI & IER)
                 {
-                    DPRINTF(Uart,
-                            "IER: IER_THRI set, scheduling TX intrrupt\n");
+                    DPRINTF(Uart, "IER: IER_THRI set, scheduling TX intrrupt\n");
                     if (curTick() - lastTxInt > 225 * SimClock::Int::ns) {
                         DPRINTF(Uart, "-- Interrupting Immediately... %d,%d\n",
                                 curTick(), lastTxInt);
@@ -217,8 +216,7 @@ Uart8250::write(PacketPtr pkt)
                 }
                 else
                 {
-                    DPRINTF(Uart, "IER: IER_THRI cleared, "
-                            "descheduling TX intrrupt\n");
+                    DPRINTF(Uart, "IER: IER_THRI cleared, descheduling TX intrrupt\n");
                     if (txIntrEvent.scheduled())
                         deschedule(txIntrEvent);
                     if (status & TX_INT)
@@ -227,12 +225,10 @@ Uart8250::write(PacketPtr pkt)
                 }
 
                 if ((UART_IER_RDI & IER) && device->dataAvailable()) {
-                    DPRINTF(Uart,
-                            "IER: IER_RDI set, scheduling RX intrrupt\n");
+                    DPRINTF(Uart, "IER: IER_RDI set, scheduling RX intrrupt\n");
                     scheduleIntr(&rxIntrEvent);
                 } else {
-                    DPRINTF(Uart, "IER: IER_RDI cleared, "
-                            "descheduling RX intrrupt\n");
+                    DPRINTF(Uart, "IER: IER_RDI cleared, descheduling RX intrrupt\n");
                     if (rxIntrEvent.scheduled())
                         deschedule(rxIntrEvent);
                     if (status & RX_INT)
@@ -246,10 +242,10 @@ Uart8250::write(PacketPtr pkt)
         case 0x2: // FIFO Control Register (FCR)
             break;
         case 0x3: // Line Control Register (LCR)
-            LCR = pkt->getRaw<uint8_t>();
+            LCR = pkt->get<uint8_t>();
             break;
         case 0x4: // Modem Control Register (MCR)
-            if (pkt->getRaw<uint8_t>() == (UART_MCR_LOOP | 0x0A))
+            if (pkt->get<uint8_t>() == (UART_MCR_LOOP | 0x0A))
                     MCR = 0x9A;
             break;
         case 0x7: // Scratch Register (SCR)

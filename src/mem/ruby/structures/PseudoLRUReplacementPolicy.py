@@ -27,7 +27,7 @@
 #
 # Author: Derek Hower
 
-from m5.objects.ReplacementPolicy import ReplacementPolicy
+from ReplacementPolicy import ReplacementPolicy
 
 class PseudoLRUReplacementPolicy(ReplacementPolicy):
     type = 'PseudoLRUReplacementPolicy'

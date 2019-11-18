@@ -72,7 +72,7 @@ PioPort::getAddrRanges() const
 }
 
 PioDevice::PioDevice(const Params *p)
-    : ClockedObject(p), sys(p->system), pioPort(this)
+    : MemObject(p), sys(p->system), pioPort(this)
 {}
 
 PioDevice::~PioDevice()
@@ -87,13 +87,13 @@ PioDevice::init()
     pioPort.sendRangeChange();
 }
 
-Port &
-PioDevice::getPort(const std::string &if_name, PortID idx)
+BaseSlavePort &
+PioDevice::getSlavePort(const std::string &if_name, PortID idx)
 {
     if (if_name == "pio") {
         return pioPort;
     }
-    return ClockedObject::getPort(if_name, idx);
+    return MemObject::getSlavePort(if_name, idx);
 }
 
 BasicPioDevice::BasicPioDevice(const Params *p, Addr size)

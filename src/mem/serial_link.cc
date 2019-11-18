@@ -82,7 +82,7 @@ SerialLink::SerialLinkMasterPort::SerialLinkMasterPort(const std::string&
 }
 
 SerialLink::SerialLink(SerialLinkParams *p)
-    : ClockedObject(p),
+    : MemObject(p),
       slavePort(p->name + ".slave", *this, masterPort,
                 ticksToCycles(p->delay), p->resp_size, p->ranges),
       masterPort(p->name + ".master", *this, slavePort,
@@ -93,16 +93,24 @@ SerialLink::SerialLink(SerialLinkParams *p)
 {
 }
 
-Port&
-SerialLink::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort&
+SerialLink::getMasterPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "master")
         return masterPort;
-    else if (if_name == "slave")
+    else
+        // pass it along to our super class
+        return MemObject::getMasterPort(if_name, idx);
+}
+
+BaseSlavePort&
+SerialLink::getSlavePort(const std::string &if_name, PortID idx)
+{
+    if (if_name == "slave")
         return slavePort;
     else
         // pass it along to our super class
-        return ClockedObject::getPort(if_name, idx);
+        return MemObject::getSlavePort(if_name, idx);
 }
 
 void
@@ -385,14 +393,14 @@ SerialLink::SerialLinkSlavePort::recvFunctional(PacketPtr pkt)
 
     // check the response queue
     for (auto i = transmitList.begin();  i != transmitList.end(); ++i) {
-        if (pkt->trySatisfyFunctional((*i).pkt)) {
+        if (pkt->checkFunctional((*i).pkt)) {
             pkt->makeResponse();
             return;
         }
     }
 
     // also check the master port's request queue
-    if (masterPort.trySatisfyFunctional(pkt)) {
+    if (masterPort.checkFunctional(pkt)) {
         return;
     }
 
@@ -403,13 +411,13 @@ SerialLink::SerialLinkSlavePort::recvFunctional(PacketPtr pkt)
 }
 
 bool
-SerialLink::SerialLinkMasterPort::trySatisfyFunctional(PacketPtr pkt)
+SerialLink::SerialLinkMasterPort::checkFunctional(PacketPtr pkt)
 {
     bool found = false;
     auto i = transmitList.begin();
 
     while (i != transmitList.end() && !found) {
-        if (pkt->trySatisfyFunctional((*i).pkt)) {
+        if (pkt->checkFunctional((*i).pkt)) {
             pkt->makeResponse();
             found = true;
         }

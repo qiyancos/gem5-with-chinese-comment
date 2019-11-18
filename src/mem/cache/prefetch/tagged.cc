@@ -35,8 +35,6 @@
 
 #include "mem/cache/prefetch/tagged.hh"
 
-#include "params/TaggedPrefetcher.hh"
-
 TaggedPrefetcher::TaggedPrefetcher(const TaggedPrefetcherParams *p)
     : QueuedPrefetcher(p), degree(p->degree)
 {
@@ -44,14 +42,20 @@ TaggedPrefetcher::TaggedPrefetcher(const TaggedPrefetcherParams *p)
 }
 
 void
-TaggedPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
+TaggedPrefetcher::calculatePrefetch(const PacketPtr &pkt,
         std::vector<AddrPriority> &addresses)
 {
-    Addr blkAddr = blockAddress(pfi.getAddr());
+    Addr blkAddr = pkt->getAddr() & ~(Addr)(blkSize-1);
 
     for (int d = 1; d <= degree; d++) {
         Addr newAddr = blkAddr + d*(blkSize);
-        addresses.push_back(AddrPriority(newAddr,0));
+        if (!samePage(blkAddr, newAddr)) {
+            // Count number of unissued prefetches due to page crossing
+            pfSpanPage += degree - d + 1;
+            return;
+        } else {
+            addresses.push_back(AddrPriority(newAddr,0));
+        }
     }
 }
 

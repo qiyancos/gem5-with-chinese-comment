@@ -44,6 +44,10 @@
 
 class EtherInt;
 
+/**
+ * The base EtherObject class, allows for an accesor function to a
+ * simobj that returns the Port.
+ */
 class EtherDevice : public PciDevice
 {
   public:
@@ -57,6 +61,10 @@ class EtherDevice : public PciDevice
     {
         return dynamic_cast<const Params *>(_params);
     }
+
+  public:
+    /** Additional function to return the Port of a memory object. */
+    virtual EtherInt *getEthPort(const std::string &if_name, int idx = -1) = 0;
 
   public:
     void regStats();

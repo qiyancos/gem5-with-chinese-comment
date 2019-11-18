@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 ARM Limited
+ * Copyright (c) 2012-2016 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -57,18 +57,17 @@
 #include <deque>
 #include <string>
 #include <unordered_set>
-#include <vector>
 
 #include "base/callback.hh"
 #include "base/statistics.hh"
 #include "enums/AddrMap.hh"
 #include "enums/MemSched.hh"
 #include "enums/PageManage.hh"
-#include "mem/drampower.hh"
-#include "mem/qos/mem_ctrl.hh"
+#include "mem/abstract_mem.hh"
 #include "mem/qport.hh"
 #include "params/DRAMCtrl.hh"
 #include "sim/eventq.hh"
+#include "mem/drampower.hh"
 
 /**
  * The DRAM controller is a single-channel memory controller capturing
@@ -95,7 +94,7 @@
  * similar to that described in "Optimized Active and Power-Down Mode
  * Refresh Control in 3D-DRAMs" by Jung et al, VLSI-SoC, 2014.
  */
-class DRAMCtrl : public QoS::MemCtrl
+class DRAMCtrl : public AbstractMemory
 {
 
   private:
@@ -131,7 +130,7 @@ class DRAMCtrl : public QoS::MemCtrl
     MemoryPort port;
 
     /**
-     * Remember if the memory system is in timing mode
+     * Remeber if the memory system is in timing mode
      */
     bool isTimingMode;
 
@@ -141,7 +140,19 @@ class DRAMCtrl : public QoS::MemCtrl
     bool retryRdReq;
     bool retryWrReq;
 
-    /**/
+    /**
+     * Bus state used to control the read/write switching and drive
+     * the scheduling of the next request.
+     */
+    enum BusState {
+        READ = 0,
+        WRITE,
+    };
+
+    BusState busState;
+
+    /* bus state for next request event triggered */
+    BusState busStateNext;
 
     /**
      * Simple structure to hold the values needed to keep track of
@@ -178,8 +189,7 @@ class DRAMCtrl : public QoS::MemCtrl
         uint8_t bank;
         uint8_t bankgr;
 
-        Tick rdAllowedAt;
-        Tick wrAllowedAt;
+        Tick colAllowedAt;
         Tick preAllowedAt;
         Tick actAllowedAt;
 
@@ -188,7 +198,7 @@ class DRAMCtrl : public QoS::MemCtrl
 
         Bank() :
             openRow(NO_ROW), bank(0), bankgr(0),
-            rdAllowedAt(0), wrAllowedAt(0), preAllowedAt(0), actAllowedAt(0),
+            colAllowedAt(0), preAllowedAt(0), actAllowedAt(0),
             rowAccesses(0), bytesAccessed(0)
         { }
     };
@@ -420,7 +430,7 @@ class DRAMCtrl : public QoS::MemCtrl
         DRAMPower power;
 
         /**
-         * List of commands issued, to be sent to DRAMPpower at refresh
+         * List of comamnds issued, to be sent to DRAMPpower at refresh
          * and stats dump.  Keep commands here since commands to different
          * banks are added out of order.  Will only pass commands up to
          * curTick() to DRAMPower after sorting.
@@ -495,12 +505,12 @@ class DRAMCtrl : public QoS::MemCtrl
         }
 
         /**
-         * Check if the command queue of current rank is idle
+         * Check if the current rank is idle and should enter a low-pwer state
          *
-         * @param Return true if the there are no commands in Q.
-         *                    Bus direction determines queue checked.
+         * @param Return true if the there are no read commands in Q
+         *                    and there are no outstanding events
          */
-        bool isQueueEmpty() const;
+        bool lowPowerEntryReady() const;
 
         /**
          * Let the rank check if it was waiting for requests to drain
@@ -644,10 +654,7 @@ class DRAMCtrl : public QoS::MemCtrl
         /** This comes from the outside world */
         const PacketPtr pkt;
 
-        /** MasterID associated with the packet */
-        const MasterID _masterId;
-
-        const bool read;
+        const bool isRead;
 
         /** Will be populated by address decoder */
         const uint8_t rank;
@@ -683,69 +690,16 @@ class DRAMCtrl : public QoS::MemCtrl
         Bank& bankRef;
         Rank& rankRef;
 
-        /**
-         * QoS value of the encapsulated packet read at queuing time
-         */
-        uint8_t _qosValue;
-
-        /**
-         * Set the packet QoS value
-         * (interface compatibility with Packet)
-         */
-        inline void qosValue(const uint8_t qv) { _qosValue = qv; }
-
-        /**
-         * Get the packet QoS value
-         * (interface compatibility with Packet)
-         */
-        inline uint8_t qosValue() const { return _qosValue; }
-
-        /**
-         * Get the packet MasterID
-         * (interface compatibility with Packet)
-         */
-        inline MasterID masterId() const { return _masterId; }
-
-        /**
-         * Get the packet size
-         * (interface compatibility with Packet)
-         */
-        inline unsigned int getSize() const { return size; }
-
-        /**
-         * Get the packet address
-         * (interface compatibility with Packet)
-         */
-        inline Addr getAddr() const { return addr; }
-
-        /**
-         * Return true if its a read packet
-         * (interface compatibility with Packet)
-         */
-        inline bool isRead() const { return read; }
-
-        /**
-         * Return true if its a write packet
-         * (interface compatibility with Packet)
-         */
-        inline bool isWrite() const { return !read; }
-
-
         DRAMPacket(PacketPtr _pkt, bool is_read, uint8_t _rank, uint8_t _bank,
                    uint32_t _row, uint16_t bank_id, Addr _addr,
                    unsigned int _size, Bank& bank_ref, Rank& rank_ref)
-            : entryTime(curTick()), readyTime(curTick()), pkt(_pkt),
-              _masterId(pkt->masterId()),
-              read(is_read), rank(_rank), bank(_bank), row(_row),
+            : entryTime(curTick()), readyTime(curTick()),
+              pkt(_pkt), isRead(is_read), rank(_rank), bank(_bank), row(_row),
               bankId(bank_id), addr(_addr), size(_size), burstHelper(NULL),
-              bankRef(bank_ref), rankRef(rank_ref), _qosValue(_pkt->qosValue())
+              bankRef(bank_ref), rankRef(rank_ref)
         { }
 
     };
-
-    // The DRAM packets are store in a multiple dequeue structure,
-    // based on their QoS priority
-    typedef std::deque<DRAMPacket*> DRAMPacketQueue;
 
     /**
      * Bunch of things requires to setup "events" in gem5
@@ -839,8 +793,8 @@ class DRAMCtrl : public QoS::MemCtrl
      * @param isRead Is the request for a read or a write to DRAM
      * @return A DRAMPacket pointer with the decoded information
      */
-    DRAMPacket* decodeAddr(const PacketPtr pkt, Addr dramPktAddr,
-                           unsigned int size, bool isRead) const;
+    DRAMPacket* decodeAddr(PacketPtr pkt, Addr dramPktAddr, unsigned int size,
+                           bool isRead);
 
     /**
      * The memory schduler/arbiter - picks which request needs to
@@ -851,10 +805,10 @@ class DRAMCtrl : public QoS::MemCtrl
      *
      * @param queue Queued requests to consider
      * @param extra_col_delay Any extra delay due to a read/write switch
-     * @return an iterator to the selected packet, else queue.end()
+     * @return true if a packet is scheduled to a rank which is available else
+     * false
      */
-    DRAMPacketQueue::iterator chooseNext(DRAMPacketQueue& queue,
-        Tick extra_col_delay);
+    bool chooseNext(std::deque<DRAMPacket*>& queue, Tick extra_col_delay);
 
     /**
      * For FR-FCFS policy reorder the read/write queue depending on row buffer
@@ -862,23 +816,23 @@ class DRAMCtrl : public QoS::MemCtrl
      *
      * @param queue Queued requests to consider
      * @param extra_col_delay Any extra delay due to a read/write switch
-     * @return an iterator to the selected packet, else queue.end()
+     * @return true if a packet is scheduled to a rank which is available else
+     * false
      */
-    DRAMPacketQueue::iterator chooseNextFRFCFS(DRAMPacketQueue& queue,
-            Tick extra_col_delay);
+    bool reorderQueue(std::deque<DRAMPacket*>& queue, Tick extra_col_delay);
 
     /**
      * Find which are the earliest banks ready to issue an activate
-     * for the enqueued requests. Assumes maximum of 32 banks per rank
+     * for the enqueued requests. Assumes maximum of 64 banks per DIMM
      * Also checks if the bank is already prepped.
      *
      * @param queue Queued requests to consider
-     * @param min_col_at time of seamless burst command
+     * @param time of seamless burst command
      * @return One-hot encoded mask of bank indices
      * @return boolean indicating burst can issue seamlessly, with no gaps
      */
-    std::pair<std::vector<uint32_t>, bool>
-    minBankPrep(const DRAMPacketQueue& queue, Tick min_col_at) const;
+    std::pair<uint64_t, bool> minBankPrep(const std::deque<DRAMPacket*>& queue,
+                                          Tick min_col_at) const;
 
     /**
      * Keep track of when row activations happen, in order to enforce
@@ -922,10 +876,10 @@ class DRAMCtrl : public QoS::MemCtrl
     Addr burstAlign(Addr addr) const { return (addr & ~(Addr(burstSize - 1))); }
 
     /**
-     * The controller's main read and write queues, with support for QoS reordering
+     * The controller's main read and write queues
      */
-    std::vector<DRAMPacketQueue> readQueue;
-    std::vector<DRAMPacketQueue> writeQueue;
+    std::deque<DRAMPacket*> readQueue;
+    std::deque<DRAMPacket*> writeQueue;
 
     /**
      * To avoid iterating over the write queue to check for
@@ -939,7 +893,7 @@ class DRAMCtrl : public QoS::MemCtrl
     /**
      * Response queue where read packets wait after we're done working
      * with them, but it's not time to send the response yet. The
-     * responses are stored separately mostly to keep the code clean
+     * responses are stored seperately mostly to keep the code clean
      * and help with events scheduling. For all logical purposes such
      * as sizing the read queue, this and the main read queue need to
      * be added together.
@@ -985,10 +939,10 @@ class DRAMCtrl : public QoS::MemCtrl
      * values.
      */
     const Tick M5_CLASS_VAR_USED tCK;
+    const Tick tWTR;
     const Tick tRTW;
     const Tick tCS;
     const Tick tBURST;
-    const Tick tCCD_L_WR;
     const Tick tCCD_L;
     const Tick tRCD;
     const Tick tCL;
@@ -1004,9 +958,6 @@ class DRAMCtrl : public QoS::MemCtrl
     const Tick tXP;
     const Tick tXS;
     const uint32_t activationLimit;
-    const Tick rankToRankDly;
-    const Tick wrToRdDly;
-    const Tick rdToWrDly;
 
     /**
      * Memory controller configuration initialized based on parameter
@@ -1017,7 +968,7 @@ class DRAMCtrl : public QoS::MemCtrl
     Enums::PageManage pageMgmt;
 
     /**
-     * Max column accesses (read and write) per row, before forcefully
+     * Max column accesses (read and write) per row, before forefully
      * closing it.
      */
     const uint32_t maxAccessesPerRow;
@@ -1037,16 +988,16 @@ class DRAMCtrl : public QoS::MemCtrl
     const Tick backendLatency;
 
     /**
-     * Till when must we wait before issuing next RD/WR burst?
+     * Till when has the main data bus been spoken for already?
      */
-    Tick nextBurstAt;
+    Tick busBusyUntil;
 
     Tick prevArrival;
 
     /**
      * The soonest you have to start thinking about the next request
      * is the longest access time that can occur before
-     * nextBurstAt. Assuming you need to precharge, open a new row,
+     * busBusyUntil. Assuming you need to precharge, open a new row,
      * and access, it is tRP + tRCD + tCL.
      */
     Tick nextReqTime;
@@ -1076,26 +1027,6 @@ class DRAMCtrl : public QoS::MemCtrl
     Stats::Histogram bytesPerActivate;
     Stats::Histogram rdPerTurnAround;
     Stats::Histogram wrPerTurnAround;
-
-    // per-master bytes read and written to memory
-    Stats::Vector masterReadBytes;
-    Stats::Vector masterWriteBytes;
-
-    // per-master bytes read and written to memory rate
-    Stats::Formula masterReadRate;
-    Stats::Formula masterWriteRate;
-
-    // per-master read and write serviced memory accesses
-    Stats::Vector masterReadAccesses;
-    Stats::Vector masterWriteAccesses;
-
-    // per-master read and write total memory access latency
-    Stats::Vector masterReadTotalLat;
-    Stats::Vector masterWriteTotalLat;
-
-    // per-master raed and write average memory access latency
-    Stats::Formula masterReadAvgLat;
-    Stats::Formula masterWriteAvgLat;
 
     // Latencies summed over all requests
     Stats::Scalar totQLat;
@@ -1140,9 +1071,6 @@ class DRAMCtrl : public QoS::MemCtrl
     /** The time when stats were last reset used to calculate average power */
     Tick lastStatsResetTick;
 
-    /** Enable or disable DRAM powerdown states. */
-    bool enableDRAMPowerdown;
-
     /**
      * Upstream caches need this packet until true is returned, so
      * hold it for deletion until a subsequent call
@@ -1156,7 +1084,7 @@ class DRAMCtrl : public QoS::MemCtrl
      * result of the energy values coming from DRAMPower, and there
      * is currently no support for resetting the state.
      *
-     * @param rank Current rank
+     * @param rank Currrent rank
      */
     void updatePowerStats(Rank& rank_ref);
 
@@ -1179,8 +1107,8 @@ class DRAMCtrl : public QoS::MemCtrl
 
     DrainState drain() override;
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    virtual BaseSlavePort& getSlavePort(const std::string& if_name,
+                                        PortID idx = InvalidPortID) override;
 
     virtual void init() override;
     virtual void startup() override;

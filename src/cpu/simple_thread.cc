@@ -1,16 +1,4 @@
 /*
- * Copyright (c) 2018 ARM Limited
- * All rights reserved
- *
- * The license below extends only to copyright in the software and shall
- * not be construed as granting a license to any other intellectual
- * property including but not limited to intellectual property relating
- * to a hardware implementation of the functionality of the software
- * licensed hereunder.  You may use the software subject to the license
- * terms below provided that you ensure that this notice is replicated
- * unmodified and in its entirety in all distributions of the software,
- * modified or unmodified, in source code or in binary form.
- *
  * Copyright (c) 2001-2006 The Regents of The University of Michigan
  * All rights reserved.
  *
@@ -77,21 +65,23 @@ SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
                            Process *_process, BaseTLB *_itb,
                            BaseTLB *_dtb, TheISA::ISA *_isa)
     : ThreadState(_cpu, _thread_num, _process), isa(_isa),
-      predicate(true), memAccPredicate(true), system(_sys),
-      itb(_itb), dtb(_dtb), decoder(TheISA::Decoder(_isa))
+      predicate(false), system(_sys),
+      itb(_itb), dtb(_dtb)
 {
     clearArchRegs();
-    quiesceEvent = new EndQuiesceEvent(this);
+    tc = new ProxyThreadContext<SimpleThread>(this);
+    quiesceEvent = new EndQuiesceEvent(tc);
 }
 
 SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
                            BaseTLB *_itb, BaseTLB *_dtb,
                            TheISA::ISA *_isa, bool use_kernel_stats)
-    : ThreadState(_cpu, _thread_num, NULL), isa(_isa),
-      predicate(true), memAccPredicate(true), system(_sys),
-      itb(_itb), dtb(_dtb), decoder(TheISA::Decoder(_isa))
+    : ThreadState(_cpu, _thread_num, NULL), isa(_isa), system(_sys), itb(_itb),
+      dtb(_dtb)
 {
-    quiesceEvent = new EndQuiesceEvent(this);
+    tc = new ProxyThreadContext<SimpleThread>(this);
+
+    quiesceEvent = new EndQuiesceEvent(tc);
 
     clearArchRegs();
 
@@ -113,10 +103,15 @@ SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
         kernelStats = new TheISA::Kernel::Statistics();
 }
 
+SimpleThread::~SimpleThread()
+{
+    delete tc;
+}
+
 void
 SimpleThread::takeOverFrom(ThreadContext *oldContext)
 {
-    ::takeOverFrom(*this, *oldContext);
+    ::takeOverFrom(*tc, *oldContext);
     decoder.takeOverFrom(oldContext->getDecoderPtr());
 
     kernelStats = oldContext->getKernelStats();
@@ -141,7 +136,7 @@ void
 SimpleThread::serialize(CheckpointOut &cp) const
 {
     ThreadState::serialize(cp);
-    ::serialize(*this, cp);
+    ::serialize(*tc, cp);
 }
 
 
@@ -149,20 +144,20 @@ void
 SimpleThread::unserialize(CheckpointIn &cp)
 {
     ThreadState::unserialize(cp);
-    ::unserialize(*this, cp);
+    ::unserialize(*tc, cp);
 }
 
 void
 SimpleThread::startup()
 {
-    isa->startup(this);
+    isa->startup(tc);
 }
 
 void
 SimpleThread::dumpFuncProfile()
 {
     OutputStream *os(simout.create(csprintf("profile.%s.dat", baseCpu->name())));
-    profile->dump(this, *os->stream());
+    profile->dump(tc, *os->stream());
     simout.close(os);
 }
 
@@ -211,5 +206,21 @@ SimpleThread::regStats(const string &name)
 void
 SimpleThread::copyArchRegs(ThreadContext *src_tc)
 {
-    TheISA::copyRegs(src_tc, this);
+    TheISA::copyRegs(src_tc, tc);
 }
+
+// The following methods are defined in src/arch/alpha/ev5.cc for
+// Alpha.
+#if THE_ISA != ALPHA_ISA
+Fault
+SimpleThread::hwrei()
+{
+    return NoFault;
+}
+
+bool
+SimpleThread::simPalCheck(int palFunc)
+{
+    return true;
+}
+#endif

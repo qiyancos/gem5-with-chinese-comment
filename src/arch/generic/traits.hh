@@ -42,7 +42,6 @@
 #ifndef __ARCH_COMMON_TRAITS_HH__
 #define __ARCH_COMMON_TRAITS_HH__
 
-#include "arch/types.hh"
 #include "enums/VecRegRenameMode.hh"
 
 /** Helper structure to get the vector register mode for a given ISA.
@@ -51,19 +50,14 @@
  * appropriate member of the ISA.
  */
 template <typename ISA>
-struct RenameMode
+struct initRenameMode
 {
-    static Enums::VecRegRenameMode init(const ISA*) { return Enums::Full; }
-
-    static Enums::VecRegRenameMode
-    mode(const TheISA::PCState&)
-    { return Enums::Full; }
-
+    static Enums::VecRegRenameMode mode(const ISA*) { return Enums::Full; }
     /**
      * Compare the initial rename mode of two instances of the ISA.
      * Result is true by definition, as the default mode is Full.
      * */
-    static bool equalsInit(const ISA*, const ISA*) { return true; }
+    static bool equals(const ISA*, const ISA*) { return true; }
 };
 
 #endif /* __ARCH_COMMON_TRAITS_HH__ */

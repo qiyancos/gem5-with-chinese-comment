@@ -519,8 +519,7 @@ class IGbE : public EtherDevice
     ~IGbE();
     void init() override;
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    EtherInt *getEthPort(const std::string &if_name, int idx) override;
 
     Tick lastInterrupt;
 

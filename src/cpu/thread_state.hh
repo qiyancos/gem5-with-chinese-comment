@@ -36,19 +36,19 @@
 #include "cpu/base.hh"
 #include "cpu/profile.hh"
 #include "cpu/thread_context.hh"
+#include "mem/mem_object.hh"
 #include "sim/process.hh"
 
 class EndQuiesceEvent;
 class FunctionProfile;
 class ProfileNode;
-namespace Kernel {
-    class Statistics;
+namespace TheISA {
+    namespace Kernel {
+        class Statistics;
+    }
 }
 
 class Checkpoint;
-
-class FSTranslatingPortProxy;
-class SETranslatingPortProxy;
 
 /**
  *  Struct for holding general thread state that is needed across CPU
@@ -99,11 +99,11 @@ struct ThreadState : public Serializable {
 
     void profileSample();
 
-    Kernel::Statistics *getKernelStats() { return kernelStats; }
+    TheISA::Kernel::Statistics *getKernelStats() { return kernelStats; }
 
     PortProxy &getPhysProxy();
 
-    PortProxy &getVirtProxy();
+    FSTranslatingPortProxy &getVirtProxy();
 
     Process *getProcessPtr() { return process; }
 
@@ -115,17 +115,19 @@ struct ThreadState : public Serializable {
          * the se translating port proxy needs to be reinitialized since it
          * holds a pointer to the process class.
          */
-        if (virtProxy) {
-            delete virtProxy;
-            virtProxy = NULL;
+        if (proxy) {
+            delete proxy;
+            proxy = NULL;
             initMemProxies(NULL);
         }
     }
 
+    SETranslatingPortProxy &getMemProxy();
+
     /** Reads the number of instructions functionally executed and
      * committed.
      */
-    Counter readFuncExeInst() const { return funcExeInst; }
+    Counter readFuncExeInst() { return funcExeInst; }
 
     /** Sets the total number of instructions functionally executed
      * and committed.
@@ -184,7 +186,7 @@ struct ThreadState : public Serializable {
     Addr profilePC;
     EndQuiesceEvent *quiesceEvent;
 
-    Kernel::Statistics *kernelStats;
+    TheISA::Kernel::Statistics *kernelStats;
 
   protected:
     Process *process;
@@ -195,7 +197,8 @@ struct ThreadState : public Serializable {
 
     /** A translating port proxy, outgoing only, for functional
      * accesse to virtual addresses. */
-    PortProxy *virtProxy;
+    FSTranslatingPortProxy *virtProxy;
+    SETranslatingPortProxy *proxy;
 
   public:
     /*

@@ -77,7 +77,7 @@ Bridge::BridgeMasterPort::BridgeMasterPort(const std::string& _name,
 }
 
 Bridge::Bridge(Params *p)
-    : ClockedObject(p),
+    : MemObject(p),
       slavePort(p->name + ".slave", *this, masterPort,
                 ticksToCycles(p->delay), p->resp_size, p->ranges),
       masterPort(p->name + ".master", *this, slavePort,
@@ -85,16 +85,24 @@ Bridge::Bridge(Params *p)
 {
 }
 
-Port &
-Bridge::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort&
+Bridge::getMasterPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "master")
         return masterPort;
-    else if (if_name == "slave")
+    else
+        // pass it along to our super class
+        return MemObject::getMasterPort(if_name, idx);
+}
+
+BaseSlavePort&
+Bridge::getSlavePort(const std::string &if_name, PortID idx)
+{
+    if (if_name == "slave")
         return slavePort;
     else
         // pass it along to our super class
-        return ClockedObject::getPort(if_name, idx);
+        return MemObject::getSlavePort(if_name, idx);
 }
 
 void
@@ -353,14 +361,14 @@ Bridge::BridgeSlavePort::recvFunctional(PacketPtr pkt)
 
     // check the response queue
     for (auto i = transmitList.begin();  i != transmitList.end(); ++i) {
-        if (pkt->trySatisfyFunctional((*i).pkt)) {
+        if (pkt->checkFunctional((*i).pkt)) {
             pkt->makeResponse();
             return;
         }
     }
 
     // also check the master port's request queue
-    if (masterPort.trySatisfyFunctional(pkt)) {
+    if (masterPort.checkFunctional(pkt)) {
         return;
     }
 
@@ -371,13 +379,13 @@ Bridge::BridgeSlavePort::recvFunctional(PacketPtr pkt)
 }
 
 bool
-Bridge::BridgeMasterPort::trySatisfyFunctional(PacketPtr pkt)
+Bridge::BridgeMasterPort::checkFunctional(PacketPtr pkt)
 {
     bool found = false;
     auto i = transmitList.begin();
 
     while (i != transmitList.end() && !found) {
-        if (pkt->trySatisfyFunctional((*i).pkt)) {
+        if (pkt->checkFunctional((*i).pkt)) {
             pkt->makeResponse();
             found = true;
         }

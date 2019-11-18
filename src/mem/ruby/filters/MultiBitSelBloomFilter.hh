@@ -29,40 +29,58 @@
 #ifndef __MEM_RUBY_FILTERS_MULTIBITSELBLOOMFILTER_HH__
 #define __MEM_RUBY_FILTERS_MULTIBITSELBLOOMFILTER_HH__
 
-#include "mem/ruby/filters/AbstractBloomFilter.hh"
+#include <iostream>
+#include <string>
+#include <vector>
 
-struct MultiBitSelBloomFilterParams;
+#include "mem/ruby/common/Address.hh"
+#include "mem/ruby/common/TypeDefines.hh"
+#include "mem/ruby/filters/AbstractBloomFilter.hh"
 
 class MultiBitSelBloomFilter : public AbstractBloomFilter
 {
   public:
-    MultiBitSelBloomFilter(const MultiBitSelBloomFilterParams* p);
+    MultiBitSelBloomFilter(std::string config);
     ~MultiBitSelBloomFilter();
 
-    void merge(const AbstractBloomFilter* other) override;
-    void set(Addr addr) override;
-    int getCount(Addr addr) const override;
+    void clear();
+    void increment(Addr addr);
+    void decrement(Addr addr);
+    void merge(AbstractBloomFilter * other_filter);
+    void set(Addr addr);
+    void unset(Addr addr);
+
+    bool isSet(Addr addr);
+    int getCount(Addr addr);
+    int getTotalCount();
+    void print(std::ostream& out) const;
+
+    int getIndex(Addr addr);
+    int readBit(const int index);
+    void writeBit(const int index, const int value);
+
+    int
+    operator[](const int index) const
+    {
+        return this->m_filter[index];
+    }
 
   private:
-    int hash(Addr addr, int hash_number) const;
+    int get_index(Addr addr, int hashNumber);
 
-    int hashBitsel(uint64_t value, int index, int jump, int maxBits,
-                    int numBits) const;
+    int hash_bitsel(uint64_t value, int index, int jump, int maxBits,
+                    int numBits);
 
-    /** Number of hashes. */
-    const int numHashes;
+    std::vector<int> m_filter;
+    int m_filter_size;
+    int m_num_hashes;
+    int m_filter_size_bits;
+    int m_skip_bits;
 
-    /**
-     * Bit offset from block number. Used to simulate bit selection hashing
-     * on larger than cache-line granularities, by skipping some bits.
-     */
-    const int skipBits;
+    int m_par_filter_size;
+    int m_par_filter_size_bits;
 
-    /** Size of the filter when doing parallel hashing. */
-    const int parFilterSize;
-
-    /** Whether hashing should be performed in parallel. */
-    const bool isParallel;
+    bool isParallel;
 };
 
 #endif // __MEM_RUBY_FILTERS_MULTIBITSELBLOOMFILTER_HH__

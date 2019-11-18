@@ -14,9 +14,9 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from this
- * software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software
+ * without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,7 +30,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Lisa Hsu
+ * Author: Lisa Hsu
  */
 
 #ifndef __TLB_COALESCER_HH__
@@ -49,23 +49,23 @@
 #include "base/logging.hh"
 #include "base/statistics.hh"
 #include "gpu-compute/gpu_tlb.hh"
+#include "mem/mem_object.hh"
 #include "mem/port.hh"
 #include "mem/request.hh"
 #include "params/TLBCoalescer.hh"
-#include "sim/clocked_object.hh"
 
 class BaseTLB;
 class Packet;
 class ThreadContext;
 
 /**
- * The TLBCoalescer is a ClockedObject sitting on the front side (CPUSide) of
+ * The TLBCoalescer is a MemObject sitting on the front side (CPUSide) of
  * each TLB. It receives packets and issues coalesced requests to the
  * TLB below it. It controls how requests are coalesced (the rules)
  * and the permitted number of TLB probes per cycle (i.e., how many
  * coalesced requests it feeds the TLB per cycle).
  */
-class TLBCoalescer : public ClockedObject
+class TLBCoalescer : public MemObject
 {
    protected:
     // TLB clock: will inherit clock from shader's clock period in terms
@@ -211,8 +211,8 @@ class TLBCoalescer : public ClockedObject
     // Coalescer master ports on the memory side
     std::vector<MemSidePort*> memSidePort;
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    BaseMasterPort& getMasterPort(const std::string &if_name, PortID idx);
+    BaseSlavePort& getSlavePort(const std::string &if_name, PortID idx);
 
     void processProbeTLBEvent();
     /// This event issues the TLB probes

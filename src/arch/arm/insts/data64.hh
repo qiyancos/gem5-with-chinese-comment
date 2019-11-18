@@ -57,8 +57,7 @@ class DataXImmOp : public ArmStaticInst
         dest(_dest), op1(_op1), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataXImmOnlyOp : public ArmStaticInst
@@ -73,8 +72,7 @@ class DataXImmOnlyOp : public ArmStaticInst
         dest(_dest), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataXSRegOp : public ArmStaticInst
@@ -92,8 +90,7 @@ class DataXSRegOp : public ArmStaticInst
         shiftAmt(_shiftAmt), shiftType(_shiftType)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataXERegOp : public ArmStaticInst
@@ -111,8 +108,7 @@ class DataXERegOp : public ArmStaticInst
         extendType(_extendType), shiftAmt(_shiftAmt)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataX1RegOp : public ArmStaticInst
@@ -125,8 +121,7 @@ class DataX1RegOp : public ArmStaticInst
         ArmStaticInst(mnem, _machInst, __opClass), dest(_dest), op1(_op1)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataX1RegImmOp : public ArmStaticInst
@@ -141,8 +136,7 @@ class DataX1RegImmOp : public ArmStaticInst
         imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataX1Reg2ImmOp : public ArmStaticInst
@@ -158,8 +152,7 @@ class DataX1Reg2ImmOp : public ArmStaticInst
         imm1(_imm1), imm2(_imm2)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataX2RegOp : public ArmStaticInst
@@ -173,8 +166,7 @@ class DataX2RegOp : public ArmStaticInst
         dest(_dest), op1(_op1), op2(_op2)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataX2RegImmOp : public ArmStaticInst
@@ -190,8 +182,7 @@ class DataX2RegImmOp : public ArmStaticInst
         dest(_dest), op1(_op1), op2(_op2), imm(_imm)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataX3RegOp : public ArmStaticInst
@@ -206,8 +197,7 @@ class DataX3RegOp : public ArmStaticInst
         dest(_dest), op1(_op1), op2(_op2), op3(_op3)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataXCondCompImmOp : public ArmStaticInst
@@ -225,8 +215,7 @@ class DataXCondCompImmOp : public ArmStaticInst
         op1(_op1), imm(_imm), condCode(_condCode), defCc(_defCc)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataXCondCompRegOp : public ArmStaticInst
@@ -243,8 +232,7 @@ class DataXCondCompRegOp : public ArmStaticInst
         op1(_op1), op2(_op2), condCode(_condCode), defCc(_defCc)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class DataXCondSelOp : public ArmStaticInst
@@ -260,8 +248,7 @@ class DataXCondSelOp : public ArmStaticInst
         dest(_dest), op1(_op1), op2(_op2), condCode(_condCode)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 }

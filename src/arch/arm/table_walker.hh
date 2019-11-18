@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2016, 2019 ARM Limited
+ * Copyright (c) 2010-2016 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -43,13 +43,11 @@
 
 #include <list>
 
-#include "arch/arm/faults.hh"
 #include "arch/arm/miscregs.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/tlb.hh"
 #include "mem/request.hh"
 #include "params/ArmTableWalker.hh"
-#include "sim/clocked_object.hh"
 #include "sim/eventq.hh"
 
 class ThreadContext;
@@ -61,15 +59,13 @@ class Translation;
 class TLB;
 class Stage2MMU;
 
-class TableWalker : public ClockedObject
+class TableWalker : public MemObject
 {
   public:
     class WalkerState;
 
     class DescriptorBase {
       public:
-        DescriptorBase() : lookupLevel(L0) {}
-
         /** Current lookup level for this descriptor */
         LookupLevel lookupLevel;
 
@@ -384,8 +380,6 @@ class TableWalker : public ClockedObject
             Block,
             Page
         };
-
-        LongDescriptor() : data(0), _dirty(false) {}
 
         /** The raw bits of the entry */
         uint64_t data;
@@ -764,11 +758,13 @@ class TableWalker : public ClockedObject
         bool xnTable;
         bool pxnTable;
 
-        /** Hierarchical access permission disable */
-        bool hpd;
-
         /** Flag indicating if a second stage of lookup is required */
         bool stage2Req;
+
+        /** Indicates whether the translation has been passed onto the second
+         *  stage mmu, and no more work is required from the first stage.
+         */
+        bool doingStage2;
 
         /** A pointer to the stage 2 translation that's in progress */
         TLB::Translation *stage2Tran;
@@ -898,13 +894,12 @@ class TableWalker : public ClockedObject
     DrainState drain() override;
     void drainResume() override;
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    BaseMasterPort& getMasterPort(const std::string &if_name,
+                                  PortID idx = InvalidPortID) override;
 
     void regStats() override;
 
-    Fault walk(const RequestPtr &req, ThreadContext *tc,
-               uint16_t asid, uint8_t _vmid,
+    Fault walk(RequestPtr req, ThreadContext *tc, uint16_t asid, uint8_t _vmid,
                bool _isHyp, TLB::Mode mode, TLB::Translation *_trans,
                bool timing, bool functional, bool secure,
                TLB::ArmTranslationType tranType, bool _stage2Req);
@@ -948,8 +943,6 @@ class TableWalker : public ClockedObject
     bool fetchDescriptor(Addr descAddr, uint8_t *data, int numBytes,
         Request::Flags flags, int queueIndex, Event *event,
         void (TableWalker::*doDescriptor)());
-
-    Fault generateLongDescFault(ArmFault::FaultSource src);
 
     void insertTableEntry(DescriptorBase &descriptor, bool longDescriptor);
 

@@ -120,16 +120,16 @@ AlphaBackdoor::read(PacketPtr pkt)
             switch (daddr)
             {
                 case offsetof(AlphaAccess, last_offset):
-                    pkt->setLE(alphaAccess->last_offset);
+                    pkt->set(alphaAccess->last_offset);
                     break;
                 case offsetof(AlphaAccess, version):
-                    pkt->setLE(alphaAccess->version);
+                    pkt->set(alphaAccess->version);
                     break;
                 case offsetof(AlphaAccess, numCPUs):
-                    pkt->setLE(alphaAccess->numCPUs);
+                    pkt->set(alphaAccess->numCPUs);
                     break;
                 case offsetof(AlphaAccess, intrClockFrequency):
-                    pkt->setLE(alphaAccess->intrClockFrequency);
+                    pkt->set(alphaAccess->intrClockFrequency);
                     break;
                 default:
                     /* Old console code read in everyting as a 32bit int
@@ -138,58 +138,58 @@ AlphaBackdoor::read(PacketPtr pkt)
                   pkt->setBadAddress();
             }
             DPRINTF(AlphaBackdoor, "read: offset=%#x val=%#x\n", daddr,
-                    pkt->getLE<uint32_t>());
+                    pkt->get<uint32_t>());
             break;
         case sizeof(uint64_t):
             switch (daddr)
             {
                 case offsetof(AlphaAccess, inputChar):
-                    pkt->setLE(terminal->console_in());
+                    pkt->set(terminal->console_in());
                     break;
                 case offsetof(AlphaAccess, cpuClock):
-                    pkt->setLE(alphaAccess->cpuClock);
+                    pkt->set(alphaAccess->cpuClock);
                     break;
                 case offsetof(AlphaAccess, mem_size):
-                    pkt->setLE(alphaAccess->mem_size);
+                    pkt->set(alphaAccess->mem_size);
                     break;
                 case offsetof(AlphaAccess, kernStart):
-                    pkt->setLE(alphaAccess->kernStart);
+                    pkt->set(alphaAccess->kernStart);
                     break;
                 case offsetof(AlphaAccess, kernEnd):
-                    pkt->setLE(alphaAccess->kernEnd);
+                    pkt->set(alphaAccess->kernEnd);
                     break;
                 case offsetof(AlphaAccess, entryPoint):
-                    pkt->setLE(alphaAccess->entryPoint);
+                    pkt->set(alphaAccess->entryPoint);
                     break;
                 case offsetof(AlphaAccess, diskUnit):
-                    pkt->setLE(alphaAccess->diskUnit);
+                    pkt->set(alphaAccess->diskUnit);
                     break;
                 case offsetof(AlphaAccess, diskCount):
-                    pkt->setLE(alphaAccess->diskCount);
+                    pkt->set(alphaAccess->diskCount);
                     break;
                 case offsetof(AlphaAccess, diskPAddr):
-                    pkt->setLE(alphaAccess->diskPAddr);
+                    pkt->set(alphaAccess->diskPAddr);
                     break;
                 case offsetof(AlphaAccess, diskBlock):
-                    pkt->setLE(alphaAccess->diskBlock);
+                    pkt->set(alphaAccess->diskBlock);
                     break;
                 case offsetof(AlphaAccess, diskOperation):
-                    pkt->setLE(alphaAccess->diskOperation);
+                    pkt->set(alphaAccess->diskOperation);
                     break;
                 case offsetof(AlphaAccess, outputChar):
-                    pkt->setLE(alphaAccess->outputChar);
+                    pkt->set(alphaAccess->outputChar);
                     break;
                 default:
                     int cpunum = (daddr - offsetof(AlphaAccess, cpuStack)) /
                                  sizeof(alphaAccess->cpuStack[0]);
 
                     if (cpunum >= 0 && cpunum < 64)
-                        pkt->setLE(alphaAccess->cpuStack[cpunum]);
+                        pkt->set(alphaAccess->cpuStack[cpunum]);
                     else
                         panic("Unknown 64bit access, %#x\n", daddr);
             }
             DPRINTF(AlphaBackdoor, "read: offset=%#x val=%#x\n", daddr,
-                    pkt->getLE<uint64_t>());
+                    pkt->get<uint64_t>());
             break;
         default:
           pkt->setBadAddress();
@@ -203,7 +203,7 @@ AlphaBackdoor::write(PacketPtr pkt)
     assert(pkt->getAddr() >= pioAddr && pkt->getAddr() < pioAddr + pioSize);
     Addr daddr = pkt->getAddr() - pioAddr;
 
-    uint64_t val = pkt->getLE<uint64_t>();
+    uint64_t val = pkt->get<uint64_t>();
     assert(pkt->getSize() == sizeof(uint64_t));
 
     switch (daddr) {

@@ -47,7 +47,7 @@ copyRegs(ThreadContext *src, ThreadContext *dest)
 
     // Then loop through the floating point registers.
     for (int i = 0; i < NumFloatRegs; ++i)
-        dest->setFloatReg(i, src->readFloatReg(i));
+        dest->setFloatRegBits(i, src->readFloatRegBits(i));
 
     // Would need to add condition-code regs if implemented
     assert(NumCCRegs == 0);

@@ -41,6 +41,7 @@
 #include "base/pollevent.hh"
 #include "config/use_tuntap.hh"
 #include "dev/net/etherint.hh"
+#include "dev/net/etherobject.hh"
 #include "dev/net/etherpkt.hh"
 
 #if USE_TUNTAP
@@ -55,7 +56,7 @@
 class TapEvent;
 class EtherTapInt;
 
-class EtherTapBase : public SimObject
+class EtherTapBase : public EtherObject
 {
   public:
     typedef EtherTapBaseParams Params;
@@ -100,8 +101,7 @@ class EtherTapBase : public SimObject
     EtherTapInt *interface;
 
   public:
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    EtherInt *getEthPort(const std::string &if_name, int idx) override;
 
     bool recvSimulated(EthPacketPtr packet);
     void sendSimulated(void *data, size_t len);

@@ -60,26 +60,25 @@
 #ifndef __MEM_EXTERNAL_MASTER_HH__
 #define __MEM_EXTERNAL_MASTER_HH__
 
-#include "mem/port.hh"
+#include "mem/mem_object.hh"
 #include "params/ExternalMaster.hh"
-#include "sim/sim_object.hh"
 
-class ExternalMaster : public SimObject
+class ExternalMaster : public MemObject
 {
   public:
     /** Derive from this class to create an external port interface */
-    class ExternalPort : public MasterPort
+    class Port : public MasterPort
     {
       protected:
         ExternalMaster &owner;
 
       public:
-        ExternalPort(const std::string &name_,
+        Port(const std::string &name_,
             ExternalMaster &owner_) :
             MasterPort(name_, &owner_), owner(owner_)
         { }
 
-        ~ExternalPort() { }
+        ~Port() { }
 
         /** Any or all of recv... can be overloaded to provide the port's
          *  functionality */
@@ -94,14 +93,14 @@ class ExternalMaster : public SimObject
       public:
         /** Create or find an external port which can be bound.  Returns
          *  NULL on failure */
-        virtual ExternalPort *getExternalPort(
+        virtual Port *getExternalPort(
             const std::string &name, ExternalMaster &owner,
             const std::string &port_data) = 0;
     };
 
   protected:
     /** The peer port for the gem5 port "port" */
-    ExternalPort *externalPort;
+    Port *externalPort;
 
     /** Name of the bound port.  This will be name() + ".port" */
     std::string portName;
@@ -121,16 +120,16 @@ class ExternalMaster : public SimObject
   public:
     ExternalMaster(ExternalMasterParams *params);
 
-    /** Port interface.  Responds only to port "port" */
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    /** MasterPort interface.  Responds only to port "port" */
+    BaseMasterPort &getMasterPort(const std::string &if_name,
+        PortID idx = InvalidPortID);
 
     /** Register a handler which can provide ports with port_type ==
      *  handler_name */
     static void registerHandler(const std::string &handler_name,
         Handler *handler);
 
-    void init() override;
+    void init();
 
     const MasterID masterId;
 };

@@ -61,19 +61,13 @@ class PowerStaticInst : public StaticInst
     void
     printReg(std::ostream &os, RegId reg) const;
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string
+    generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 
     void
-    advancePC(PowerISA::PCState &pcState) const override
+    advancePC(PowerISA::PCState &pcState) const
     {
         pcState.advance();
-    }
-
-    size_t
-    asBytes(void *buf, size_t max_size) override
-    {
-        return simpleAsBytes(buf, max_size, machInst);
     }
 };
 

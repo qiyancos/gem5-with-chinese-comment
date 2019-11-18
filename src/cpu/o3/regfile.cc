@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 ARM Limited
+ * Copyright (c) 2016 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -52,26 +52,22 @@
 PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
                          unsigned _numPhysicalFloatRegs,
                          unsigned _numPhysicalVecRegs,
-                         unsigned _numPhysicalVecPredRegs,
                          unsigned _numPhysicalCCRegs,
                          VecMode vmode)
     : intRegFile(_numPhysicalIntRegs),
       floatRegFile(_numPhysicalFloatRegs),
       vectorRegFile(_numPhysicalVecRegs),
-      vecPredRegFile(_numPhysicalVecPredRegs),
       ccRegFile(_numPhysicalCCRegs),
       numPhysicalIntRegs(_numPhysicalIntRegs),
       numPhysicalFloatRegs(_numPhysicalFloatRegs),
       numPhysicalVecRegs(_numPhysicalVecRegs),
       numPhysicalVecElemRegs(_numPhysicalVecRegs *
                              NumVecElemPerVecReg),
-      numPhysicalVecPredRegs(_numPhysicalVecPredRegs),
       numPhysicalCCRegs(_numPhysicalCCRegs),
       totalNumRegs(_numPhysicalIntRegs
                    + _numPhysicalFloatRegs
                    + _numPhysicalVecRegs
                    + _numPhysicalVecRegs * NumVecElemPerVecReg
-                   + _numPhysicalVecPredRegs
                    + _numPhysicalCCRegs),
       vecMode(vmode)
 {
@@ -110,12 +106,6 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
             vecElemIds.emplace_back(VecElemClass, phys_reg,
                     eIdx, flat_reg_idx++);
         }
-    }
-
-    // The next batch of the registers are the predicate physical
-    // registers; put them onto the predicate free list.
-    for (phys_reg = 0; phys_reg < numPhysicalVecPredRegs; phys_reg++) {
-        vecPredRegIds.emplace_back(VecPredRegClass, phys_reg, flat_reg_idx++);
     }
 
     // The rest of the registers are the condition-code physical
@@ -169,13 +159,6 @@ PhysRegFile::initFreeList(UnifiedFreeList *freeList)
     else
         freeList->addRegs(vecElemIds.begin(), vecElemIds.end());
 
-    // The next batch of the registers are the predicate physical
-    // registers; put them onto the predicate free list.
-    for (reg_idx = 0; reg_idx < numPhysicalVecPredRegs; reg_idx++) {
-        assert(vecPredRegIds[reg_idx].index() == reg_idx);
-    }
-    freeList->addRegs(vecPredRegIds.begin(), vecPredRegIds.end());
-
     // The rest of the registers are the condition-code physical
     // registers; put them onto the condition-code free list.
     for (reg_idx = 0; reg_idx < numPhysicalCCRegs; reg_idx++) {
@@ -208,16 +191,14 @@ PhysRegFile::getRegIds(RegClass cls) -> IdRange
         return std::make_pair(vecRegIds.begin(), vecRegIds.end());
       case VecElemClass:
         return std::make_pair(vecElemIds.begin(), vecElemIds.end());
-      case VecPredRegClass:
-        return std::make_pair(vecPredRegIds.begin(), vecPredRegIds.end());
       case CCRegClass:
         return std::make_pair(ccRegIds.begin(), ccRegIds.end());
       case MiscRegClass:
         return std::make_pair(miscRegIds.begin(), miscRegIds.end());
     }
     /* There is no way to make an empty iterator */
-    return std::make_pair(PhysIds::iterator(),
-                          PhysIds::iterator());
+    return std::make_pair(PhysIds::const_iterator(),
+                          PhysIds::const_iterator());
 }
 
 PhysRegIdPtr

@@ -32,7 +32,6 @@
 
 #include "arch/sparc/isa_traits.hh"
 #include "arch/sparc/registers.hh"
-#include "base/loader/object_file.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "kern/solaris/solaris.hh"
@@ -43,48 +42,22 @@
 using namespace std;
 using namespace SparcISA;
 
-namespace
-{
-
-class SparcSolarisObjectFileLoader : public ObjectFile::Loader
-{
-  public:
-    Process *
-    load(ProcessParams *params, ObjectFile *obj_file) override
-    {
-        auto arch = obj_file->getArch();
-        auto opsys = obj_file->getOpSys();
-
-        if (arch != ObjectFile::SPARC64 && arch != ObjectFile::SPARC32)
-            return nullptr;
-
-        if (opsys != ObjectFile::Solaris)
-            return nullptr;
-
-        return new SparcSolarisProcess(params, obj_file);
-    }
-};
-
-SparcSolarisObjectFileLoader loader;
-
-} // anonymous namespace
-
 
 /// Target uname() handler.
 static SyscallReturn
-unameFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
+unameFunc(SyscallDesc *desc, int callnum, Process *process,
+          ThreadContext *tc)
 {
     int index = 0;
-    auto process = tc->getProcessPtr();
     TypedBufferArg<Solaris::utsname> name(process->getSyscallArg(tc, index));
 
     strcpy(name->sysname, "SunOS");
     strcpy(name->nodename, "m5.eecs.umich.edu");
-    strcpy(name->release, process->release.c_str());
+    strcpy(name->release, "5.9"); //?? do we want this or something newer?
     strcpy(name->version, "Generic_118558-21");
     strcpy(name->machine, "sun4u");
 
-    name.copyOut(tc->getVirtProxy());
+    name.copyOut(tc->getMemProxy());
 
     return 0;
 }
@@ -94,8 +67,8 @@ SyscallDesc SparcSolarisProcess::syscallDescs[] = {
     /* 0 */ SyscallDesc("syscall", unimplementedFunc),
     /* 1 */ SyscallDesc("exit", exitFunc),
     /* 2 */ SyscallDesc("fork", unimplementedFunc),
-    /* 3 */ SyscallDesc("read", readFunc<SparcSolaris>),
-    /* 4 */ SyscallDesc("write", writeFunc<SparcSolaris>),
+    /* 3 */ SyscallDesc("read", readFunc),
+    /* 4 */ SyscallDesc("write", writeFunc),
     /* 5 */ SyscallDesc("open", openFunc<SparcSolaris>),
     /* 6 */ SyscallDesc("close", closeFunc),
     /* 7 */ SyscallDesc("wait", unimplementedFunc),

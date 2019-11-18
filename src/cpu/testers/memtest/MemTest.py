@@ -38,12 +38,12 @@
 #
 # Authors: Nathan Binkert
 #          Andreas Hansson
+
+from MemObject import MemObject
 from m5.params import *
 from m5.proxy import *
 
-from m5.objects.ClockedObject import ClockedObject
-
-class MemTest(ClockedObject):
+class MemTest(MemObject):
     type = 'MemTest'
     cxx_header = "cpu/testers/memtest/memtest.hh"
 

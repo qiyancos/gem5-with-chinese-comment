@@ -50,7 +50,6 @@
 #include "cpu/exetrace.hh"
 #include "cpu/inst_seq.hh"
 #include "cpu/timebuf.hh"
-#include "enums/CommitPolicy.hh"
 #include "sim/probe/probe.hh"
 
 struct DerivO3CPUParams;
@@ -120,6 +119,13 @@ class DefaultCommit
         SquashAfterPending, //< Committing instructions before a squash.
     };
 
+    /** Commit policy for SMT mode. */
+    enum CommitPolicy {
+        Aggressive,
+        RoundRobin,
+        OldestReady
+    };
+
   private:
     /** Overall commit status. */
     CommitStatus _status;
@@ -186,9 +192,6 @@ class DefaultCommit
 
     /** Initializes stage by sending back the number of free entries. */
     void startupStage();
-
-    /** Clear all thread-specific states */
-    void clearStates(ThreadID tid);
 
     /** Initializes the draining of commit. */
     void drain();
@@ -279,7 +282,7 @@ class DefaultCommit
      * @param tid ID of the thread to squash.
      * @param head_inst Instruction that requested the squash.
      */
-    void squashAfter(ThreadID tid, const DynInstPtr &head_inst);
+    void squashAfter(ThreadID tid, DynInstPtr &head_inst);
 
     /** Handles processing an interrupt. */
     void handleInterrupt();
@@ -293,7 +296,7 @@ class DefaultCommit
     /** Tries to commit the head ROB instruction passed in.
      * @param head_inst The instruction to be committed.
      */
-    bool commitHead(const DynInstPtr &head_inst, unsigned inst_num);
+    bool commitHead(DynInstPtr &head_inst, unsigned inst_num);
 
     /** Gets instructions from rename and inserts them into the ROB. */
     void getInsts();
@@ -474,7 +477,7 @@ class DefaultCommit
     bool avoidQuiesceLiveLock;
 
     /** Updates commit stats based on this instruction. */
-    void updateComInstStats(const DynInstPtr &inst);
+    void updateComInstStats(DynInstPtr &inst);
 
     /** Stat for the total number of squashed instructions discarded by commit.
      */
@@ -498,8 +501,6 @@ class DefaultCommit
     Stats::Vector statComRefs;
     /** Stat for the total number of committed loads. */
     Stats::Vector statComLoads;
-    /** Stat for the total number of committed atomics. */
-    Stats::Vector statComAmos;
     /** Total number of committed memory barriers. */
     Stats::Vector statComMembars;
     /** Total number of committed branches. */

@@ -31,33 +31,18 @@
 /**
  * @file
  * Declaration of a First In First Out replacement policy.
- * The victim is chosen using the timestamp. The oldest entry is always chosen
+ * The victim is chosen using the timestamp. The oldest block is always chosen
  * to be evicted, regardless of the amount of times it has been touched.
  */
 
 #ifndef __MEM_CACHE_REPLACEMENT_POLICIES_FIFO_RP_HH__
 #define __MEM_CACHE_REPLACEMENT_POLICIES_FIFO_RP_HH__
 
-#include "base/types.hh"
 #include "mem/cache/replacement_policies/base.hh"
-
-struct FIFORPParams;
+#include "params/FIFORP.hh"
 
 class FIFORP : public BaseReplacementPolicy
 {
-  protected:
-    /** FIFO-specific implementation of replacement data. */
-    struct FIFOReplData : ReplacementData
-    {
-        /** Tick on which the entry was inserted. */
-        Tick tickInserted;
-
-        /**
-         * Default constructor. Invalidate data.
-         */
-        FIFOReplData() : tickInserted(0) {}
-    };
-
   public:
     /** Convenience typedef. */
     typedef FIFORPParams Params;
@@ -73,47 +58,12 @@ class FIFORP : public BaseReplacementPolicy
     ~FIFORP() {}
 
     /**
-     * Invalidate replacement data to set it as the next probable victim.
-     * Reset insertion tick to 0.
-     *
-     * @param replacement_data Replacement data to be invalidated.
-     */
-    void invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-                                                              const override;
-
-    /**
-     * Touch an entry to update its replacement data.
-     * Does not modify the replacement data.
-     *
-     * @param replacement_data Replacement data to be touched.
-     */
-    void touch(const std::shared_ptr<ReplacementData>& replacement_data) const
-                                                                     override;
-
-    /**
-     * Reset replacement data. Used when an entry is inserted.
-     * Sets its insertion tick.
-     *
-     * @param replacement_data Replacement data to be reset.
-     */
-    void reset(const std::shared_ptr<ReplacementData>& replacement_data) const
-                                                                     override;
-
-    /**
      * Find replacement victim using insertion timestamps.
      *
      * @param cands Replacement candidates, selected by indexing policy.
-     * @return Replacement entry to be replaced.
+     * @return Cache block to be replaced.
      */
-    ReplaceableEntry* getVictim(const ReplacementCandidates& candidates) const
-                                                                     override;
-
-    /**
-     * Instantiate a replacement data entry.
-     *
-     * @return A shared pointer to the new replacement data.
-     */
-    std::shared_ptr<ReplacementData> instantiateEntry() override;
+    CacheBlk* getVictim(const ReplacementCandidates& cands) override;
 };
 
 #endif // __MEM_CACHE_REPLACEMENT_POLICIES_FIFO_RP_HH__

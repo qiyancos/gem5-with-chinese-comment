@@ -37,9 +37,9 @@
 #include "debug/RubySequencer.hh"
 #include "debug/RubyStats.hh"
 #include "mem/packet.hh"
+#include "mem/protocol/PrefetchBit.hh"
+#include "mem/protocol/RubyAccessMode.hh"
 #include "mem/ruby/profiler/Profiler.hh"
-#include "mem/ruby/protocol/PrefetchBit.hh"
-#include "mem/ruby/protocol/RubyAccessMode.hh"
 #include "mem/ruby/slicc_interface/RubyRequest.hh"
 #include "mem/ruby/system/RubySystem.hh"
 #include "sim/system.hh"
@@ -60,6 +60,8 @@ Sequencer::Sequencer(const Params *p)
 
     m_instCache_ptr = p->icache;
     m_dataCache_ptr = p->dcache;
+    m_data_cache_hit_latency = p->dcache_hit_latency;
+    m_inst_cache_hit_latency = p->icache_hit_latency;
     m_max_outstanding_requests = p->max_outstanding_requests;
     m_deadlock_threshold = p->deadlock_threshold;
 
@@ -68,6 +70,8 @@ Sequencer::Sequencer(const Params *p)
     assert(m_deadlock_threshold > 0);
     assert(m_instCache_ptr != NULL);
     assert(m_dataCache_ptr != NULL);
+    assert(m_data_cache_hit_latency > 0);
+    assert(m_inst_cache_hit_latency > 0);
 
     m_runningGarnetStandalone = p->garnet_standalone;
 }
@@ -472,14 +476,17 @@ Sequencer::hitCallback(SequencerRequest* srequest, DataBlock& data,
             (type == RubyRequestType_RMW_Read) ||
             (type == RubyRequestType_Locked_RMW_Read) ||
             (type == RubyRequestType_Load_Linked)) {
-            pkt->setData(
-                data.getData(getOffset(request_address), pkt->getSize()));
+            memcpy(pkt->getPtr<uint8_t>(),
+                   data.getData(getOffset(request_address), pkt->getSize()),
+                   pkt->getSize());
             DPRINTF(RubySequencer, "read data %s\n", data);
         } else if (pkt->req->isSwap()) {
             std::vector<uint8_t> overwrite_val(pkt->getSize());
-            pkt->writeData(&overwrite_val[0]);
-            pkt->setData(
-                data.getData(getOffset(request_address), pkt->getSize()));
+            memcpy(&overwrite_val[0], pkt->getConstPtr<uint8_t>(),
+                   pkt->getSize());
+            memcpy(pkt->getPtr<uint8_t>(),
+                   data.getData(getOffset(request_address), pkt->getSize()),
+                   pkt->getSize());
             data.setData(&overwrite_val[0],
                          getOffset(request_address), pkt->getSize());
             DPRINTF(RubySequencer, "swap data %s\n", data);
@@ -509,6 +516,7 @@ Sequencer::hitCallback(SequencerRequest* srequest, DataBlock& data,
     RubySystem *rs = m_ruby_system;
     if (RubySystem::getWarmupEnabled()) {
         assert(pkt->req);
+        delete pkt->req;
         delete pkt;
         rs->m_cache_recorder->enqueueNextFetchRequest();
     } else if (RubySystem::getCooldownEnabled()) {
@@ -646,12 +654,23 @@ Sequencer::issueRequest(PacketPtr pkt, RubyRequestType secondary_type)
             printAddress(msg->getPhysicalAddress()),
             RubyRequestType_to_string(secondary_type));
 
-    Tick latency = cyclesToTicks(
-                        m_controller->mandatoryQueueLatency(secondary_type));
+    // The Sequencer currently assesses instruction and data cache hit latency
+    // for the top-level caches at the beginning of a memory access.
+    // TODO: Eventually, this latency should be moved to represent the actual
+    // cache access latency portion of the memory access. This will require
+    // changing cache controller protocol files to assess the latency on the
+    // access response path.
+    Cycles latency(0);  // Initialize to zero to catch misconfigured latency
+    if (secondary_type == RubyRequestType_IFETCH)
+        latency = m_inst_cache_hit_latency;
+    else
+        latency = m_data_cache_hit_latency;
+
+    // Send the message to the cache controller
     assert(latency > 0);
 
     assert(m_mandatory_q_ptr != NULL);
-    m_mandatory_q_ptr->enqueue(msg, clockEdge(), latency);
+    m_mandatory_q_ptr->enqueue(msg, clockEdge(), cyclesToTicks(latency));
 }
 
 template <class KEY, class VALUE>
@@ -685,6 +704,9 @@ Sequencer::print(ostream& out) const
 void
 Sequencer::checkCoherence(Addr addr)
 {
+#ifdef CHECK_COHERENCE
+    m_ruby_system->checkGlobalCoherenceInvariant(addr);
+#endif
 }
 
 void

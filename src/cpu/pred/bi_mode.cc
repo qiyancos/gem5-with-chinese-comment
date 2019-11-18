@@ -44,15 +44,24 @@ BiModeBP::BiModeBP(const BiModeBPParams *params)
       choicePredictorSize(params->choicePredictorSize),
       choiceCtrBits(params->choiceCtrBits),
       globalPredictorSize(params->globalPredictorSize),
-      globalCtrBits(params->globalCtrBits),
-      choiceCounters(choicePredictorSize, SatCounter(choiceCtrBits)),
-      takenCounters(globalPredictorSize, SatCounter(globalCtrBits)),
-      notTakenCounters(globalPredictorSize, SatCounter(globalCtrBits))
+      globalCtrBits(params->globalCtrBits)
 {
     if (!isPowerOf2(choicePredictorSize))
         fatal("Invalid choice predictor size.\n");
     if (!isPowerOf2(globalPredictorSize))
         fatal("Invalid global history predictor size.\n");
+
+    choiceCounters.resize(choicePredictorSize);
+    takenCounters.resize(globalPredictorSize);
+    notTakenCounters.resize(globalPredictorSize);
+
+    for (int i = 0; i < choicePredictorSize; ++i) {
+        choiceCounters[i].setBits(choiceCtrBits);
+    }
+    for (int i = 0; i < globalPredictorSize; ++i) {
+        takenCounters[i].setBits(globalCtrBits);
+        notTakenCounters[i].setBits(globalCtrBits);
+    }
 
     historyRegisterMask = mask(globalHistoryBits);
     choiceHistoryMask = choicePredictorSize - 1;
@@ -111,11 +120,11 @@ BiModeBP::lookup(ThreadID tid, Addr branchAddr, void * &bpHistory)
     assert(choiceHistoryIdx < choicePredictorSize);
     assert(globalHistoryIdx < globalPredictorSize);
 
-    bool choicePrediction = choiceCounters[choiceHistoryIdx]
+    bool choicePrediction = choiceCounters[choiceHistoryIdx].read()
                             > choiceThreshold;
-    bool takenGHBPrediction = takenCounters[globalHistoryIdx]
+    bool takenGHBPrediction = takenCounters[globalHistoryIdx].read()
                               > takenThreshold;
-    bool notTakenGHBPrediction = notTakenCounters[globalHistoryIdx]
+    bool notTakenGHBPrediction = notTakenCounters[globalHistoryIdx].read()
                                  > notTakenThreshold;
     bool finalPrediction;
 
@@ -152,7 +161,7 @@ BiModeBP::btbUpdate(ThreadID tid, Addr branchAddr, void * &bpHistory)
  */
 void
 BiModeBP::update(ThreadID tid, Addr branchAddr, bool taken, void *bpHistory,
-                 bool squashed, const StaticInstPtr & inst, Addr corrTarget)
+                 bool squashed)
 {
     assert(bpHistory);
 
@@ -177,16 +186,16 @@ BiModeBP::update(ThreadID tid, Addr branchAddr, bool taken, void *bpHistory,
     if (history->takenUsed) {
         // if the taken array's prediction was used, update it
         if (taken) {
-            takenCounters[globalHistoryIdx]++;
+            takenCounters[globalHistoryIdx].increment();
         } else {
-            takenCounters[globalHistoryIdx]--;
+            takenCounters[globalHistoryIdx].decrement();
         }
     } else {
         // if the not-taken array's prediction was used, update it
         if (taken) {
-            notTakenCounters[globalHistoryIdx]++;
+            notTakenCounters[globalHistoryIdx].increment();
         } else {
-            notTakenCounters[globalHistoryIdx]--;
+            notTakenCounters[globalHistoryIdx].decrement();
         }
     }
 
@@ -203,21 +212,27 @@ BiModeBP::update(ThreadID tid, Addr branchAddr, bool taken, void *bpHistory,
         */
         if (history->finalPred == history->takenUsed) {
             if (taken) {
-                choiceCounters[choiceHistoryIdx]++;
+                choiceCounters[choiceHistoryIdx].increment();
             } else {
-                choiceCounters[choiceHistoryIdx]--;
+                choiceCounters[choiceHistoryIdx].decrement();
             }
         }
     } else {
         // always update the choice predictor on an incorrect prediction
         if (taken) {
-            choiceCounters[choiceHistoryIdx]++;
+            choiceCounters[choiceHistoryIdx].increment();
         } else {
-            choiceCounters[choiceHistoryIdx]--;
+            choiceCounters[choiceHistoryIdx].decrement();
         }
     }
 
     delete history;
+}
+
+unsigned
+BiModeBP::getGHR(ThreadID tid, void *bp_history) const
+{
+    return static_cast<BPHistory*>(bp_history)->globalHistoryReg;
 }
 
 void

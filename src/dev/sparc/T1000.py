@@ -28,11 +28,10 @@
 
 from m5.params import *
 from m5.proxy import *
-
-from m5.objects.Device import BasicPioDevice, PioDevice, IsaFake, BadAddr
-from m5.objects.Platform import Platform
-from m5.objects.Terminal import Terminal
-from m5.objects.Uart import Uart8250
+from Device import BasicPioDevice, PioDevice, IsaFake, BadAddr
+from Platform import Platform
+from Terminal import Terminal
+from Uart import Uart8250
 
 
 class MmDisk(BasicPioDevice):

@@ -46,7 +46,7 @@ class Decoder
     // The extended machine instruction being generated
     ExtMachInst emi;
     bool instDone;
-    RegVal asi;
+    MiscReg asi;
 
   public:
     Decoder(ISA* isa = nullptr) : instDone(false), asi(0)
@@ -93,7 +93,7 @@ class Decoder
     }
 
     void
-    setContext(RegVal _asi)
+    setContext(MiscReg _asi)
     {
         asi = _asi;
     }

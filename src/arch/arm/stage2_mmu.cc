@@ -51,7 +51,7 @@ using namespace ArmISA;
 Stage2MMU::Stage2MMU(const Params *p)
     : SimObject(p), _stage1Tlb(p->tlb), _stage2Tlb(p->stage2_tlb),
       port(_stage1Tlb->getTableWalker(), p->sys),
-      masterId(p->sys->getMasterId(_stage1Tlb->getTableWalker()))
+      masterId(p->sys->getMasterId(_stage1Tlb->getTableWalker()->name()))
 {
     // we use the stage-one table walker as the parent of the port,
     // and to get our master id, this is done to keep things
@@ -67,17 +67,17 @@ Stage2MMU::readDataUntimed(ThreadContext *tc, Addr oVAddr, Addr descAddr,
     Fault fault;
 
     // translate to physical address using the second stage MMU
-    auto req = std::make_shared<Request>();
-    req->setVirt(0, descAddr, numBytes, flags | Request::PT_WALK, masterId, 0);
+    Request req = Request();
+    req.setVirt(0, descAddr, numBytes, flags | Request::PT_WALK, masterId, 0);
     if (isFunctional) {
-        fault = stage2Tlb()->translateFunctional(req, tc, BaseTLB::Read);
+        fault = stage2Tlb()->translateFunctional(&req, tc, BaseTLB::Read);
     } else {
-        fault = stage2Tlb()->translateAtomic(req, tc, BaseTLB::Read);
+        fault = stage2Tlb()->translateAtomic(&req, tc, BaseTLB::Read);
     }
 
     // Now do the access.
-    if (fault == NoFault && !req->getFlags().isSet(Request::NO_ACCESS)) {
-        Packet pkt = Packet(req, MemCmd::ReadReq);
+    if (fault == NoFault && !req.getFlags().isSet(Request::NO_ACCESS)) {
+        Packet pkt = Packet(&req, MemCmd::ReadReq);
         pkt.dataStatic(data);
         if (isFunctional) {
             port.sendFunctional(&pkt);
@@ -113,12 +113,10 @@ Stage2MMU::Stage2Translation::Stage2Translation(Stage2MMU &_parent,
     : data(_data), numBytes(0), event(_event), parent(_parent), oVAddr(_oVAddr),
     fault(NoFault)
 {
-    req = std::make_shared<Request>();
 }
 
 void
-Stage2MMU::Stage2Translation::finish(const Fault &_fault,
-                                     const RequestPtr &req,
+Stage2MMU::Stage2Translation::finish(const Fault &_fault, RequestPtr req,
                                      ThreadContext *tc, BaseTLB::Mode mode)
 {
     fault = _fault;
@@ -132,9 +130,9 @@ Stage2MMU::Stage2Translation::finish(const Fault &_fault,
     }
 
     if (_fault == NoFault && !req->getFlags().isSet(Request::NO_ACCESS)) {
-        parent.getDMAPort().dmaAction(
-            MemCmd::ReadReq, req->getPaddr(), numBytes, event, data,
-            tc->getCpuPtr()->clockPeriod(), req->getFlags());
+        parent.getPort().dmaAction(MemCmd::ReadReq, req->getPaddr(), numBytes,
+                                   event, data, tc->getCpuPtr()->clockPeriod(),
+                                   req->getFlags());
     } else {
         // We can't do the DMA access as there's been a problem, so tell the
         // event we're done

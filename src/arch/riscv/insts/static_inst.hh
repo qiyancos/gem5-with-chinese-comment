@@ -51,14 +51,11 @@ class RiscvStaticInst : public StaticInst
   protected:
     using StaticInst::StaticInst;
 
-  public:
-    void advancePC(PCState &pc) const override { pc.advance(); }
+    virtual std::string
+    generateDisassembly(Addr pc, const SymbolTable *symtab) const = 0;
 
-    size_t
-    asBytes(void *buf, size_t size) override
-    {
-        return simpleAsBytes(buf, size, machInst);
-    }
+  public:
+    void advancePC(PCState &pc) const { pc.advance(); }
 };
 
 /**
@@ -117,7 +114,7 @@ class RiscvMicroInst : public RiscvStaticInst
         flags[IsMicroop] = true;
     }
 
-    void advancePC(PCState &pcState) const override;
+    void advancePC(PCState &pcState) const;
 };
 
 }

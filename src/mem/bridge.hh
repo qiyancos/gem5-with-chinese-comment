@@ -54,9 +54,8 @@
 #include <deque>
 
 #include "base/types.hh"
-#include "mem/port.hh"
+#include "mem/mem_object.hh"
 #include "params/Bridge.hh"
-#include "sim/clocked_object.hh"
 
 /**
  * A bridge is used to interface two different crossbars (or in general a
@@ -71,7 +70,7 @@
  * the bridge will delay accepting the packet until space becomes
  * available.
  */
-class Bridge : public ClockedObject
+class Bridge : public MemObject
 {
   protected:
 
@@ -296,7 +295,7 @@ class Bridge : public ClockedObject
          *
          * @return true if we find a match
          */
-        bool trySatisfyFunctional(PacketPtr pkt);
+        bool checkFunctional(PacketPtr pkt);
 
       protected:
 
@@ -317,10 +316,12 @@ class Bridge : public ClockedObject
 
   public:
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    virtual BaseMasterPort& getMasterPort(const std::string& if_name,
+                                          PortID idx = InvalidPortID);
+    virtual BaseSlavePort& getSlavePort(const std::string& if_name,
+                                        PortID idx = InvalidPortID);
 
-    void init() override;
+    virtual void init();
 
     typedef BridgeParams Params;
 

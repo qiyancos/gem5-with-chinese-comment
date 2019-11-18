@@ -32,7 +32,6 @@
 #define __ARCH_GENERIC_TYPES_HH__
 
 #include <iostream>
-#include <limits>
 
 #include "base/trace.hh"
 #include "base/types.hh"
@@ -43,9 +42,6 @@ typedef uint16_t RegIndex;
 
 /** Logical vector register elem index type. */
 using ElemIndex = uint16_t;
-
-/** ElemIndex value that indicates that the register is not a vector. */
-#define ILLEGAL_ELEM_INDEX std::numeric_limits<ElemIndex>::max()
 
 namespace GenericISA
 {

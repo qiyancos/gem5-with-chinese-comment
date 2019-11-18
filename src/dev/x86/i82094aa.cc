@@ -70,12 +70,12 @@ X86ISA::I82094AA::init()
     IntDevice::init();
 }
 
-Port &
-X86ISA::I82094AA::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort &
+X86ISA::I82094AA::getMasterPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "int_master")
         return intMasterPort;
-    return BasicPioDevice::getPort(if_name, idx);
+    return BasicPioDevice::getMasterPort(if_name, idx);
 }
 
 AddrRangeList
@@ -92,6 +92,7 @@ Tick
 X86ISA::I82094AA::recvResponse(PacketPtr pkt)
 {
     // Packet instantiated calling sendMessage() in signalInterrupt()
+    delete pkt->req;
     delete pkt;
     return 0;
 }
@@ -103,10 +104,10 @@ X86ISA::I82094AA::read(PacketPtr pkt)
     Addr offset = pkt->getAddr() - pioAddr;
     switch(offset) {
       case 0:
-        pkt->setLE<uint32_t>(regSel);
+        pkt->set<uint32_t>(regSel);
         break;
       case 16:
-        pkt->setLE<uint32_t>(readReg(regSel));
+        pkt->set<uint32_t>(readReg(regSel));
         break;
       default:
         panic("Illegal read from I/O APIC.\n");
@@ -122,10 +123,10 @@ X86ISA::I82094AA::write(PacketPtr pkt)
     Addr offset = pkt->getAddr() - pioAddr;
     switch(offset) {
       case 0:
-        regSel = pkt->getLE<uint32_t>();
+        regSel = pkt->get<uint32_t>();
         break;
       case 16:
-        writeReg(regSel, pkt->getLE<uint32_t>());
+        writeReg(regSel, pkt->get<uint32_t>());
         break;
       default:
         panic("Illegal write to I/O APIC.\n");

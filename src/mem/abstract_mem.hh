@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019 ARM Limited
+ * Copyright (c) 2012 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -49,10 +49,8 @@
 #ifndef __MEM_ABSTRACT_MEMORY_HH__
 #define __MEM_ABSTRACT_MEMORY_HH__
 
-#include "mem/backdoor.hh"
-#include "mem/port.hh"
+#include "mem/mem_object.hh"
 #include "params/AbstractMemory.hh"
-#include "sim/clocked_object.hh"
 #include "sim/stats.hh"
 
 
@@ -81,15 +79,13 @@ class LockedAddr {
     static Addr mask(Addr paddr) { return (paddr & ~Addr_Mask); }
 
     // check for matching execution context
-    bool matchesContext(const RequestPtr &req) const
+    bool matchesContext(Request *req) const
     {
-        assert(contextId != InvalidContextID);
-        assert(req->hasContextId());
         return (contextId == req->contextId());
     }
 
-    LockedAddr(const RequestPtr &req) : addr(mask(req->getPaddr())),
-                                        contextId(req->contextId())
+    LockedAddr(Request *req) : addr(mask(req->getPaddr())),
+                               contextId(req->contextId())
     {}
 
     // constructor for unserialization use
@@ -101,10 +97,10 @@ class LockedAddr {
  * An abstract memory represents a contiguous block of physical
  * memory, with an associated address range, and also provides basic
  * functionality for reading and writing this memory without any
- * timing information. It is a ClockedObject since subclasses may need timing
- * information.
+ * timing information. It is a MemObject since any subclass must have
+ * at least one slave port.
  */
-class AbstractMemory : public ClockedObject
+class AbstractMemory : public MemObject
 {
   protected:
 
@@ -113,9 +109,6 @@ class AbstractMemory : public ClockedObject
 
     // Pointer to host memory used to implement this memory
     uint8_t* pmemAddr;
-
-    // Backdoor to access this memory.
-    MemBackdoor backdoor;
 
     // Enable specific memories to be reported to the configuration table
     const bool confTableReported;
@@ -147,7 +140,7 @@ class AbstractMemory : public ClockedObject
     // this method must be called on *all* stores since even
     // non-conditional stores must clear any matching lock addresses.
     bool writeOK(PacketPtr pkt) {
-        const RequestPtr &req = pkt->req;
+        Request *req = pkt->req;
         if (lockedAddrList.empty()) {
             // no locked addrs: nothing to check, store_conditional fails
             bool isLLSC = pkt->isLLSC();

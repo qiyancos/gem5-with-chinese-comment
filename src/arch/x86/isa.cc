@@ -107,7 +107,7 @@ ISA::clear()
 {
     // Blank everything. 0 might not be an appropriate value for some things,
     // but it is for most.
-    memset(regVal, 0, NumMiscRegs * sizeof(RegVal));
+    memset(regVal, 0, NumMiscRegs * sizeof(MiscReg));
     regVal[MISCREG_DR6] = (mask(8) << 4) | (mask(16) << 16);
     regVal[MISCREG_DR7] = 1 << 10;
 }
@@ -124,7 +124,7 @@ ISA::params() const
     return dynamic_cast<const Params *>(_params);
 }
 
-RegVal
+MiscReg
 ISA::readMiscRegNoEffect(int miscReg) const
 {
     // Make sure we're not dealing with an illegal control register.
@@ -135,7 +135,7 @@ ISA::readMiscRegNoEffect(int miscReg) const
     return regVal[miscReg];
 }
 
-RegVal
+MiscReg
 ISA::readMiscReg(int miscReg, ThreadContext * tc)
 {
     if (miscReg == MISCREG_TSC) {
@@ -143,16 +143,16 @@ ISA::readMiscReg(int miscReg, ThreadContext * tc)
     }
 
     if (miscReg == MISCREG_FSW) {
-        RegVal fsw = regVal[MISCREG_FSW];
-        RegVal top = regVal[MISCREG_X87_TOP];
-        return insertBits(fsw, 13, 11, top);
+        MiscReg fsw = regVal[MISCREG_FSW];
+        MiscReg top = regVal[MISCREG_X87_TOP];
+        return insertBits(fsw, 11, 13, top);
     }
 
     return readMiscRegNoEffect(miscReg);
 }
 
 void
-ISA::setMiscRegNoEffect(int miscReg, RegVal val)
+ISA::setMiscRegNoEffect(int miscReg, MiscReg val)
 {
     // Make sure we're not dealing with an illegal control register.
     // Instructions should filter out these indexes, and nothing else should
@@ -194,9 +194,9 @@ ISA::setMiscRegNoEffect(int miscReg, RegVal val)
 }
 
 void
-ISA::setMiscReg(int miscReg, RegVal val, ThreadContext * tc)
+ISA::setMiscReg(int miscReg, MiscReg val, ThreadContext * tc)
 {
-    RegVal newVal = val;
+    MiscReg newVal = val;
     switch(miscReg)
     {
       case MISCREG_CR0:

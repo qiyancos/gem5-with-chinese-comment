@@ -68,8 +68,8 @@ namespace MipsISA
             perVirtProcessor
         };
 
-        std::vector<std::vector<RegVal> > miscRegFile;
-        std::vector<std::vector<RegVal> > miscRegFile_WriteMask;
+        std::vector<std::vector<MiscReg> > miscRegFile;
+        std::vector<std::vector<MiscReg> > miscRegFile_WriteMask;
         std::vector<BankType> bankType;
 
       public:
@@ -88,18 +88,20 @@ namespace MipsISA
         //@TODO: MIPS MT's register view automatically connects
         //       Status to TCStatus depending on current thread
         void updateCP0ReadView(int misc_reg, ThreadID tid) { }
-        RegVal readMiscRegNoEffect(int misc_reg, ThreadID tid = 0) const;
+        MiscReg readMiscRegNoEffect(int misc_reg, ThreadID tid = 0) const;
 
         //template <class TC>
-        RegVal readMiscReg(int misc_reg, ThreadContext *tc, ThreadID tid = 0);
+        MiscReg readMiscReg(int misc_reg,
+                            ThreadContext *tc, ThreadID tid = 0);
 
-        RegVal filterCP0Write(int misc_reg, int reg_sel, RegVal val);
-        void setRegMask(int misc_reg, RegVal val, ThreadID tid = 0);
-        void setMiscRegNoEffect(int misc_reg, RegVal val, ThreadID tid=0);
+        MiscReg filterCP0Write(int misc_reg, int reg_sel, const MiscReg &val);
+        void setRegMask(int misc_reg, const MiscReg &val, ThreadID tid = 0);
+        void setMiscRegNoEffect(int misc_reg, const MiscReg &val,
+                                ThreadID tid = 0);
 
         //template <class TC>
-        void setMiscReg(int misc_reg, RegVal val,
-                        ThreadContext *tc, ThreadID tid=0);
+        void setMiscReg(int misc_reg, const MiscReg &val,
+                        ThreadContext *tc, ThreadID tid = 0);
 
         //////////////////////////////////////////////////////////
         //
@@ -160,12 +162,6 @@ namespace MipsISA
 
         int
         flattenVecElemIndex(int reg) const
-        {
-            return reg;
-        }
-
-        int
-        flattenVecPredIndex(int reg) const
         {
             return reg;
         }

@@ -93,9 +93,8 @@ ClDriver::handshake(GpuDispatcher *_dispatcher)
 }
 
 int
-ClDriver::open(ThreadContext *tc, int mode, int flags)
+ClDriver::open(Process *p, ThreadContext *tc, int mode, int flags)
 {
-    auto p = tc->getProcessPtr();
     std::shared_ptr<DeviceFDEntry> fdp;
     fdp = std::make_shared<DeviceFDEntry>(this, filename);
     int tgt_fd = p->fds->allocFD(fdp);
@@ -103,10 +102,9 @@ ClDriver::open(ThreadContext *tc, int mode, int flags)
 }
 
 int
-ClDriver::ioctl(ThreadContext *tc, unsigned req)
+ClDriver::ioctl(Process *process, ThreadContext *tc, unsigned req)
 {
     int index = 2;
-    auto process = tc->getProcessPtr();
     Addr buf_addr = process->getSyscallArg(tc, index);
 
     switch (req) {
@@ -137,7 +135,7 @@ ClDriver::ioctl(ThreadContext *tc, unsigned req)
                     k->numInsts() * sizeof(TheGpuISA::RawMachInst);
             }
 
-            sizes.copyOut(tc->getVirtProxy());
+            sizes.copyOut(tc->getMemProxy());
         }
         break;
 
@@ -158,7 +156,7 @@ ClDriver::ioctl(ThreadContext *tc, unsigned req)
                 ki->spill_mem_size   = kernelInfo[i].spill_mem_size;
             }
 
-            kinfo.copyOut(tc->getVirtProxy());
+            kinfo.copyOut(tc->getMemProxy());
         }
         break;
 
@@ -183,7 +181,7 @@ ClDriver::ioctl(ThreadContext *tc, unsigned req)
 
             assert(bufp - (char *)buf.bufferPtr() == string_table_size);
 
-            buf.copyOut(tc->getVirtProxy());
+            buf.copyOut(tc->getMemProxy());
         }
         break;
 
@@ -198,7 +196,7 @@ ClDriver::ioctl(ThreadContext *tc, unsigned req)
             memcpy(datap,
                    kernels.back()->readonly_data,
                    size);
-            data.copyOut(tc->getVirtProxy());
+            data.copyOut(tc->getMemProxy());
         }
         break;
 
@@ -227,7 +225,7 @@ ClDriver::ioctl(ThreadContext *tc, unsigned req)
                 }
             }
 
-            buf.copyOut(tc->getVirtProxy());
+            buf.copyOut(tc->getMemProxy());
         }
         break;
 
@@ -235,7 +233,7 @@ ClDriver::ioctl(ThreadContext *tc, unsigned req)
         {
             BufferArg buf(buf_addr, sizeof(uint32_t));
             *((uint32_t*)buf.bufferPtr()) = dispatcher->getNumCUs();
-            buf.copyOut(tc->getVirtProxy());
+            buf.copyOut(tc->getMemProxy());
         }
         break;
 
@@ -243,14 +241,14 @@ ClDriver::ioctl(ThreadContext *tc, unsigned req)
         {
             BufferArg buf(buf_addr, sizeof(uint32_t));
             *((uint32_t*)buf.bufferPtr()) = dispatcher->wfSize();
-            buf.copyOut(tc->getVirtProxy());
+            buf.copyOut(tc->getMemProxy());
         }
         break;
       case HSA_GET_HW_STATIC_CONTEXT_SIZE:
         {
             BufferArg buf(buf_addr, sizeof(uint32_t));
             *((uint32_t*)buf.bufferPtr()) = dispatcher->getStaticContextSize();
-            buf.copyOut(tc->getVirtProxy());
+            buf.copyOut(tc->getMemProxy());
         }
         break;
 

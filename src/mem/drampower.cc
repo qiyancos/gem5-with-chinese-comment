@@ -42,6 +42,8 @@
 #include "base/intmath.hh"
 #include "sim/core.hh"
 
+using namespace Data;
+
 DRAMPower::DRAMPower(const DRAMCtrlParams* p, bool include_io) :
     powerlib(libDRAMPower(getMemSpec(p), include_io))
 {

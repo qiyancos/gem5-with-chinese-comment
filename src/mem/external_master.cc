@@ -52,16 +52,17 @@ std::map<std::string, ExternalMaster::Handler *>
     ExternalMaster::portHandlers;
 
 ExternalMaster::ExternalMaster(ExternalMasterParams *params) :
-    SimObject(params),
+    MemObject(params),
     externalPort(NULL),
     portName(params->name + ".port"),
     portType(params->port_type),
     portData(params->port_data),
-    masterId(params->system->getMasterId(this))
+    masterId(params->system->getMasterId(params->name))
 {}
 
-Port &
-ExternalMaster::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort &
+ExternalMaster::getMasterPort(const std::string &if_name,
+    PortID idx)
 {
     if (if_name == "port") {
         DPRINTF(ExternalPort, "Trying to bind external port: %s %s\n",
@@ -83,7 +84,7 @@ ExternalMaster::getPort(const std::string &if_name, PortID idx)
         }
         return *externalPort;
     } else {
-        return SimObject::getPort(if_name, idx);
+        return MemObject::getMasterPort(if_name, idx);
     }
 }
 

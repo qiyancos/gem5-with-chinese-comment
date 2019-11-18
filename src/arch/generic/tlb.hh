@@ -53,10 +53,11 @@ class BaseMasterPort;
 class BaseTLB : public SimObject
 {
   protected:
-    BaseTLB(const Params *p) : SimObject(p) {}
+    BaseTLB(const Params *p)
+        : SimObject(p)
+    {}
 
   public:
-
     enum Mode { Read, Write, Execute };
 
     class Translation
@@ -76,7 +77,7 @@ class BaseTLB : public SimObject
          * be responsible for cleaning itself up which will happen in this
          * function. Once it's called, the object is no longer valid.
          */
-        virtual void finish(const Fault &fault, const RequestPtr &req,
+        virtual void finish(const Fault &fault, RequestPtr req,
                             ThreadContext *tc, Mode mode) = 0;
 
         /** This function is used by the page table walker to determine if it
@@ -91,12 +92,12 @@ class BaseTLB : public SimObject
     virtual void demapPage(Addr vaddr, uint64_t asn) = 0;
 
     virtual Fault translateAtomic(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) = 0;
+            RequestPtr req, ThreadContext *tc, Mode mode) = 0;
     virtual void translateTiming(
-            const RequestPtr &req, ThreadContext *tc,
+            RequestPtr req, ThreadContext *tc,
             Translation *translation, Mode mode) = 0;
     virtual Fault
-    translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
+    translateFunctional(RequestPtr req, ThreadContext *tc, Mode mode)
     {
         panic("Not implemented.\n");
     }
@@ -116,7 +117,7 @@ class BaseTLB : public SimObject
      * @return A fault on failure, NoFault otherwise.
      */
     virtual Fault finalizePhysical(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) const = 0;
+            RequestPtr req, ThreadContext *tc, Mode mode) const = 0;
 
     /**
      * Remove all entries from the TLB
@@ -129,15 +130,15 @@ class BaseTLB : public SimObject
     virtual void takeOverFrom(BaseTLB *otlb) = 0;
 
     /**
-     * Get the table walker port if present. This is used for
+     * Get the table walker master port if present. This is used for
      * migrating port connections during a CPU takeOverFrom()
      * call. For architectures that do not have a table walker, NULL
      * is returned, hence the use of a pointer rather than a
      * reference.
      *
-     * @return A pointer to the walker port or NULL if not present
+     * @return A pointer to the walker master port or NULL if not present
      */
-    virtual Port* getTableWalkerPort() { return NULL; }
+    virtual BaseMasterPort* getMasterPort() { return NULL; }
 
     void memInvalidate() { flushAll(); }
 };
@@ -153,13 +154,13 @@ class GenericTLB : public BaseTLB
     void demapPage(Addr vaddr, uint64_t asn) override;
 
     Fault translateAtomic(
-        const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+        RequestPtr req, ThreadContext *tc, Mode mode) override;
     void translateTiming(
-        const RequestPtr &req, ThreadContext *tc,
+        RequestPtr req, ThreadContext *tc,
         Translation *translation, Mode mode) override;
 
     Fault finalizePhysical(
-        const RequestPtr &req, ThreadContext *tc, Mode mode) const override;
+        RequestPtr req, ThreadContext *tc, Mode mode) const override;
 };
 
 #endif // __ARCH_GENERIC_TLB_HH__

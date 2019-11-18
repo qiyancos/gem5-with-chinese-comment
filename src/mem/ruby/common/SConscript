@@ -33,8 +33,6 @@ Import('*')
 if env['PROTOCOL'] == 'None':
     Return()
 
-env.Append(CPPDEFINES={'NUMBER_BITS_PER_SET': env['NUMBER_BITS_PER_SET']})
-
 Source('Address.cc')
 Source('BoolVec.cc')
 Source('Consumer.cc')

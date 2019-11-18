@@ -42,10 +42,15 @@
 
 #include "base/types.hh"
 
+namespace LittleEndianGuest {}
+
 namespace NullISA
 {
+    using namespace LittleEndianGuest;
+
     const Addr PageShift = 12;
     const Addr PageBytes = ULL(1) << PageShift;
+
 }
 
 #endif //__ARCH_NULL_ISA_TRAITS_HH__

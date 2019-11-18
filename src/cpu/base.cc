@@ -126,9 +126,9 @@ CPUProgressEvent::description() const
 }
 
 BaseCPU::BaseCPU(Params *p, bool is_checker)
-    : ClockedObject(p), instCnt(0), _cpuId(p->cpu_id), _socketId(p->socket_id),
-      _instMasterId(p->system->getMasterId(this, "inst")),
-      _dataMasterId(p->system->getMasterId(this, "data")),
+    : MemObject(p), instCnt(0), _cpuId(p->cpu_id), _socketId(p->socket_id),
+      _instMasterId(p->system->getMasterId(name() + ".inst")),
+      _dataMasterId(p->system->getMasterId(name() + ".data")),
       _taskId(ContextSwitchTaskId::Unknown), _pid(invldPid),
       _switchedOut(p->switched_out), _cacheLineSize(p->system->cacheLineSize()),
       interrupts(p->interrupts), profileEvent(NULL),
@@ -318,8 +318,7 @@ BaseCPU::mwaitAtomic(ThreadID tid, ThreadContext *tc, BaseTLB *dtb)
     assert(tid < numThreads);
     AddressMonitor &monitor = addressMonitor[tid];
 
-    RequestPtr req = std::make_shared<Request>();
-
+    Request req;
     Addr addr = monitor.vAddr;
     int block_size = cacheLineSize();
     uint64_t mask = ~((uint64_t)(block_size - 1));
@@ -331,13 +330,13 @@ BaseCPU::mwaitAtomic(ThreadID tid, ThreadContext *tc, BaseTLB *dtb)
     if (secondAddr > addr)
         size = secondAddr - addr;
 
-    req->setVirt(0, addr, size, 0x0, dataMasterId(), tc->instAddr());
+    req.setVirt(0, addr, size, 0x0, dataMasterId(), tc->instAddr());
 
     // translate to physical address
-    Fault fault = dtb->translateAtomic(req, tc, BaseTLB::Read);
+    Fault fault = dtb->translateAtomic(&req, tc, BaseTLB::Read);
     assert(fault == NoFault);
 
-    monitor.pAddr = req->getPaddr() & mask;
+    monitor.pAddr = req.getPaddr() & mask;
     monitor.waiting = true;
 
     DPRINTF(Mwait,"[tid:%d] mwait called (vAddr=0x%lx, line's paddr=0x%lx)\n",
@@ -391,7 +390,6 @@ BaseCPU::regProbePoints()
     ppActiveCycles = pmuProbePoint("ActiveCycles");
 
     ppRetiredInsts = pmuProbePoint("RetiredInsts");
-    ppRetiredInstsPC = pmuProbePoint("RetiredInstsPC");
     ppRetiredLoads = pmuProbePoint("RetiredLoads");
     ppRetiredStores = pmuProbePoint("RetiredStores");
     ppRetiredBranches = pmuProbePoint("RetiredBranches");
@@ -401,17 +399,16 @@ BaseCPU::regProbePoints()
 }
 
 void
-BaseCPU::probeInstCommit(const StaticInstPtr &inst, Addr pc)
+BaseCPU::probeInstCommit(const StaticInstPtr &inst)
 {
-    if (!inst->isMicroop() || inst->isLastMicroop()) {
+    if (!inst->isMicroop() || inst->isLastMicroop())
         ppRetiredInsts->notify(1);
-        ppRetiredInstsPC->notify(pc);
-    }
+
 
     if (inst->isLoad())
         ppRetiredLoads->notify(1);
 
-    if (inst->isStore() || inst->isAtomic())
+    if (inst->isStore())
         ppRetiredStores->notify(1);
 
     if (inst->isControl())
@@ -421,7 +418,7 @@ BaseCPU::probeInstCommit(const StaticInstPtr &inst, Addr pc)
 void
 BaseCPU::regStats()
 {
-    ClockedObject::regStats();
+    MemObject::regStats();
 
     using namespace Stats;
 
@@ -451,18 +448,19 @@ BaseCPU::regStats()
         threadContexts[0]->regStats(name());
 }
 
-Port &
-BaseCPU::getPort(const string &if_name, PortID idx)
+BaseMasterPort &
+BaseCPU::getMasterPort(const string &if_name, PortID idx)
 {
     // Get the right port based on name. This applies to all the
     // subclasses of the base CPU and relies on their implementation
-    // of getDataPort and getInstPort.
+    // of getDataPort and getInstPort. In all cases there methods
+    // return a MasterPort pointer.
     if (if_name == "dcache_port")
         return getDataPort();
     else if (if_name == "icache_port")
         return getInstPort();
     else
-        return ClockedObject::getPort(if_name, idx);
+        return MemObject::getMasterPort(if_name, idx);
 }
 
 void
@@ -622,18 +620,17 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
             ThreadContext::compare(oldTC, newTC);
         */
 
-        Port *old_itb_port = oldTC->getITBPtr()->getTableWalkerPort();
-        Port *old_dtb_port = oldTC->getDTBPtr()->getTableWalkerPort();
-        Port *new_itb_port = newTC->getITBPtr()->getTableWalkerPort();
-        Port *new_dtb_port = newTC->getDTBPtr()->getTableWalkerPort();
+        BaseMasterPort *old_itb_port = oldTC->getITBPtr()->getMasterPort();
+        BaseMasterPort *old_dtb_port = oldTC->getDTBPtr()->getMasterPort();
+        BaseMasterPort *new_itb_port = newTC->getITBPtr()->getMasterPort();
+        BaseMasterPort *new_dtb_port = newTC->getDTBPtr()->getMasterPort();
 
         // Move over any table walker ports if they exist
         if (new_itb_port) {
             assert(!new_itb_port->isConnected());
             assert(old_itb_port);
             assert(old_itb_port->isConnected());
-            auto &slavePort =
-                dynamic_cast<BaseMasterPort *>(old_itb_port)->getSlavePort();
+            BaseSlavePort &slavePort = old_itb_port->getSlavePort();
             old_itb_port->unbind();
             new_itb_port->bind(slavePort);
         }
@@ -641,8 +638,7 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
             assert(!new_dtb_port->isConnected());
             assert(old_dtb_port);
             assert(old_dtb_port->isConnected());
-            auto &slavePort =
-                dynamic_cast<BaseMasterPort *>(old_dtb_port)->getSlavePort();
+            BaseSlavePort &slavePort = old_dtb_port->getSlavePort();
             old_dtb_port->unbind();
             new_dtb_port->bind(slavePort);
         }
@@ -654,14 +650,14 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
         CheckerCPU *oldChecker = oldTC->getCheckerCpuPtr();
         CheckerCPU *newChecker = newTC->getCheckerCpuPtr();
         if (oldChecker && newChecker) {
-            Port *old_checker_itb_port =
-                oldChecker->getITBPtr()->getTableWalkerPort();
-            Port *old_checker_dtb_port =
-                oldChecker->getDTBPtr()->getTableWalkerPort();
-            Port *new_checker_itb_port =
-                newChecker->getITBPtr()->getTableWalkerPort();
-            Port *new_checker_dtb_port =
-                newChecker->getDTBPtr()->getTableWalkerPort();
+            BaseMasterPort *old_checker_itb_port =
+                oldChecker->getITBPtr()->getMasterPort();
+            BaseMasterPort *old_checker_dtb_port =
+                oldChecker->getDTBPtr()->getMasterPort();
+            BaseMasterPort *new_checker_itb_port =
+                newChecker->getITBPtr()->getMasterPort();
+            BaseMasterPort *new_checker_dtb_port =
+                newChecker->getDTBPtr()->getMasterPort();
 
             newChecker->getITBPtr()->takeOverFrom(oldChecker->getITBPtr());
             newChecker->getDTBPtr()->takeOverFrom(oldChecker->getDTBPtr());
@@ -671,9 +667,8 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
                 assert(!new_checker_itb_port->isConnected());
                 assert(old_checker_itb_port);
                 assert(old_checker_itb_port->isConnected());
-                auto &slavePort =
-                    dynamic_cast<BaseMasterPort *>(old_checker_itb_port)->
-                    getSlavePort();
+                BaseSlavePort &slavePort =
+                    old_checker_itb_port->getSlavePort();
                 old_checker_itb_port->unbind();
                 new_checker_itb_port->bind(slavePort);
             }
@@ -681,9 +676,8 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
                 assert(!new_checker_dtb_port->isConnected());
                 assert(old_checker_dtb_port);
                 assert(old_checker_dtb_port->isConnected());
-                auto &slavePort =
-                    dynamic_cast<BaseMasterPort *>(old_checker_dtb_port)->
-                    getSlavePort();
+                BaseSlavePort &slavePort =
+                    old_checker_dtb_port->getSlavePort();
                 old_checker_dtb_port->unbind();
                 new_checker_dtb_port->bind(slavePort);
             }
@@ -710,15 +704,13 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
     // we are switching to.
     assert(!getInstPort().isConnected());
     assert(oldCPU->getInstPort().isConnected());
-    auto &inst_peer_port =
-        dynamic_cast<BaseMasterPort &>(oldCPU->getInstPort()).getSlavePort();
+    BaseSlavePort &inst_peer_port = oldCPU->getInstPort().getSlavePort();
     oldCPU->getInstPort().unbind();
     getInstPort().bind(inst_peer_port);
 
     assert(!getDataPort().isConnected());
     assert(oldCPU->getDataPort().isConnected());
-    auto &data_peer_port =
-        dynamic_cast<BaseMasterPort &>(oldCPU->getDataPort()).getSlavePort();
+    BaseSlavePort &data_peer_port = oldCPU->getDataPort().getSlavePort();
     oldCPU->getDataPort().unbind();
     getDataPort().bind(data_peer_port);
 }

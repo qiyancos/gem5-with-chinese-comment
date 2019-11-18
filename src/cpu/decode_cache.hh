@@ -47,8 +47,7 @@ namespace DecodeCache
 {
 
 /// Hash for decoded instructions.
-template <typename EMI>
-using InstMap = std::unordered_map<EMI, StaticInstPtr>;
+typedef std::unordered_map<TheISA::ExtMachInst, StaticInstPtr> InstMap;
 
 /// A sparse map from an Addr to a Value, stored in page chunks.
 template<class Value>

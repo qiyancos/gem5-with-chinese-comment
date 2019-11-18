@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2017, 2019 ARM Limited
+# Copyright (c) 2016-2017 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -37,9 +37,6 @@
 #          Gabor Dozsa
 
 # System components used by the bigLITTLE.py configuration script
-
-from __future__ import print_function
-from __future__ import absolute_import
 
 import m5
 from m5.objects import *
@@ -187,20 +184,16 @@ class KvmCluster(CpuCluster):
 class SimpleSystem(LinuxArmSystem):
     cache_line_size = 64
 
-    def __init__(self, caches, mem_size, platform=None, **kwargs):
+    def __init__(self, caches, mem_size, **kwargs):
         super(SimpleSystem, self).__init__(**kwargs)
 
         self.voltage_domain = VoltageDomain(voltage="1.0V")
         self.clk_domain = SrcClockDomain(clock="1GHz",
                                          voltage_domain=Parent.voltage_domain)
 
-        if platform is None:
-            self.realview = VExpress_GEM5_V1()
-        else:
-            self.realview = platform
+        self.realview = VExpress_GEM5_V1()
 
-        if hasattr(self.realview.gic, 'cpu_addr'):
-            self.gic_cpu_addr = self.realview.gic.cpu_addr
+        self.gic_cpu_addr = self.realview.gic.cpu_addr
         self.flags_addr = self.realview.realview_io.pio_addr + 0x30
 
         self.membus = MemBus()
@@ -214,8 +207,9 @@ class SimpleSystem(LinuxArmSystem):
         self.iobridge = Bridge(delay='50ns')
         # Device DMA -> MEM
         mem_range = self.realview._mem_regions[0]
-        assert long(mem_range.size()) >= long(Addr(mem_size))
-        self.mem_ranges = [ AddrRange(start=mem_range.start, size=mem_size) ]
+        mem_range_size = long(mem_range[1]) - long(mem_range[0])
+        assert mem_range_size >= long(Addr(mem_size))
+        self.mem_ranges = [ AddrRange(start=mem_range[0], size=mem_size) ]
         self._caches = caches
         if self._caches:
             self.iocache = IOCache(addr_ranges=[self.mem_ranges[0]])
@@ -243,8 +237,7 @@ class SimpleSystem(LinuxArmSystem):
             self.dmabridge.master = self.membus.slave
             self.dmabridge.slave = self.iobus.master
 
-        if hasattr(self.realview.gic, 'cpu_addr'):
-            self.gic_cpu_addr = self.realview.gic.cpu_addr
+        self.gic_cpu_addr = self.realview.gic.cpu_addr
         self.realview.attachOnChipIO(self.membus, self.iobridge)
         self.realview.attachIO(self.iobus)
         self.system_port = self.membus.slave

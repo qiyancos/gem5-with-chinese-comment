@@ -30,9 +30,9 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="No" # [Yes/No] 
+    forceNotBuild="Yes" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
-    m5outDir="$gem5Dir/check_points/"
+    m5outDir=""
     # m5outDir option [default m5out]
 
     enableSmt="No" # [Yes/No]
@@ -75,7 +75,7 @@ setGem5(){
         memSize="2GB"
         # Specify the physical memory size (single memory)
 
-    enableCache="No"
+    enableCache="Yes"
         numDirs=""
         cacheLineSize=""
         L1Dsize="32768"
@@ -90,9 +90,9 @@ setGem5(){
 	    #  AMPMPrefetcher, StridePrefetcher]
         L1Isize="65536"
         L1Iassoc="4"
-        L1Iprefetcher="BOPPrefetcher"
+        L1Iprefetcher="StridePrefetcher"
 
-    enableL2Cache="No"
+    enableL2Cache="Yes"
         numL2Caches=""
         L2size="1048576"
         L2assoc="8"
@@ -114,10 +114,10 @@ setGem5(){
         debugStartTick=""
         debugEndTick=""
     
-    enableCheckPoint="Yes" # [Yes/No]
-        loadCheckPointPos=""
+    enableCheckPoint="No" # [Yes/No]
+        loadCheckPointPos="300000000"
         # num of instructions already run to load checkpoint
-        saveCheckPointPos="300000000"
+        saveCheckPointPos= #"300000000"
         # num of instructions to take checkpoint
         checkPointDir="$gem5Dir/check_points/"
         # where to put or load the checkpoint file

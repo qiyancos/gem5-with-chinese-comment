@@ -30,66 +30,38 @@
 
 #include "mem/cache/replacement_policies/random_rp.hh"
 
-#include <cassert>
-#include <memory>
-
 #include "base/random.hh"
-#include "params/RandomRP.hh"
+#include "debug/CacheRepl.hh"
 
 RandomRP::RandomRP(const Params *p)
     : BaseReplacementPolicy(p)
 {
 }
 
-void
-RandomRP::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-const
-{
-    // Unprioritize replacement data victimization
-    std::static_pointer_cast<RandomReplData>(
-        replacement_data)->valid = false;
-}
-
-void
-RandomRP::touch(const std::shared_ptr<ReplacementData>& replacement_data) const
-{
-}
-
-void
-RandomRP::reset(const std::shared_ptr<ReplacementData>& replacement_data) const
-{
-    // Unprioritize replacement data victimization
-    std::static_pointer_cast<RandomReplData>(
-        replacement_data)->valid = true;
-}
-
-ReplaceableEntry*
-RandomRP::getVictim(const ReplacementCandidates& candidates) const
+CacheBlk*
+RandomRP::getVictim(const ReplacementCandidates& candidates)
 {
     // There must be at least one replacement candidate
     assert(candidates.size() > 0);
 
     // Choose one candidate at random
-    ReplaceableEntry* victim = candidates[random_mt.random<unsigned>(0,
+    CacheBlk* blk = candidates[random_mt.random<unsigned>(0,
                                     candidates.size() - 1)];
 
-    // Visit all candidates to search for an invalid entry. If one is found,
-    // its eviction is prioritized
+    // Visit all candidates to find an invalid entry
     for (const auto& candidate : candidates) {
-        if (!std::static_pointer_cast<RandomReplData>(
-                    candidate->replacementData)->valid) {
-            victim = candidate;
+        // Give priority to victimise invalid entries
+        if (!candidate->isValid()){
+            blk = candidate;
             break;
         }
     }
 
-    return victim;
-}
+    // If no invalid blocks were found, choose one of the candidates randomly
+    DPRINTF(CacheRepl, "set %x, way %x: selecting blk for replacement\n",
+            blk->set, blk->way);
 
-std::shared_ptr<ReplacementData>
-RandomRP::instantiateEntry()
-{
-    return std::shared_ptr<ReplacementData>(new RandomReplData());
+    return blk;
 }
 
 RandomRP*

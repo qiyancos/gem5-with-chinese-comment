@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2019 ARM Limited
+ * Copyright (c) 2011-2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -59,8 +59,6 @@
 CoherentXBar::CoherentXBar(const CoherentXBarParams *p)
     : BaseXBar(p), system(p->system), snoopFilter(p->snoop_filter),
       snoopResponseLatency(p->snoop_response_latency),
-      maxOutstandingSnoopCheck(p->max_outstanding_snoops),
-      maxRoutingTableSizeCheck(p->max_routing_table_size),
       pointOfCoherency(p->point_of_coherency),
       pointOfUnification(p->point_of_unification)
 {
@@ -73,8 +71,8 @@ CoherentXBar::CoherentXBar(const CoherentXBarParams *p)
         masterPorts.push_back(bp);
         reqLayers.push_back(new ReqLayer(*bp, *this,
                                          csprintf(".reqLayer%d", i)));
-        snoopLayers.push_back(
-                new SnoopRespLayer(*bp, *this, csprintf(".snoopLayer%d", i)));
+        snoopLayers.push_back(new SnoopRespLayer(*bp, *this,
+                                                 csprintf(".snoopLayer%d", i)));
     }
 
     // see if we have a default slave device connected and if so add
@@ -83,10 +81,10 @@ CoherentXBar::CoherentXBar(const CoherentXBarParams *p)
         defaultPortID = masterPorts.size();
         std::string portName = name() + ".default";
         MasterPort* bp = new CoherentXBarMasterPort(portName, *this,
-                                                    defaultPortID);
+                                                   defaultPortID);
         masterPorts.push_back(bp);
         reqLayers.push_back(new ReqLayer(*bp, *this, csprintf(".reqLayer%d",
-                                         defaultPortID)));
+                                             defaultPortID)));
         snoopLayers.push_back(new SnoopRespLayer(*bp, *this,
                                                  csprintf(".snoopLayer%d",
                                                           defaultPortID)));
@@ -101,6 +99,8 @@ CoherentXBar::CoherentXBar(const CoherentXBarParams *p)
                                            csprintf(".respLayer%d", i)));
         snoopRespPorts.push_back(new SnoopRespPort(*bp, *this));
     }
+
+    clearPortCache();
 }
 
 CoherentXBar::~CoherentXBar()
@@ -153,8 +153,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
     // and the cache responding flag should always be the same
     assert(is_express_snoop == cache_responding);
 
-    // determine the destination based on the destination address range
-    PortID master_port_id = findPort(pkt->getAddrRange());
+    // determine the destination based on the address
+    PortID master_port_id = findPort(pkt->getAddr());
 
     // test if the crossbar should be considered occupied for the current
     // port, and exclude express snoops from the check
@@ -327,9 +327,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
                 outstandingSnoop.insert(pkt->req);
 
                 // basic sanity check on the outstanding snoops
-                panic_if(outstandingSnoop.size() > maxOutstandingSnoopCheck,
-                         "%s: Outstanding snoop requests exceeded %d\n",
-                         name(), maxOutstandingSnoopCheck);
+                panic_if(outstandingSnoop.size() > 512,
+                         "Outstanding snoop requests exceeded 512\n");
             }
 
             // remember where to route the normal response to
@@ -337,9 +336,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
                 assert(routeTo.find(pkt->req) == routeTo.end());
                 routeTo[pkt->req] = slave_port_id;
 
-                panic_if(routeTo.size() > maxRoutingTableSizeCheck,
-                         "%s: Routing table exceeds %d packets\n",
-                         name(), maxRoutingTableSizeCheck);
+                panic_if(routeTo.size() > 512,
+                         "Routing table exceeds 512 packets\n");
             }
 
             // update the layer state and schedule an idle event
@@ -405,9 +403,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
                 assert(routeTo.find(pkt->req) == routeTo.end());
                 routeTo[pkt->req] = slave_port_id;
 
-                panic_if(routeTo.size() > maxRoutingTableSizeCheck,
-                         "%s: Routing table exceeds %d packets\n",
-                         name(), maxRoutingTableSizeCheck);
+                panic_if(routeTo.size() > 512,
+                         "Routing table exceeds 512 packets\n");
             }
         }
     }
@@ -556,7 +553,7 @@ CoherentXBar::recvTimingSnoopReq(PacketPtr pkt, PortID master_port_id)
     // device responsible for the address range something is
     // wrong, hence there is nothing further to do as the packet
     // would be going back to where it came from
-    assert(findPort(pkt->getAddrRange()) == master_port_id);
+    assert(master_port_id == findPort(pkt->getAddr()));
 }
 
 bool
@@ -723,8 +720,7 @@ CoherentXBar::recvReqRetry(PortID master_port_id)
 }
 
 Tick
-CoherentXBar::recvAtomicBackdoor(PacketPtr pkt, PortID slave_port_id,
-                                 MemBackdoorPtr *backdoor)
+CoherentXBar::recvAtomic(PacketPtr pkt, PortID slave_port_id)
 {
     DPRINTF(CoherentXBar, "%s: src %s packet %s\n", __func__,
             slavePorts[slave_port_id]->name(), pkt->print());
@@ -787,7 +783,7 @@ CoherentXBar::recvAtomicBackdoor(PacketPtr pkt, PortID slave_port_id,
 
     // even if we had a snoop response, we must continue and also
     // perform the actual request at the destination
-    PortID master_port_id = findPort(pkt->getAddrRange());
+    PortID master_port_id = findPort(pkt->getAddr());
 
     if (sink_packet) {
         DPRINTF(CoherentXBar, "%s: Not forwarding %s\n", __func__,
@@ -802,10 +798,7 @@ CoherentXBar::recvAtomicBackdoor(PacketPtr pkt, PortID slave_port_id,
             }
 
             // forward the request to the appropriate destination
-            auto master = masterPorts[master_port_id];
-            response_latency = backdoor ?
-                master->sendAtomicBackdoor(pkt, *backdoor) :
-                master->sendAtomic(pkt);
+            response_latency = masterPorts[master_port_id]->sendAtomic(pkt);
         } else {
             // if it does not need a response we sink the packet above
             assert(pkt->needsResponse());
@@ -1007,14 +1000,14 @@ CoherentXBar::recvFunctional(PacketPtr pkt, PortID slave_port_id)
             // if we find a response that has the data, then the
             // downstream caches/memories may be out of date, so simply stop
             // here
-            if (p->trySatisfyFunctional(pkt)) {
+            if (p->checkFunctional(pkt)) {
                 if (pkt->needsResponse())
                     pkt->makeResponse();
                 return;
             }
         }
 
-        PortID dest_id = findPort(pkt->getAddrRange());
+        PortID dest_id = findPort(pkt->getAddr());
 
         masterPorts[dest_id]->sendFunctional(pkt);
     }
@@ -1030,7 +1023,7 @@ CoherentXBar::recvFunctionalSnoop(PacketPtr pkt, PortID master_port_id)
     }
 
     for (const auto& p : slavePorts) {
-        if (p->trySatisfyFunctional(pkt)) {
+        if (p->checkFunctional(pkt)) {
             if (pkt->needsResponse())
                 pkt->makeResponse();
             return;

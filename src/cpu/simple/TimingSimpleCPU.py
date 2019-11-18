@@ -27,8 +27,7 @@
 # Authors: Nathan Binkert
 
 from m5.params import *
-
-from m5.objects.BaseSimpleCPU import BaseSimpleCPU
+from BaseSimpleCPU import BaseSimpleCPU
 
 class TimingSimpleCPU(BaseSimpleCPU):
     type = 'TimingSimpleCPU'

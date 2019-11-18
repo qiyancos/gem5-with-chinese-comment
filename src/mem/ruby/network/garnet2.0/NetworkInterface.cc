@@ -437,6 +437,9 @@ void
 NetworkInterface::scheduleOutputLink()
 {
     int vc = m_vc_round_robin;
+    m_vc_round_robin++;
+    if (m_vc_round_robin == m_num_vcs)
+        m_vc_round_robin = 0;
 
     for (int i = 0; i < m_num_vcs; i++) {
         vc++;
@@ -466,8 +469,6 @@ NetworkInterface::scheduleOutputLink()
             }
             if (!is_candidate_vc)
                 continue;
-
-            m_vc_round_robin = vc;
 
             m_out_vc_state[vc]->decrement_credit();
             // Just removing the flit

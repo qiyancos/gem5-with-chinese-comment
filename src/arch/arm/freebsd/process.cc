@@ -41,7 +41,6 @@
 
 #include "arch/arm/freebsd/freebsd.hh"
 #include "arch/arm/isa_traits.hh"
-#include "base/loader/object_file.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "kern/freebsd/freebsd.hh"
@@ -53,50 +52,21 @@
 using namespace std;
 using namespace ArmISA;
 
-namespace
-{
-
-class ArmFreebsdObjectFileLoader : public ObjectFile::Loader
-{
-  public:
-    Process *
-    load(ProcessParams *params, ObjectFile *obj_file) override
-    {
-        auto arch = obj_file->getArch();
-        auto opsys = obj_file->getOpSys();
-
-        if (arch != ObjectFile::Arm && arch != ObjectFile::Thumb &&
-                arch != ObjectFile::Arm64) {
-            return nullptr;
-        }
-
-        if (opsys != ObjectFile::FreeBSD)
-            return nullptr;
-
-        if (arch == ObjectFile::Arm64)
-            return new ArmFreebsdProcess64(params, obj_file, arch);
-        else
-            return new ArmFreebsdProcess32(params, obj_file, arch);
-    }
-};
-
-ArmFreebsdObjectFileLoader loader;
-
-} // anonymous namespace
-
 static SyscallReturn
-issetugidFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
+issetugidFunc(SyscallDesc *desc, int callnum, Process *process,
+              ThreadContext *tc)
 {
+
     return 0;
 }
 
 static SyscallReturn
-sysctlFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
+sysctlFunc(SyscallDesc *desc, int callnum, Process *process,
+           ThreadContext *tc)
 {
     int index = 0;
     uint64_t ret;
 
-    auto process = tc->getProcessPtr();
     Addr namep = process->getSyscallArg(tc, index);
     size_t namelen = process->getSyscallArg(tc, index);
     Addr oldp = process->getSyscallArg(tc, index);
@@ -109,13 +79,13 @@ sysctlFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     BufferArg buf3(oldlenp, sizeof(size_t));
     BufferArg buf4(newp, sizeof(size_t));
 
-    buf.copyIn(tc->getVirtProxy());
-    buf2.copyIn(tc->getVirtProxy());
-    buf3.copyIn(tc->getVirtProxy());
+    buf.copyIn(tc->getMemProxy());
+    buf2.copyIn(tc->getMemProxy());
+    buf3.copyIn(tc->getMemProxy());
 
     void *hnewp = NULL;
     if (newp) {
-        buf4.copyIn(tc->getVirtProxy());
+        buf4.copyIn(tc->getMemProxy());
         hnewp = (void *)buf4.bufferPtr();
     }
 
@@ -125,11 +95,11 @@ sysctlFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 
     ret = sysctl((int *)hnamep, namelen, holdp, holdlenp, hnewp, newlen);
 
-    buf.copyOut(tc->getVirtProxy());
-    buf2.copyOut(tc->getVirtProxy());
-    buf3.copyOut(tc->getVirtProxy());
+    buf.copyOut(tc->getMemProxy());
+    buf2.copyOut(tc->getMemProxy());
+    buf3.copyOut(tc->getMemProxy());
     if (newp)
-        buf4.copyOut(tc->getVirtProxy());
+        buf4.copyOut(tc->getMemProxy());
 
     return (ret);
 }
@@ -689,8 +659,8 @@ static SyscallDesc syscallDescs64[] = {
     /*    0 */ SyscallDesc("unused#000", unimplementedFunc),
     /*    1 */ SyscallDesc("exit", exitFunc),
     /*    2 */ SyscallDesc("unused#002", unimplementedFunc),
-    /*    3 */ SyscallDesc("read", readFunc<ArmFreebsd64>),
-    /*    4 */ SyscallDesc("write", writeFunc<ArmFreebsd64>),
+    /*    3 */ SyscallDesc("read", readFunc),
+    /*    4 */ SyscallDesc("write", writeFunc),
     /*    5 */ SyscallDesc("unused#005", unimplementedFunc),
     /*    6 */ SyscallDesc("unused#006", unimplementedFunc),
     /*    7 */ SyscallDesc("unused#007", unimplementedFunc),

@@ -1,5 +1,4 @@
 # Copyright (c) 2008 The Hewlett-Packard Development Company
-# Copyright (c) 2018 Metempsy Technology Consulting
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -26,15 +25,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Authors: Gabe Black
-#          Ivan Pizarro
 
-from m5.params import *
 from m5.SimObject import SimObject
 
 class BaseTLB(SimObject):
     type = 'BaseTLB'
     abstract = True
     cxx_header = "arch/generic/tlb.hh"
-    # Ports to connect with other TLB levels
-    slave  = VectorSlavePort("Port closer to the CPU side")
-    master = MasterPort("Port closer to memory side")

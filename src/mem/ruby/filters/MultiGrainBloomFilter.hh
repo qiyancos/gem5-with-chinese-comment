@@ -29,32 +29,46 @@
 #ifndef __MEM_RUBY_FILTERS_MULTIGRAINBLOOMFILTER_HH__
 #define __MEM_RUBY_FILTERS_MULTIGRAINBLOOMFILTER_HH__
 
+#include <iostream>
 #include <vector>
 
+#include "mem/ruby/common/Address.hh"
 #include "mem/ruby/filters/AbstractBloomFilter.hh"
-
-struct MultiGrainBloomFilterParams;
 
 class MultiGrainBloomFilter : public AbstractBloomFilter
 {
   public:
-    MultiGrainBloomFilter(const MultiGrainBloomFilterParams* p);
+    MultiGrainBloomFilter(int head, int tail);
     ~MultiGrainBloomFilter();
 
-    void clear() override;
-    void set(Addr addr) override;
+    void clear();
+    void increment(Addr addr);
+    void decrement(Addr addr);
+    void merge(AbstractBloomFilter * other_filter);
+    void set(Addr addr);
+    void unset(Addr addr);
 
-    int getCount(Addr addr) const override;
-    int getTotalCount() const override;
+    bool isSet(Addr addr);
+    int getCount(Addr addr);
+    int getTotalCount();
+    int getIndex(Addr addr);
+    int readBit(const int index);
+    void writeBit(const int index, const int value);
+
+    void print(std::ostream& out) const;
 
   private:
-    int hash(Addr addr) const;
-    int pageHash(Addr addr) const;
+    int get_block_index(Addr addr);
+    int get_page_index(Addr addr);
 
-    // The block filter uses the filter vector declared in the base class
-    /** The page number filter. */
-    std::vector<int> pageFilter;
-    int pageFilterSizeBits;
+    // The block filter
+    std::vector<int> m_filter;
+    int m_filter_size;
+    int m_filter_size_bits;
+    // The page number filter
+    std::vector<int> m_page_filter;
+    int m_page_filter_size;
+    int m_page_filter_size_bits;
 };
 
 #endif // __MEM_RUBY_FILTERS_MULTIGRAINBLOOMFILTER_HH__

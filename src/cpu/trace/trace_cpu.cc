@@ -50,8 +50,8 @@ TraceCPU::TraceCPU(TraceCPUParams *params)
     :   BaseCPU(params),
         icachePort(this),
         dcachePort(this),
-        instMasterID(params->system->getMasterId(this, "inst")),
-        dataMasterID(params->system->getMasterId(this, "data")),
+        instMasterID(params->system->getMasterId(name() + ".inst")),
+        dataMasterID(params->system->getMasterId(name() + ".data")),
         instTraceFile(params->instTraceFile),
         dataTraceFile(params->dataTraceFile),
         icacheGen(*this, ".iside", icachePort, instMasterID, instTraceFile),
@@ -108,13 +108,13 @@ TraceCPU::takeOverFrom(BaseCPU *oldCPU)
     // Unbind the ports of the old CPU and bind the ports of the TraceCPU.
     assert(!getInstPort().isConnected());
     assert(oldCPU->getInstPort().isConnected());
-    Port &inst_peer_port = oldCPU->getInstPort().getSlavePort();
+    BaseSlavePort &inst_peer_port = oldCPU->getInstPort().getSlavePort();
     oldCPU->getInstPort().unbind();
     getInstPort().bind(inst_peer_port);
 
     assert(!getDataPort().isConnected());
     assert(oldCPU->getDataPort().isConnected());
-    Port &data_peer_port = oldCPU->getDataPort().getSlavePort();
+    BaseSlavePort &data_peer_port = oldCPU->getDataPort().getSlavePort();
     oldCPU->getDataPort().unbind();
     getDataPort().bind(data_peer_port);
 }
@@ -662,11 +662,9 @@ TraceCPU::ElasticDataGen::executeMemReq(GraphNode* node_ptr)
     }
 
     // Create a request and the packet containing request
-    auto req = std::make_shared<Request>(
-        node_ptr->physAddr, node_ptr->size,
-        node_ptr->flags, masterID, node_ptr->seqNum,
-        ContextID(0));
-
+    Request* req = new Request(node_ptr->physAddr, node_ptr->size,
+                               node_ptr->flags, masterID, node_ptr->seqNum,
+                               ContextID(0));
     req->setPC(node_ptr->pc);
     // If virtual address is valid, set the asid and virtual address fields
     // of the request.
@@ -1160,7 +1158,7 @@ TraceCPU::FixedRetryGen::send(Addr addr, unsigned size, const MemCmd& cmd,
 {
 
     // Create new request
-    auto req = std::make_shared<Request>(addr, size, flags, masterID);
+    Request* req = new Request(addr, size, flags, masterID);
     req->setPC(pc);
 
     // If this is not done it triggers assert in L1 cache for invalid contextId
@@ -1226,7 +1224,8 @@ bool
 TraceCPU::IcachePort::recvTimingResp(PacketPtr pkt)
 {
     // All responses on the instruction fetch side are ignored. Simply delete
-    // the packet to free allocated memory
+    // the request and packet to free allocated memory
+    delete pkt->req;
     delete pkt;
 
     return true;
@@ -1251,8 +1250,9 @@ TraceCPU::DcachePort::recvTimingResp(PacketPtr pkt)
     // Handle the responses for data memory requests which is done inside the
     // elastic data generator
     owner->dcacheRecvTimingResp(pkt);
-    // After processing the response delete the packet to free
+    // After processing the response delete the request and packet to free
     // memory
+    delete pkt->req;
     delete pkt;
 
     return true;

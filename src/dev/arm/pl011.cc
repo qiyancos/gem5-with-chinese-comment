@@ -54,7 +54,7 @@
 #include "sim/sim_exit.hh"
 
 Pl011::Pl011(const Pl011Params *p)
-    : Uart(p, 0x1000),
+    : Uart(p, 0xfff),
       intEvent([this]{ generateInterrupt(); }, name()),
       control(0x300), fbrd(0), ibrd(0), lcrh(0), ifls(0x12),
       imsc(0), rawInt(0),
@@ -91,9 +91,6 @@ Pl011::read(PacketPtr pkt)
                 dataAvailable();
             }
         }
-        break;
-      case UART_RSR:
-        data = 0x0; // We never have errors
         break;
       case UART_FR:
         data =
@@ -133,14 +130,10 @@ Pl011::read(PacketPtr pkt)
         DPRINTF(Uart, "Reading Masked Int status as 0x%x\n", maskInt());
         data = maskInt();
         break;
-      case UART_DMACR:
-        warn("PL011: DMA not supported\n");
-        data = 0x0; // DMA never enabled
-        break;
       default:
         if (readId(pkt, AMBA_ID, pioAddr)) {
             // Hack for variable size accesses
-            data = pkt->getLE<uint32_t>();
+            data = pkt->get<uint32_t>();
             break;
         }
 
@@ -150,13 +143,13 @@ Pl011::read(PacketPtr pkt)
 
     switch(pkt->getSize()) {
       case 1:
-        pkt->setLE<uint8_t>(data);
+        pkt->set<uint8_t>(data);
         break;
       case 2:
-        pkt->setLE<uint16_t>(data);
+        pkt->set<uint16_t>(data);
         break;
       case 4:
-        pkt->setLE<uint32_t>(data);
+        pkt->set<uint32_t>(data);
         break;
       default:
         panic("Uart read size too big?\n");
@@ -177,7 +170,7 @@ Pl011::write(PacketPtr pkt)
     Addr daddr = pkt->getAddr() - pioAddr;
 
     DPRINTF(Uart, " write register %#x value %#x size=%d\n", daddr,
-            pkt->getLE<uint8_t>(), pkt->getSize());
+            pkt->get<uint8_t>(), pkt->getSize());
 
     // use a temporary data since the uart registers are read/written with
     // different size operations
@@ -186,13 +179,13 @@ Pl011::write(PacketPtr pkt)
 
     switch(pkt->getSize()) {
       case 1:
-        data = pkt->getLE<uint8_t>();
+        data = pkt->get<uint8_t>();
         break;
       case 2:
-        data = pkt->getLE<uint16_t>();
+        data = pkt->get<uint16_t>();
         break;
       case 4:
-        data = pkt->getLE<uint32_t>();
+        data = pkt->get<uint32_t>();
         break;
       default:
         panic("Uart write size too big?\n");
@@ -211,8 +204,6 @@ Pl011::write(PacketPtr pkt)
         // need to immediately raise it again.
         clearInterrupts(UART_TXINTR);
         raiseInterrupts(UART_TXINTR);
-        break;
-      case UART_ECR: // clears errors, ignore
         break;
       case UART_CR:
         control = data;
@@ -242,14 +233,6 @@ Pl011::write(PacketPtr pkt)
                     "UART_ICR write\n");
             dataAvailable();
         }
-        break;
-      case UART_DMACR:
-        // DMA is not supported, so panic if anyome tries to enable it.
-        // Bits 0, 1, 2 enables DMA on RX, TX, ERR respectively, others res0.
-        if (data & 0x7) {
-            panic("Tried to enable DMA on PL011\n");
-        }
-        warn("PL011: DMA not supported\n");
         break;
       default:
         panic("Tried to write PL011 at offset %#x that doesn't exist\n", daddr);

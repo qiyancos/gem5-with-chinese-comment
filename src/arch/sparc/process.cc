@@ -183,7 +183,7 @@ Sparc64Process::initState()
     pstate.ie = 1;
     tc->setMiscReg(MISCREG_PSTATE, pstate);
 
-    argsInit(sizeof(RegVal), PageBytes);
+    argsInit(sizeof(IntReg), PageBytes);
 }
 
 template<class IntType>
@@ -192,7 +192,9 @@ SparcProcess::argsInit(int pageSize)
 {
     int intSize = sizeof(IntType);
 
-    std::vector<AuxVector<IntType>> auxv;
+    typedef AuxVector<IntType> auxv_t;
+
+    std::vector<auxv_t> auxv;
 
     string filename;
     if (argv.size() < 1)
@@ -236,34 +238,34 @@ SparcProcess::argsInit(int pageSize)
     ElfObject * elfObject = dynamic_cast<ElfObject *>(objFile);
     if (elfObject) {
         // Bits which describe the system hardware capabilities
-        auxv.emplace_back(M5_AT_HWCAP, hwcap);
+        auxv.push_back(auxv_t(M5_AT_HWCAP, hwcap));
         // The system page size
-        auxv.emplace_back(M5_AT_PAGESZ, SparcISA::PageBytes);
+        auxv.push_back(auxv_t(M5_AT_PAGESZ, SparcISA::PageBytes));
         // Defined to be 100 in the kernel source.
         // Frequency at which times() increments
-        auxv.emplace_back(M5_AT_CLKTCK, 100);
-        // For statically linked executables, this is the virtual address of
-        // the program header tables if they appear in the executable image
-        auxv.emplace_back(M5_AT_PHDR, elfObject->programHeaderTable());
+        auxv.push_back(auxv_t(M5_AT_CLKTCK, 100));
+        // For statically linked executables, this is the virtual address of the
+        // program header tables if they appear in the executable image
+        auxv.push_back(auxv_t(M5_AT_PHDR, elfObject->programHeaderTable()));
         // This is the size of a program header entry from the elf file.
-        auxv.emplace_back(M5_AT_PHENT, elfObject->programHeaderSize());
+        auxv.push_back(auxv_t(M5_AT_PHENT, elfObject->programHeaderSize()));
         // This is the number of program headers from the original elf file.
-        auxv.emplace_back(M5_AT_PHNUM, elfObject->programHeaderCount());
+        auxv.push_back(auxv_t(M5_AT_PHNUM, elfObject->programHeaderCount()));
         // This is the base address of the ELF interpreter; it should be
         // zero for static executables or contain the base address for
         // dynamic executables.
-        auxv.emplace_back(M5_AT_BASE, getBias());
+        auxv.push_back(auxv_t(M5_AT_BASE, getBias()));
         // This is hardwired to 0 in the elf loading code in the kernel
-        auxv.emplace_back(M5_AT_FLAGS, 0);
+        auxv.push_back(auxv_t(M5_AT_FLAGS, 0));
         // The entry point to the program
-        auxv.emplace_back(M5_AT_ENTRY, objFile->entryPoint());
+        auxv.push_back(auxv_t(M5_AT_ENTRY, objFile->entryPoint()));
         // Different user and group IDs
-        auxv.emplace_back(M5_AT_UID, uid());
-        auxv.emplace_back(M5_AT_EUID, euid());
-        auxv.emplace_back(M5_AT_GID, gid());
-        auxv.emplace_back(M5_AT_EGID, egid());
+        auxv.push_back(auxv_t(M5_AT_UID, uid()));
+        auxv.push_back(auxv_t(M5_AT_EUID, euid()));
+        auxv.push_back(auxv_t(M5_AT_GID, gid()));
+        auxv.push_back(auxv_t(M5_AT_EGID, egid()));
         // Whether to enable "secure mode" in the executable
-        auxv.emplace_back(M5_AT_SECURE, 0);
+        auxv.push_back(auxv_t(M5_AT_SECURE, 0));
     }
 
     // Figure out how big the initial stack needs to be
@@ -364,27 +366,31 @@ SparcProcess::argsInit(int pageSize)
 
     // Write out the sentry void *
     uint64_t sentry_NULL = 0;
-    initVirtMem.writeBlob(sentry_base, &sentry_NULL, sentry_size);
+    initVirtMem.writeBlob(sentry_base,
+            (uint8_t*)&sentry_NULL, sentry_size);
 
     // Write the file name
     initVirtMem.writeString(file_name_base, filename.c_str());
 
     // Copy the aux stuff
-    Addr auxv_array_end = auxv_array_base;
-    for (const auto &aux: auxv) {
-        initVirtMem.write(auxv_array_end, aux, GuestByteOrder);
-        auxv_array_end += sizeof(aux);
+    for (int x = 0; x < auxv.size(); x++) {
+        initVirtMem.writeBlob(auxv_array_base + x * 2 * intSize,
+                (uint8_t*)&(auxv[x].a_type), intSize);
+        initVirtMem.writeBlob(auxv_array_base + (x * 2 + 1) * intSize,
+                (uint8_t*)&(auxv[x].a_val), intSize);
     }
 
     // Write out the terminating zeroed auxilliary vector
-    const AuxVector<IntType> zero(0, 0);
-    initVirtMem.write(auxv_array_end, zero);
-    auxv_array_end += sizeof(zero);
+    const IntType zero = 0;
+    initVirtMem.writeBlob(auxv_array_base + intSize * 2 * auxv.size(),
+            (uint8_t*)&zero, intSize);
+    initVirtMem.writeBlob(auxv_array_base + intSize * (2 * auxv.size() + 1),
+            (uint8_t*)&zero, intSize);
 
     copyStringArray(envp, envp_array_base, env_data_base, initVirtMem);
     copyStringArray(argv, argv_array_base, arg_data_base, initVirtMem);
 
-    initVirtMem.writeBlob(argc_base, &guestArgc, intSize);
+    initVirtMem.writeBlob(argc_base, (uint8_t*)&guestArgc, intSize);
 
     // Set up space for the trap handlers into the processes address space.
     // Since the stack grows down and there is reserved address space abov
@@ -416,9 +422,9 @@ Sparc64Process::argsInit(int intSize, int pageSize)
 
     // Stuff the trap handlers into the process address space
     initVirtMem.writeBlob(fillStart,
-            fillHandler64, sizeof(MachInst) * numFillInsts);
+            (uint8_t*)fillHandler64, sizeof(MachInst) * numFillInsts);
     initVirtMem.writeBlob(spillStart,
-            spillHandler64, sizeof(MachInst) *  numSpillInsts);
+            (uint8_t*)spillHandler64, sizeof(MachInst) *  numSpillInsts);
 }
 
 void
@@ -428,18 +434,18 @@ Sparc32Process::argsInit(int intSize, int pageSize)
 
     // Stuff the trap handlers into the process address space
     initVirtMem.writeBlob(fillStart,
-            fillHandler32, sizeof(MachInst) * numFillInsts);
+            (uint8_t*)fillHandler32, sizeof(MachInst) * numFillInsts);
     initVirtMem.writeBlob(spillStart,
-            spillHandler32, sizeof(MachInst) *  numSpillInsts);
+            (uint8_t*)spillHandler32, sizeof(MachInst) *  numSpillInsts);
 }
 
 void Sparc32Process::flushWindows(ThreadContext *tc)
 {
-    RegVal Cansave = tc->readIntReg(NumIntArchRegs + 3);
-    RegVal Canrestore = tc->readIntReg(NumIntArchRegs + 4);
-    RegVal Otherwin = tc->readIntReg(NumIntArchRegs + 6);
-    RegVal CWP = tc->readMiscReg(MISCREG_CWP);
-    RegVal origCWP = CWP;
+    IntReg Cansave = tc->readIntReg(NumIntArchRegs + 3);
+    IntReg Canrestore = tc->readIntReg(NumIntArchRegs + 4);
+    IntReg Otherwin = tc->readIntReg(NumIntArchRegs + 6);
+    MiscReg CWP = tc->readMiscReg(MISCREG_CWP);
+    MiscReg origCWP = CWP;
     CWP = (CWP + Cansave + 2) % NWindows;
     while (NWindows - 2 - Cansave != 0) {
         if (Otherwin) {
@@ -447,11 +453,11 @@ void Sparc32Process::flushWindows(ThreadContext *tc)
         } else {
             tc->setMiscReg(MISCREG_CWP, CWP);
             // Do the stores
-            RegVal sp = tc->readIntReg(StackPointerReg);
+            IntReg sp = tc->readIntReg(StackPointerReg);
             for (int index = 16; index < 32; index++) {
                 uint32_t regVal = tc->readIntReg(index);
                 regVal = htog(regVal);
-                if (!tc->getVirtProxy().tryWriteBlob(
+                if (!tc->getMemProxy().tryWriteBlob(
                         sp + (index - 16) * 4, (uint8_t *)&regVal, 4)) {
                     warn("Failed to save register to the stack when "
                             "flushing windows.\n");
@@ -470,11 +476,11 @@ void Sparc32Process::flushWindows(ThreadContext *tc)
 void
 Sparc64Process::flushWindows(ThreadContext *tc)
 {
-    RegVal Cansave = tc->readIntReg(NumIntArchRegs + 3);
-    RegVal Canrestore = tc->readIntReg(NumIntArchRegs + 4);
-    RegVal Otherwin = tc->readIntReg(NumIntArchRegs + 6);
-    RegVal CWP = tc->readMiscReg(MISCREG_CWP);
-    RegVal origCWP = CWP;
+    IntReg Cansave = tc->readIntReg(NumIntArchRegs + 3);
+    IntReg Canrestore = tc->readIntReg(NumIntArchRegs + 4);
+    IntReg Otherwin = tc->readIntReg(NumIntArchRegs + 6);
+    MiscReg CWP = tc->readMiscReg(MISCREG_CWP);
+    MiscReg origCWP = CWP;
     CWP = (CWP + Cansave + 2) % NWindows;
     while (NWindows - 2 - Cansave != 0) {
         if (Otherwin) {
@@ -482,11 +488,11 @@ Sparc64Process::flushWindows(ThreadContext *tc)
         } else {
             tc->setMiscReg(MISCREG_CWP, CWP);
             // Do the stores
-            RegVal sp = tc->readIntReg(StackPointerReg);
+            IntReg sp = tc->readIntReg(StackPointerReg);
             for (int index = 16; index < 32; index++) {
-                RegVal regVal = tc->readIntReg(index);
+                IntReg regVal = tc->readIntReg(index);
                 regVal = htog(regVal);
-                if (!tc->getVirtProxy().tryWriteBlob(
+                if (!tc->getMemProxy().tryWriteBlob(
                         sp + 2047 + (index - 16) * 8, (uint8_t *)&regVal, 8)) {
                     warn("Failed to save register to the stack when "
                             "flushing windows.\n");
@@ -502,7 +508,7 @@ Sparc64Process::flushWindows(ThreadContext *tc)
     tc->setMiscReg(MISCREG_CWP, origCWP);
 }
 
-RegVal
+IntReg
 Sparc32Process::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 6);
@@ -510,13 +516,13 @@ Sparc32Process::getSyscallArg(ThreadContext *tc, int &i)
 }
 
 void
-Sparc32Process::setSyscallArg(ThreadContext *tc, int i, RegVal val)
+Sparc32Process::setSyscallArg(ThreadContext *tc, int i, IntReg val)
 {
     assert(i < 6);
     tc->setIntReg(FirstArgumentReg + i, bits(val, 31, 0));
 }
 
-RegVal
+IntReg
 Sparc64Process::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 6);
@@ -524,7 +530,7 @@ Sparc64Process::getSyscallArg(ThreadContext *tc, int &i)
 }
 
 void
-Sparc64Process::setSyscallArg(ThreadContext *tc, int i, RegVal val)
+Sparc64Process::setSyscallArg(ThreadContext *tc, int i, IntReg val)
 {
     assert(i < 6);
     tc->setIntReg(FirstArgumentReg + i, val);
@@ -541,7 +547,7 @@ SparcProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
         // no error, clear XCC.C
         tc->setIntReg(NumIntArchRegs + 2,
                       tc->readIntReg(NumIntArchRegs + 2) & 0xEE);
-        RegVal val = sysret.returnValue();
+        IntReg val = sysret.returnValue();
         if (pstate.am)
             val = bits(val, 31, 0);
         tc->setIntReg(ReturnValueReg, val);
@@ -549,7 +555,7 @@ SparcProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
         // got an error, set XCC.C
         tc->setIntReg(NumIntArchRegs + 2,
                       tc->readIntReg(NumIntArchRegs + 2) | 0x11);
-        RegVal val = sysret.errnoValue();
+        IntReg val = sysret.errnoValue();
         if (pstate.am)
             val = bits(val, 31, 0);
         tc->setIntReg(ReturnValueReg, val);

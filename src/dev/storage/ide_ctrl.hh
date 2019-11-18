@@ -81,10 +81,6 @@ class IdeController : public PciDevice
         /** Registers used for bus master interface */
         struct BMIRegs
         {
-            void reset() {
-                memset(static_cast<void *>(this), 0, sizeof(*this));
-            }
-
             BMICommandReg command;
             uint8_t reserved0;
             BMIStatusReg status;

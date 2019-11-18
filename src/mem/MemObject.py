@@ -26,7 +26,7 @@
 #
 # Authors: Ron Dreslinski
 
-from m5.objects.ClockedObject import ClockedObject
+from ClockedObject import ClockedObject
 
 class MemObject(ClockedObject):
     type = 'MemObject'

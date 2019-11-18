@@ -47,14 +47,13 @@
 #include <vector>
 
 #include "cpu/testers/rubytest/CheckTable.hh"
+#include "mem/mem_object.hh"
 #include "mem/packet.hh"
-#include "mem/port.hh"
 #include "mem/ruby/common/SubBlock.hh"
 #include "mem/ruby/common/TypeDefines.hh"
 #include "params/RubyTester.hh"
-#include "sim/clocked_object.hh"
 
-class RubyTester : public ClockedObject
+class RubyTester : public MemObject
 {
   public:
     class CpuPort : public MasterPort
@@ -95,8 +94,8 @@ class RubyTester : public ClockedObject
     RubyTester(const Params *p);
     ~RubyTester();
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    virtual BaseMasterPort &getMasterPort(const std::string &if_name,
+                                          PortID idx = InvalidPortID);
 
     bool isInstOnlyCpuPort(int idx);
     bool isInstDataCpuPort(int idx);
@@ -104,7 +103,7 @@ class RubyTester : public ClockedObject
     MasterPort* getReadableCpuPort(int idx);
     MasterPort* getWritableCpuPort(int idx);
 
-    void init() override;
+    virtual void init();
 
     void wakeup();
 

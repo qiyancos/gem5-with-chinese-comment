@@ -37,7 +37,7 @@
 
 from m5.SimObject import SimObject
 from m5.params import *
-from m5.objects.Device import BasicPioDevice
+from Device import BasicPioDevice
 
 class I2CDevice(SimObject):
     type = 'I2CDevice'

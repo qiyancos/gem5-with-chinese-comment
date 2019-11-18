@@ -1,0 +1,29 @@
+#! /bin/bash
+
+root=`dirname $0`
+cd $root
+root=$PWD
+
+srcDir=$root/../gem5_old
+targetDir=$root
+
+if [ ! -f $srcDir/$1 ]
+then
+    echo "Error: no such file \"$srcDir/$1\"."
+    exit 1
+fi
+
+if [ ! -f $targetDir/$1 ]
+then
+    echo "No such file \"$targetDir/$1\"."
+    echo -n "Sync with $srcDir [ENTER Y/N]: "
+    read input
+    if [ x$input = xY -o x$input = xy -o x$input = x ]
+    then
+        echo "Run: cp -r $srcDir/$1 $targetDir/$1"
+        cp -r $srcDir/$1 $targetDir/$1
+        exit 0
+    fi
+fi
+
+vimdiff -O $srcDir/$1 $targetDir/$1

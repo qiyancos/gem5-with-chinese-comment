@@ -40,15 +40,13 @@
 # Authors: Lisa Hsu
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 import sys
 from os import getcwd
 from os.path import join as joinpath
 
-from . import CpuConfig
-from . import BPConfig
-from . import MemConfig
+from common import CpuConfig
+from common import MemConfig
 
 import m5
 from m5.defines import buildEnv
@@ -454,18 +452,18 @@ def run(options, root, testsys, cpu_class):
     switch_cpus = None
 
     if options.prog_interval:
-        for i in range(np):
+        for i in xrange(np):
             testsys.cpu[i].progress_interval = options.prog_interval
 
     if options.maxinsts:
-        for i in range(np):
+        for i in xrange(np):
             testsys.cpu[i].max_insts_any_thread = options.maxinsts
 
     if cpu_class:
         switch_cpus = [cpu_class(switched_out=True, cpu_id=(i))
-                       for i in range(np)]
+                       for i in xrange(np)]
 
-        for i in range(np):
+        for i in xrange(np):
             if options.fast_forward:
                 testsys.cpu[i].max_insts_any_thread = int(options.fast_forward)
             switch_cpus[i].system = testsys
@@ -480,14 +478,6 @@ def run(options, root, testsys, cpu_class):
             # Add checker cpu if selected
             if options.checker:
                 switch_cpus[i].addCheckerCpu()
-            if options.bp_type:
-                bpClass = BPConfig.get(options.bp_type)
-                switch_cpus[i].branchPred = bpClass()
-            if options.indirect_bp_type:
-                IndirectBPClass = \
-                    BPConfig.get_indirect(options.indirect_bp_type)
-                switch_cpus[i].branchPred.indirectBranchPred = \
-                    IndirectBPClass()
 
         # If elastic tracing is enabled attach the elastic trace probe
         # to the switch CPUs
@@ -495,7 +485,7 @@ def run(options, root, testsys, cpu_class):
             CpuConfig.config_etrace(cpu_class, switch_cpus, options)
 
         testsys.switch_cpus = switch_cpus
-        switch_cpu_list = [(testsys.cpu[i], switch_cpus[i]) for i in range(np)]
+        switch_cpu_list = [(testsys.cpu[i], switch_cpus[i]) for i in xrange(np)]
 
     if options.repeat_switch:
         switch_class = getCPUClass(options.cpu_type)[0]
@@ -508,9 +498,9 @@ def run(options, root, testsys, cpu_class):
             sys.exit(1)
 
         repeat_switch_cpus = [switch_class(switched_out=True, \
-                                               cpu_id=(i)) for i in range(np)]
+                                               cpu_id=(i)) for i in xrange(np)]
 
-        for i in range(np):
+        for i in xrange(np):
             repeat_switch_cpus[i].system = testsys
             repeat_switch_cpus[i].workload = testsys.cpu[i].workload
             repeat_switch_cpus[i].clk_domain = testsys.cpu[i].clk_domain
@@ -526,18 +516,18 @@ def run(options, root, testsys, cpu_class):
 
         if cpu_class:
             repeat_switch_cpu_list = [(switch_cpus[i], repeat_switch_cpus[i])
-                                      for i in range(np)]
+                                      for i in xrange(np)]
         else:
             repeat_switch_cpu_list = [(testsys.cpu[i], repeat_switch_cpus[i])
-                                      for i in range(np)]
+                                      for i in xrange(np)]
 
     if options.standard_switch:
         switch_cpus = [TimingSimpleCPU(switched_out=True, cpu_id=(i))
-                       for i in range(np)]
+                       for i in xrange(np)]
         switch_cpus_1 = [DerivO3CPU(switched_out=True, cpu_id=(i))
-                        for i in range(np)]
+                        for i in xrange(np)]
 
-        for i in range(np):
+        for i in xrange(np):
             switch_cpus[i].system =  testsys
             switch_cpus_1[i].system =  testsys
             switch_cpus[i].workload = testsys.cpu[i].workload
@@ -578,12 +568,8 @@ def run(options, root, testsys, cpu_class):
 
         testsys.switch_cpus = switch_cpus
         testsys.switch_cpus_1 = switch_cpus_1
-        switch_cpu_list = [
-            (testsys.cpu[i], switch_cpus[i]) for i in range(np)
-        ]
-        switch_cpu_list1 = [
-            (switch_cpus[i], switch_cpus_1[i]) for i in range(np)
-        ]
+        switch_cpu_list = [(testsys.cpu[i], switch_cpus[i]) for i in xrange(np)]
+        switch_cpu_list1 = [(switch_cpus[i], switch_cpus_1[i]) for i in xrange(np)]
 
     # set the checkpoint in the cpu before m5.instantiate is called
     if options.take_checkpoints != None and \
@@ -591,7 +577,7 @@ def run(options, root, testsys, cpu_class):
         offset = int(options.take_checkpoints)
         # Set an instruction break point
         if options.simpoint:
-            for i in range(np):
+            for i in xrange(np):
                 if testsys.cpu[i].workload[0].simpoint == 0:
                     fatal('no simpoint for testsys.cpu[%d].workload[0]', i)
                 checkpoint_inst = int(testsys.cpu[i].workload[0].simpoint) + offset
@@ -602,7 +588,7 @@ def run(options, root, testsys, cpu_class):
             options.take_checkpoints = offset
             # Set all test cpus with the right number of instructions
             # for the upcoming simulation
-            for i in range(np):
+            for i in xrange(np):
                 testsys.cpu[i].max_insts_any_thread = offset
 
     if options.take_simpoint_checkpoints != None:
@@ -611,7 +597,6 @@ def run(options, root, testsys, cpu_class):
     checkpoint_dir = None
     if options.checkpoint_restore:
         cpt_starttick, checkpoint_dir = findCptDir(options, cptdir, testsys)
-    root.apply_config(options.param)
     m5.instantiate(checkpoint_dir)
 
     # Initialization is complete.  If we're not in control of simulation
@@ -731,5 +716,5 @@ def run(options, root, testsys, cpu_class):
     if options.checkpoint_at_end:
         m5.checkpoint(joinpath(cptdir, "cpt.%d"))
 
-    if exit_event.getCode() != 0:
-        print("Simulated exit code not 0! Exit code is", exit_event.getCode())
+    if not m5.options.interactive:
+        sys.exit(exit_event.getCode())

@@ -57,17 +57,14 @@ Time::_set(bool monotonic)
 void
 Time::setTick(Tick ticks)
 {
-    uint64_t secs = ticks / SimClock::Frequency;
-    ticks -= secs * SimClock::Frequency;
-    uint64_t nsecs = static_cast<uint64_t>(ticks * SimClock::Float::GHz);
-    set(secs, nsecs);
+    uint64_t nsecs = ticks / SimClock::Int::ns;
+    set(nsecs / NSEC_PER_SEC, nsecs % NSEC_PER_SEC);
 }
 
 Tick
 Time::getTick() const
 {
-    return sec() * SimClock::Frequency +
-        static_cast<uint64_t>(nsec() * SimClock::Float::ns);
+    return (nsec() + sec() * NSEC_PER_SEC) * SimClock::Int::ns;
 }
 
 string

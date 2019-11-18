@@ -35,6 +35,7 @@
 #
 # Authors: Marco Elver
 
+from MemObject import MemObject
 from m5.SimObject import SimObject
 from m5.params import *
 from m5.proxy import *
@@ -43,7 +44,7 @@ class MemChecker(SimObject):
     type = 'MemChecker'
     cxx_header = "mem/mem_checker.hh"
 
-class MemCheckerMonitor(SimObject):
+class MemCheckerMonitor(MemObject):
     type = 'MemCheckerMonitor'
     cxx_header = "mem/mem_checker_monitor.hh"
 

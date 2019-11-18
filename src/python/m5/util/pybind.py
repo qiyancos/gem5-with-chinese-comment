@@ -1,4 +1,4 @@
-# Copyright (c) 2017, 2019 ARM Limited
+# Copyright (c) 2017 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -35,9 +35,6 @@
 #
 # Authors: Andreas Sandberg
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 from abc import *
 
 class PyBindExport(object):
@@ -58,27 +55,20 @@ class PyBindProperty(PyBindExport):
         code('.${export}("${{self.name}}", &${cname}::${{self.cxx_name}})')
 
 class PyBindMethod(PyBindExport):
-    def __init__(self, name, cxx_name=None, args=None,
-                 return_value_policy=None, static=False):
+    def __init__(self, name, cxx_name=None, args=None):
         self.name = name
         self.cxx_name = cxx_name if cxx_name else name
         self.args = args
-        self.return_value_policy = return_value_policy
-        self.method_def = 'def_static' if static else 'def'
 
     def _conv_arg(self, value):
         if isinstance(value, bool):
             return "true" if value else "false"
-        elif isinstance(value, (float, int)):
+        elif isinstance(value, float, int):
             return repr(value)
         else:
             raise TypeError("Unsupported PyBind default value type")
 
     def export(self, code, cname):
-        arguments = [ '"${{self.name}}"', '&${cname}::${{self.cxx_name}}' ]
-        if self.return_value_policy:
-            arguments.append('pybind11::return_value_policy::'
-                             '${{self.return_value_policy}}')
         if self.args:
             def get_arg_decl(arg):
                 if isinstance(arg, tuple):
@@ -88,5 +78,8 @@ class PyBindMethod(PyBindExport):
                 else:
                     return 'py::arg("%s")' % arg
 
-            arguments.extend(list([ get_arg_decl(a) for a in self.args ]))
-        code('.' + self.method_def + '(' + ', '.join(arguments) + ')')
+            code('.def("${{self.name}}", &${cname}::${{self.name}}, ')
+            code('    ' + \
+                 ', '.join([ get_arg_decl(a) for a in self.args ]) + ')')
+        else:
+            code('.def("${{self.name}}", &${cname}::${{self.cxx_name}})')

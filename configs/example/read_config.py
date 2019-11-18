@@ -1,4 +1,4 @@
-# Copyright (c) 2014,2019 ARM Limited
+# Copyright (c) 2014 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -46,24 +46,19 @@
 # debugging.
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 import argparse
 import ConfigParser
 import inspect
 import json
 import re
-import six
 import sys
 
 import m5
 import m5.ticks as ticks
 
-if six.PY3:
-    long = int
-
 sim_object_classes_by_name = {
-    cls.__name__: cls for cls in m5.objects.__dict__.values()
+    cls.__name__: cls for cls in m5.objects.__dict__.itervalues()
     if inspect.isclass(cls) and issubclass(cls, m5.objects.SimObject) }
 
 # Add some parsing functions to Param classes to handle reading in .ini
@@ -89,17 +84,12 @@ def tick_parser(cast=lambda i: i):
 
 def addr_range_parser(cls, flags, param):
     sys.stdout.flush()
-    _param = param.split(':')
-    (start, end) = _param[0:2]
-    if len(_param) == 2:
-        return m5.objects.AddrRange(start=long(start), end=long(end))
-    else:
-        assert len(_param) > 2
-        intlv_match = _param[2]
-        masks = [ long(m) for m in _param[3:] ]
-        return m5.objects.AddrRange(start=long(start), end=long(end),
-                                    masks=masks, intlvMatch=long(intlv_match))
-
+    (low, high, intlv_high_bit, xor_high_bit,
+     intlv_bits, intlv_match) = param.split(':')
+    return m5.objects.AddrRange(
+        start=long(low), end=long(high),
+        intlvHighBit=long(intlv_high_bit), xorHighBit=long(xor_high_bit),
+        intlvBits=long(intlv_bits), intlvMatch=long(intlv_match))
 
 def memory_bandwidth_parser(cls, flags, param):
     # The string will be in tick/byte
@@ -129,7 +119,7 @@ param_parsers = {
     'EthernetAddr': simple_parser()
     }
 
-for name, parser in param_parsers.items():
+for name, parser in param_parsers.iteritems():
     setattr(m5.params.__dict__[name], 'parse_ini', classmethod(parser))
 
 class PortConnection(object):
@@ -193,7 +183,7 @@ class ConfigManager(object):
 
         parsed_params = {}
 
-        for param_name, param in object_class._params.items():
+        for param_name, param in object_class._params.iteritems():
             if issubclass(param.ptype, m5.params.ParamValue):
                 if isinstance(param, m5.params.VectorParamDesc):
                     param_values = self.config.get_param_vector(object_name,
@@ -221,7 +211,7 @@ class ConfigManager(object):
         if object_name == 'Null':
             return NULL
 
-        for param_name, param in obj.__class__._params.items():
+        for param_name, param in obj.__class__._params.iteritems():
             if issubclass(param.ptype, m5.objects.SimObject):
                 if isinstance(param, m5.params.VectorParamDesc):
                     param_values = self.config.get_param_vector(object_name,
@@ -286,11 +276,11 @@ class ConfigManager(object):
             return NULL
 
         parsed_ports = []
-        for port_name, port in obj.__class__._ports.items():
+        for port_name, port in obj.__class__._ports.iteritems():
             # Assume that unnamed ports are unconnected
             peers = self.config.get_port_peers(object_name, port_name)
 
-            for index, peer in zip(range(0, len(peers)), peers):
+            for index, peer in zip(xrange(0, len(peers)), peers):
                 parsed_ports.append((
                     PortConnection(object_name, port.name, index),
                     PortConnection.from_string(peer)))
@@ -368,12 +358,12 @@ class ConfigManager(object):
         # Now fill in SimObject-valued parameters in the knowledge that
         #   this won't be interpreted as becoming the parent of objects
         #   which are already in the root hierarchy
-        for name, obj in self.objects_by_name.items():
+        for name, obj in self.objects_by_name.iteritems():
             self.fill_in_simobj_parameters(name, obj)
 
         # Gather a list of all port-to-port connections
         connections = []
-        for name, obj in self.objects_by_name.items():
+        for name, obj in self.objects_by_name.iteritems():
             connections += self.gather_port_connections(name, obj)
 
         # Find an acceptable order to bind those port connections and
@@ -466,7 +456,7 @@ class ConfigJsonFile(ConfigFile):
             for elem in node:
                 self.find_all_objects(elem)
         elif isinstance(node, dict):
-            for elem in node.values():
+            for elem in node.itervalues():
                 self.find_all_objects(elem)
 
     def load(self, config_file):
@@ -505,7 +495,7 @@ class ConfigJsonFile(ConfigFile):
         obj = self.object_dicts[object_name]
 
         children = []
-        for name, node in obj.items():
+        for name, node in obj.iteritems():
             if self.is_sim_object(node):
                 children.append((name, node['path']))
             elif isinstance(node, list) and node != [] and all([

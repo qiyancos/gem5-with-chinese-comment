@@ -124,7 +124,7 @@ Checker<Impl>::handlePendingInt()
 
 template <class Impl>
 void
-Checker<Impl>::verify(const DynInstPtr &completed_inst)
+Checker<Impl>::verify(DynInstPtr &completed_inst)
 {
     DynInstPtr inst;
 
@@ -208,7 +208,7 @@ Checker<Impl>::verify(const DynInstPtr &completed_inst)
         // maintain $r0 semantics
         thread->setIntReg(ZeroReg, 0);
 #if THE_ISA == ALPHA_ISA
-        thread->setFloatReg(ZeroReg, 0);
+        thread->setFloatReg(ZeroReg, 0.0);
 #endif
 
         // Check if any recent PC changes match up with anything we
@@ -244,17 +244,16 @@ Checker<Impl>::verify(const DynInstPtr &completed_inst)
             // If not in the middle of a macro instruction
             if (!curMacroStaticInst) {
                 // set up memory request for instruction fetch
-                auto mem_req = std::make_shared<Request>(
-                    unverifiedInst->threadNumber, fetch_PC,
-                    sizeof(MachInst), 0, masterId, fetch_PC,
-                    thread->contextId());
+                memReq = new Request(unverifiedInst->threadNumber, fetch_PC,
+                                     sizeof(MachInst),
+                                     0,
+                                     masterId,
+                                     fetch_PC, thread->contextId());
+                memReq->setVirt(0, fetch_PC, sizeof(MachInst),
+                                Request::INST_FETCH, masterId, thread->instAddr());
 
-                mem_req->setVirt(0, fetch_PC, sizeof(MachInst),
-                                 Request::INST_FETCH, masterId,
-                                 thread->instAddr());
 
-                fault = itb->translateFunctional(
-                    mem_req, tc, BaseTLB::Execute);
+                fault = itb->translateFunctional(memReq, tc, BaseTLB::Execute);
 
                 if (fault != NoFault) {
                     if (unverifiedInst->getFault() == NoFault) {
@@ -271,6 +270,7 @@ Checker<Impl>::verify(const DynInstPtr &completed_inst)
                         advancePC(NoFault);
 
                         // Give up on an ITB fault..
+                        delete memReq;
                         unverifiedInst = NULL;
                         return;
                     } else {
@@ -278,15 +278,17 @@ Checker<Impl>::verify(const DynInstPtr &completed_inst)
                         // the fault and see if our results match the CPU on
                         // the next tick().
                         fault = unverifiedInst->getFault();
+                        delete memReq;
                         break;
                     }
                 } else {
-                    PacketPtr pkt = new Packet(mem_req, MemCmd::ReadReq);
+                    PacketPtr pkt = new Packet(memReq, MemCmd::ReadReq);
 
                     pkt->dataStatic(&machInst);
                     icachePort->sendFunctional(pkt);
                     machInst = gtoh(machInst);
 
+                    delete memReq;
                     delete pkt;
                 }
             }
@@ -456,7 +458,7 @@ Checker<Impl>::takeOverFrom(BaseCPU *oldCPU)
 
 template <class Impl>
 void
-Checker<Impl>::validateInst(const DynInstPtr &inst)
+Checker<Impl>::validateInst(DynInstPtr &inst)
 {
     if (inst->instAddr() != thread->instAddr()) {
         warn("%lli: PCs do not match! Inst: %s, checker: %s",
@@ -477,7 +479,7 @@ Checker<Impl>::validateInst(const DynInstPtr &inst)
 
 template <class Impl>
 void
-Checker<Impl>::validateExecution(const DynInstPtr &inst)
+Checker<Impl>::validateExecution(DynInstPtr &inst)
 {
     InstResult checker_val;
     InstResult inst_val;
@@ -595,8 +597,8 @@ Checker<Impl>::validateState()
 
 template <class Impl>
 void
-Checker<Impl>::copyResult(const DynInstPtr &inst,
-                          const InstResult& mismatch_val, int start_idx)
+Checker<Impl>::copyResult(DynInstPtr &inst, const InstResult& mismatch_val,
+                          int start_idx)
 {
     // We've already popped one dest off the queue,
     // so do the fix-up then start with the next dest reg;
@@ -609,7 +611,7 @@ Checker<Impl>::copyResult(const DynInstPtr &inst,
             break;
           case FloatRegClass:
             panic_if(!mismatch_val.isScalar(), "Unexpected type of result");
-            thread->setFloatReg(idx.index(), mismatch_val.asInteger());
+            thread->setFloatRegBits(idx.index(), mismatch_val.asInteger());
             break;
           case VecRegClass:
             panic_if(!mismatch_val.isVector(), "Unexpected type of result");
@@ -644,7 +646,7 @@ Checker<Impl>::copyResult(const DynInstPtr &inst,
             break;
           case FloatRegClass:
             panic_if(!res.isScalar(), "Unexpected type of result");
-            thread->setFloatReg(idx.index(), res.asInteger());
+            thread->setFloatRegBits(idx.index(), res.asInteger());
             break;
           case VecRegClass:
             panic_if(!res.isVector(), "Unexpected type of result");
@@ -672,7 +674,7 @@ Checker<Impl>::copyResult(const DynInstPtr &inst,
 
 template <class Impl>
 void
-Checker<Impl>::dumpAndExit(const DynInstPtr &inst)
+Checker<Impl>::dumpAndExit(DynInstPtr &inst)
 {
     cprintf("Error detected, instruction information:\n");
     cprintf("PC:%s, nextPC:%#x\n[sn:%lli]\n[tid:%i]\n"

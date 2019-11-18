@@ -156,12 +156,9 @@ class ArmStaticInst : public StaticInst
 
     /// Print a register name for disassembly given the unique
     /// dependence tag number (FP or int).
-    void printIntReg(std::ostream &os, RegIndex reg_idx,
-                     uint8_t opWidth = 0) const;
+    void printIntReg(std::ostream &os, RegIndex reg_idx) const;
     void printFloatReg(std::ostream &os, RegIndex reg_idx) const;
-    void printVecReg(std::ostream &os, RegIndex reg_idx,
-                     bool isSveVecReg = false) const;
-    void printVecPredReg(std::ostream &os, RegIndex reg_idx) const;
+    void printVecReg(std::ostream &os, RegIndex reg_idx) const;
     void printCCReg(std::ostream &os, RegIndex reg_idx) const;
     void printMiscReg(std::ostream &os, RegIndex reg_idx) const;
     void printMnemonic(std::ostream &os,
@@ -182,7 +179,7 @@ class ArmStaticInst : public StaticInst
     void printExtendOperand(bool firstOperand, std::ostream &os,
                             IntRegIndex rm, ArmExtendType type,
                             int64_t shiftAmt) const;
-    void printPFflags(std::ostream &os, int flag) const;
+
 
     void printDataInst(std::ostream &os, bool withImm) const;
     void printDataInst(std::ostream &os, bool withImm, bool immShift, bool s,
@@ -191,13 +188,12 @@ class ArmStaticInst : public StaticInst
                        uint64_t imm) const;
 
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCState &pcState) const
     {
         pcState.advance();
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 
     static inline uint32_t
     cpsrWriteByInstr(CPSR cpsr, uint32_t val, SCR scr, NSACR nsacr,
@@ -233,7 +229,7 @@ class ArmStaticInst : public StaticInst
                 // Now check the new mode is allowed
                 OperatingMode newMode = (OperatingMode) (val & mask(5));
                 OperatingMode oldMode = (OperatingMode)(uint32_t)cpsr.mode;
-                if (!badMode(tc, newMode)) {
+                if (!badMode(newMode)) {
                     bool validModeChange = true;
                     // Check for attempts to enter modes only permitted in
                     // Secure state from Non-secure state. These are Monitor
@@ -374,14 +370,6 @@ class ArmStaticInst : public StaticInst
                        ExceptionLevel targetEL, bool isWfe) const;
 
     /**
-     * Trigger a Software Breakpoint.
-     *
-     * See aarch32/exceptions/debug/AArch32.SoftwareBreakpoint in the
-     * ARM ARM psueodcode library.
-     */
-    Fault softwareBreakpoint32(ExecContext *xc, uint16_t imm) const;
-
-    /**
      * Trap an access to Advanced SIMD or FP registers due to access
      * control bits.
      *
@@ -470,23 +458,6 @@ class ArmStaticInst : public StaticInst
     Fault undefinedFault64(ThreadContext *tc, ExceptionLevel el) const;
 
     /**
-     * Trap an access to SVE registers due to access control bits.
-     *
-     * @param el Target EL for the trap.
-     */
-    Fault sveAccessTrap(ExceptionLevel el) const;
-
-    /**
-     * Check an SVE access against CPTR_EL2 and CPTR_EL3.
-     */
-    Fault checkSveTrap(ThreadContext *tc, CPSR cpsr) const;
-
-    /**
-     * Check an SVE access against CPACR_EL1, CPTR_EL2, and CPTR_EL3.
-     */
-    Fault checkSveEnabled(ThreadContext *tc, CPSR cpsr, CPACR cpacr) const;
-
-    /**
      * Get the new PSTATE from a SPSR register in preparation for an
      * exception return.
      *
@@ -533,27 +504,6 @@ class ArmStaticInst : public StaticInst
     encoding() const
     {
         return static_cast<MachInst>(machInst & (mask(instSize() * 8)));
-    }
-
-    size_t
-    asBytes(void *buf, size_t max_size) override
-    {
-        return simpleAsBytes(buf, max_size, machInst);
-    }
-
-    static unsigned getCurSveVecLenInBits(ThreadContext *tc);
-
-    static unsigned
-    getCurSveVecLenInQWords(ThreadContext *tc)
-    {
-        return getCurSveVecLenInBits(tc) >> 6;
-    }
-
-    template<typename T>
-    static unsigned
-    getCurSveVecLen(ThreadContext *tc)
-    {
-        return getCurSveVecLenInBits(tc) / (8 * sizeof(T));
     }
 };
 }

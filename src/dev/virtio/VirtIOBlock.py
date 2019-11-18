@@ -39,7 +39,7 @@
 
 from m5.params import *
 from m5.proxy import *
-from m5.objects.VirtIO import VirtIODeviceBase
+from VirtIO import VirtIODeviceBase
 
 class VirtIOBlock(VirtIODeviceBase):
     type = 'VirtIOBlock'

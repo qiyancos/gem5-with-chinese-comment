@@ -27,9 +27,8 @@
 # Authors: Ali Saidi
 
 from __future__ import print_function
-from __future__ import absolute_import
 
-from .SysPaths import script, disk, binary
+from SysPaths import script, disk, binary
 from os import environ as env
 from m5.defines import buildEnv
 
@@ -60,7 +59,7 @@ class SysConfig:
         elif buildEnv['TARGET_ISA'] == 'alpha':
             return env.get('LINUX_IMAGE', disk('linux-latest.img'))
         elif buildEnv['TARGET_ISA'] == 'x86':
-            return env.get('LINUX_IMAGE', disk('x86root.img'))
+            return env.get('LINUX_IMAGE', disk('linux-x86.img'))
         elif buildEnv['TARGET_ISA'] == 'arm':
             return env.get('LINUX_IMAGE', disk('linux-aarch32-ael.img'))
         elif buildEnv['TARGET_ISA'] == 'sparc':
@@ -142,6 +141,6 @@ Benchmarks = {
                             None, 'android-ics')]
 }
 
-benchs = list(Benchmarks.keys())
+benchs = Benchmarks.keys()
 benchs.sort()
 DefinedBenchmarks = ", ".join(benchs)

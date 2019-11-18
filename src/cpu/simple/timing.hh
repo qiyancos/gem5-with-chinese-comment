@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013,2015,2018 ARM Limited
+ * Copyright (c) 2012-2013,2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -124,7 +124,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
         }
 
         void
-        finish(const Fault &fault, const RequestPtr &req, ThreadContext *tc,
+        finish(const Fault &fault, RequestPtr req, ThreadContext *tc,
                BaseTLB::Mode mode)
         {
             cpu->sendFetch(fault, req, tc);
@@ -133,18 +133,15 @@ class TimingSimpleCPU : public BaseSimpleCPU
     FetchTranslation fetchTranslation;
 
     void threadSnoop(PacketPtr pkt, ThreadID sender);
-    void sendData(const RequestPtr &req,
-                  uint8_t *data, uint64_t *res, bool read);
-    void sendSplitData(const RequestPtr &req1, const RequestPtr &req2,
-                       const RequestPtr &req,
+    void sendData(RequestPtr req, uint8_t *data, uint64_t *res, bool read);
+    void sendSplitData(RequestPtr req1, RequestPtr req2, RequestPtr req,
                        uint8_t *data, bool read);
 
     void translationFault(const Fault &fault);
 
-    PacketPtr buildPacket(const RequestPtr &req, bool read);
+    PacketPtr buildPacket(RequestPtr req, bool read);
     void buildSplitPacket(PacketPtr &pkt1, PacketPtr &pkt2,
-            const RequestPtr &req1, const RequestPtr &req2,
-            const RequestPtr &req,
+            RequestPtr req1, RequestPtr req2, RequestPtr req,
             uint8_t *data, bool read);
 
     bool handleReadPacket(PacketPtr pkt);
@@ -282,22 +279,17 @@ class TimingSimpleCPU : public BaseSimpleCPU
     void activateContext(ThreadID thread_num) override;
     void suspendContext(ThreadID thread_num) override;
 
+    Fault readMem(Addr addr, uint8_t *data, unsigned size,
+                  Request::Flags flags) override;
+
     Fault initiateMemRead(Addr addr, unsigned size,
-            Request::Flags flags,
-            const std::vector<bool>& byteEnable =std::vector<bool>())
-        override;
+                          Request::Flags flags) override;
 
     Fault writeMem(uint8_t *data, unsigned size,
-                   Addr addr, Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byteEnable = std::vector<bool>())
-        override;
-
-    Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
-                         AtomicOpFunctor *amo_op) override;
+                   Addr addr, Request::Flags flags, uint64_t *res) override;
 
     void fetch();
-    void sendFetch(const Fault &fault,
-                   const RequestPtr &req, ThreadContext *tc);
+    void sendFetch(const Fault &fault, RequestPtr req, ThreadContext *tc);
     void completeIfetch(PacketPtr );
     void completeDataAccess(PacketPtr pkt);
     void advanceInst(const Fault &fault);
@@ -350,7 +342,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
      *     activated it can happen.
      * </ul>
      */
-    bool isCpuDrained() const {
+    bool isDrained() {
         SimpleExecContext& t_info = *threadInfo[curThread];
         SimpleThread* thread = t_info.thread;
 

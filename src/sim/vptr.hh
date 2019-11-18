@@ -69,7 +69,7 @@ class VPtr
         if (!ptr)
             return;
 
-        PortProxy &proxy = tc->getVirtProxy();
+        FSTranslatingPortProxy &proxy = tc->getVirtProxy();
         proxy.readBlob(ptr, buffer, sizeof(T));
     }
 

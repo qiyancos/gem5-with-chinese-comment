@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012,2015,2018 ARM Limited
+ * Copyright (c) 2011-2012,2015 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -125,11 +125,12 @@ class BaseSimpleCPU : public BaseCPU
     Status _status;
 
   public:
+	Addr inst_number;
     Addr dbg_vtophys(Addr addr);
 
 
     void checkForInterrupts();
-    void setupFetchRequest(const RequestPtr &req);
+    void setupFetchRequest(Request *req);
     void preExecute();
     void postExecute();
     void advancePC(const Fault &fault);
@@ -143,32 +144,13 @@ class BaseSimpleCPU : public BaseCPU
     void startup() override;
 
     virtual Fault readMem(Addr addr, uint8_t* data, unsigned size,
-                          Request::Flags flags,
-                          const std::vector<bool>& byteEnable =
-                              std::vector<bool>())
-    { panic("readMem() is not implemented\n"); }
+                          Request::Flags flags) = 0;
 
     virtual Fault initiateMemRead(Addr addr, unsigned size,
-                                  Request::Flags flags,
-                                  const std::vector<bool>& byteEnable =
-                                      std::vector<bool>())
-    { panic("initiateMemRead() is not implemented\n"); }
+                                  Request::Flags flags) = 0;
 
     virtual Fault writeMem(uint8_t* data, unsigned size, Addr addr,
-                           Request::Flags flags, uint64_t* res,
-                           const std::vector<bool>& byteEnable =
-                               std::vector<bool>())
-    { panic("writeMem() is not implemented\n"); }
-
-    virtual Fault amoMem(Addr addr, uint8_t* data, unsigned size,
-                         Request::Flags flags,
-                         AtomicOpFunctor *amo_op)
-    { panic("amoMem() is not implemented\n"); }
-
-    virtual Fault initiateMemAMO(Addr addr, unsigned size,
-                                 Request::Flags flags,
-                                 AtomicOpFunctor *amo_op)
-    { panic("initiateMemAMO() is not implemented\n"); }
+                           Request::Flags flags, uint64_t* res) = 0;
 
     void countInst();
     Counter totalInsts() const override;

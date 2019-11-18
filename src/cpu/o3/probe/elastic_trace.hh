@@ -90,7 +90,6 @@ class ElasticTrace : public ProbeListenerObject
 
   public:
     typedef typename O3CPUImpl::DynInstPtr DynInstPtr;
-    typedef typename O3CPUImpl::DynInstConstPtr DynInstConstPtr;
     typedef typename std::pair<InstSeqNum, PhysRegIndex> SeqNumRegPair;
 
     /** Trace record types corresponding to instruction node types */
@@ -133,7 +132,7 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param dyn_inst pointer to dynamic instruction in flight
      */
-    void recordExecTick(const DynInstConstPtr& dyn_inst);
+    void recordExecTick(const DynInstPtr &dyn_inst);
 
     /**
      * Populate the timestamp field in an InstExecInfo object for an
@@ -142,7 +141,7 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param dyn_inst pointer to dynamic instruction in flight
      */
-    void recordToCommTick(const DynInstConstPtr& dyn_inst);
+    void recordToCommTick(const DynInstPtr &dyn_inst);
 
     /**
      * Record a Read After Write physical register dependency if there has
@@ -153,7 +152,7 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param dyn_inst pointer to dynamic instruction in flight
      */
-    void updateRegDep(const DynInstConstPtr& dyn_inst);
+    void updateRegDep(const DynInstPtr &dyn_inst);
 
     /**
      * When an instruction gets squashed the destination register mapped to it
@@ -170,14 +169,14 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param head_inst pointer to dynamic instruction to be squashed
      */
-    void addSquashedInst(const DynInstConstPtr& head_inst);
+    void addSquashedInst(const DynInstPtr &head_inst);
 
     /**
      * Add an instruction that is at the head of the ROB and is committed.
      *
      * @param head_inst pointer to dynamic instruction to be committed
      */
-    void addCommittedInst(const DynInstConstPtr& head_inst);
+    void addCommittedInst(const DynInstPtr &head_inst);
 
     /** Register statistics for the elastic trace. */
     void regStats();
@@ -386,7 +385,7 @@ class ElasticTrace : public ProbeListenerObject
      * @param exec_info_ptr Pointer to InstExecInfo for that instruction
      * @param commit        True if instruction is committed, false if squashed
      */
-    void addDepTraceRecord(const DynInstConstPtr& head_inst,
+    void addDepTraceRecord(const DynInstPtr &head_inst,
                            InstExecInfo* exec_info_ptr, bool commit);
 
     /**
@@ -395,7 +394,7 @@ class ElasticTrace : public ProbeListenerObject
      *
      * @param head_inst pointer to dynamic instruction
      */
-    void clearTempStoreUntil(const DynInstConstPtr& head_inst);
+    void clearTempStoreUntil(const DynInstPtr head_inst);
 
     /**
      * Calculate the computational delay between an instruction and a

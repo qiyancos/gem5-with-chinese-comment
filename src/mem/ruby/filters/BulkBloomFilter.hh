@@ -29,33 +29,46 @@
 #ifndef __MEM_RUBY_FILTERS_BULKBLOOMFILTER_HH__
 #define __MEM_RUBY_FILTERS_BULKBLOOMFILTER_HH__
 
+#include <iostream>
 #include <vector>
 
+#include "mem/ruby/common/Address.hh"
 #include "mem/ruby/filters/AbstractBloomFilter.hh"
 
-struct BulkBloomFilterParams;
-
-/**
- * Implementation of the bloom filter, as described in "Bulk Disambiguation of
- * Speculative Threads in Multiprocessors", by Ceze, Luis, et al.
- */
 class BulkBloomFilter : public AbstractBloomFilter
 {
   public:
-    BulkBloomFilter(const BulkBloomFilterParams* p);
+    BulkBloomFilter(int size);
     ~BulkBloomFilter();
 
-    void set(Addr addr) override;
+    void clear();
+    void increment(Addr addr);
+    void decrement(Addr addr);
+    void merge(AbstractBloomFilter * other_filter);
+    void set(Addr addr);
+    void unset(Addr addr);
 
-    bool isSet(Addr addr) const override;
-    int getCount(Addr addr) const override;
+    bool isSet(Addr addr);
+    int getCount(Addr addr);
+    int getTotalCount();
+    int getIndex(Addr addr);
+    int readBit(const int index);
+    void writeBit(const int index, const int value);
+
+    void print(std::ostream& out) const;
 
   private:
-    /** Permutes the address to generate its signature. */
-    Addr hash(Addr addr) const;
+    int get_index(Addr addr);
+    Addr permute(Addr addr);
 
-    // split the filter bits in half, c0 and c1
-    const int sectorBits;
+    std::vector<int> m_filter;
+    std::vector<int> m_temp_filter;
+
+    int m_filter_size;
+    int m_filter_size_bits;
+
+    int m_sector_bits;
+
 };
 
 #endif // __MEM_RUBY_FILTERS_BULKBLOOMFILTER_HH__

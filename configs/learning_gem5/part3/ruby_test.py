@@ -35,7 +35,6 @@ IMPORTANT: If you modify this file, it's likely that the Learning gem5 book
 
 """
 from __future__ import print_function
-from __future__ import absolute_import
 
 # import the m5 (gem5) library created when gem5 is built
 import m5
@@ -61,8 +60,8 @@ system.tester = RubyTester(checks_to_complete = 100,
                            wakeup_frequency = 10,
                            num_cpus = 2)
 
-# Create a simple memory controller and connect it to the membus
-system.mem_ctrl = SimpleMemory(latency="50ns", bandwidth="0GB/s")
+# Create a DDR3 memory controller and connect it to the membus
+system.mem_ctrl = DDR3_1600_8x8()
 system.mem_ctrl.range = system.mem_ranges[0]
 
 # Create the Ruby System

@@ -39,7 +39,6 @@
 #          Pierre-Yves Peneau
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 import m5.objects
 import inspect
@@ -53,6 +52,7 @@ _platform_classes = {}
 # Platform aliases. The platforms listed here might not be compiled,
 # we make sure they exist before we add them to the platform list.
 _platform_aliases_all = [
+    ("RealView_EB", "RealViewEB"),
     ("RealView_PBX", "RealViewPBX"),
     ("VExpress_GEM5", "VExpress_GEM5_V1"),
     ]
@@ -104,7 +104,7 @@ def print_platform_list():
 
 def platform_names():
     """Return a list of valid Platform names."""
-    return list(_platform_classes.keys()) + list(_platform_aliases.keys())
+    return _platform_classes.keys() + _platform_aliases.keys()
 
 # Add all Platforms in the object hierarchy.
 for name, cls in inspect.getmembers(m5.objects, is_platform_class):

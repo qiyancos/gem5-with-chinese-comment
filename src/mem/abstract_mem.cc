@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012,2017-2019 ARM Limited
+ * Copyright (c) 2010-2012,2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -57,10 +57,7 @@
 using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
-    ClockedObject(p), range(params()->range), pmemAddr(NULL),
-    backdoor(params()->range, nullptr,
-             (MemBackdoor::Flags)(MemBackdoor::Readable |
-                                  MemBackdoor::Writeable)),
+    MemObject(p), range(params()->range), pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     kvmMap(p->kvm_map), _system(NULL)
 {
@@ -78,20 +75,13 @@ AbstractMemory::init()
 void
 AbstractMemory::setBackingStore(uint8_t* pmem_addr)
 {
-    // If there was an existing backdoor, let everybody know it's going away.
-    if (backdoor.ptr())
-        backdoor.invalidate();
-
-    // The back door can't handle interleaved memory.
-    backdoor.ptr(range.interleaved() ? nullptr : pmem_addr);
-
     pmemAddr = pmem_addr;
 }
 
 void
 AbstractMemory::regStats()
 {
-    ClockedObject::regStats();
+    MemObject::regStats();
 
     using namespace Stats;
 
@@ -209,7 +199,7 @@ AbstractMemory::getAddrRange() const
 void
 AbstractMemory::trackLoadLocked(PacketPtr pkt)
 {
-    const RequestPtr &req = pkt->req;
+    Request *req = pkt->req;
     Addr paddr = LockedAddr::mask(req->getPaddr());
 
     // first we check if we already have a locked addr for this
@@ -240,7 +230,7 @@ AbstractMemory::trackLoadLocked(PacketPtr pkt)
 bool
 AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 {
-    const RequestPtr &req = pkt->req;
+    Request *req = pkt->req;
     Addr paddr = LockedAddr::mask(req->getPaddr());
     bool isLLSC = pkt->isLLSC();
 
@@ -284,10 +274,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
                 DPRINTF(LLSC, "Erasing lock record: context %d addr %#x\n",
                         i->contextId, paddr);
                 ContextID owner_cid = i->contextId;
-                assert(owner_cid != InvalidContextID);
-                ContextID requester_cid = req->hasContextId() ?
-                                           req->contextId() :
-                                           InvalidContextID;
+                ContextID requester_cid = pkt->req->contextId();
                 if (owner_cid != requester_cid) {
                     ThreadContext* ctx = system()->getThreadContext(owner_cid);
                     TheISA::globalClearExclusive(ctx);
@@ -302,29 +289,38 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
     return allowStore;
 }
 
-#if TRACING_ON
-static inline void
-tracePacket(System *sys, const char *label, PacketPtr pkt)
-{
-    int size = pkt->getSize();
-#if THE_ISA != NULL_ISA
-    if (size == 1 || size == 2 || size == 4 || size == 8) {
-        DPRINTF(MemoryAccess,"%s from %s of size %i on address %#x data "
-                "%#x %c\n", label, sys->getMasterName(pkt->req->masterId()),
-                size, pkt->getAddr(), pkt->getUintX(TheISA::GuestByteOrder),
-                pkt->req->isUncacheable() ? 'U' : 'C');
-        return;
-    }
-#endif
-    DPRINTF(MemoryAccess, "%s from %s of size %i on address %#x %c\n",
-            label, sys->getMasterName(pkt->req->masterId()),
-            size, pkt->getAddr(), pkt->req->isUncacheable() ? 'U' : 'C');
-    DDUMP(MemoryAccess, pkt->getConstPtr<uint8_t>(), pkt->getSize());
-}
 
-#   define TRACE_PACKET(A) tracePacket(system(), A, pkt)
+#if TRACING_ON
+
+#define CASE(A, T)                                                        \
+  case sizeof(T):                                                         \
+    DPRINTF(MemoryAccess,"%s from %s of size %i on address 0x%x data " \
+            "0x%x %c\n", A, system()->getMasterName(pkt->req->masterId()),\
+            pkt->getSize(), pkt->getAddr(), pkt->get<T>(),                \
+            pkt->req->isUncacheable() ? 'U' : 'C');                       \
+  break
+
+
+#define TRACE_PACKET(A)                                                 \
+    do {                                                                \
+        switch (pkt->getSize()) {                                       \
+          CASE(A, uint64_t);                                            \
+          CASE(A, uint32_t);                                            \
+          CASE(A, uint16_t);                                            \
+          CASE(A, uint8_t);                                             \
+          default:                                                      \
+            DPRINTF(MemoryAccess, "%s from %s of size %i on address 0x%x %c\n",\
+                    A, system()->getMasterName(pkt->req->masterId()),          \
+                    pkt->getSize(), pkt->getAddr(),                            \
+                    pkt->req->isUncacheable() ? 'U' : 'C');                    \
+            DDUMP(MemoryAccess, pkt->getConstPtr<uint8_t>(), pkt->getSize());  \
+        }                                                                      \
+    } while (0)
+
 #else
-#   define TRACE_PACKET(A)
+
+#define TRACE_PACKET(A)
+
 #endif
 
 void
@@ -342,14 +338,15 @@ AbstractMemory::access(PacketPtr pkt)
       return;
     }
 
-    assert(pkt->getAddrRange().isSubset(range));
+    assert(AddrRange(pkt->getAddr(),
+                     pkt->getAddr() + (pkt->getSize() - 1)).isSubset(range));
 
     uint8_t *hostAddr = pmemAddr + pkt->getAddr() - range.start();
 
     if (pkt->cmd == MemCmd::SwapReq) {
         if (pkt->isAtomicOp()) {
             if (pmemAddr) {
-                pkt->setData(hostAddr);
+                memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
                 (*(pkt->getAtomicOp()))(hostAddr);
             }
         } else {
@@ -357,14 +354,15 @@ AbstractMemory::access(PacketPtr pkt)
             uint64_t condition_val64;
             uint32_t condition_val32;
 
-            panic_if(!pmemAddr, "Swap only works if there is real memory " \
-                     "(i.e. null=False)");
+            if (!pmemAddr)
+                panic("Swap only works if there is real memory (i.e. null=False)");
 
             bool overwrite_mem = true;
             // keep a copy of our possible write value, and copy what is at the
             // memory address into the packet
-            pkt->writeData(&overwrite_val[0]);
-            pkt->setData(hostAddr);
+            std::memcpy(&overwrite_val[0], pkt->getConstPtr<uint8_t>(),
+                        pkt->getSize());
+            std::memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
 
             if (pkt->req->isCondSwap()) {
                 if (pkt->getSize() == sizeof(uint64_t)) {
@@ -394,9 +392,8 @@ AbstractMemory::access(PacketPtr pkt)
             // to do the LL/SC tracking here
             trackLoadLocked(pkt);
         }
-        if (pmemAddr) {
-            pkt->setData(hostAddr);
-        }
+        if (pmemAddr)
+            memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
         TRACE_PACKET(pkt->req->isInstFetch() ? "IFetch" : "Read");
         numReads[pkt->req->masterId()]++;
         bytesRead[pkt->req->masterId()] += pkt->getSize();
@@ -411,7 +408,7 @@ AbstractMemory::access(PacketPtr pkt)
     } else if (pkt->isWrite()) {
         if (writeOK(pkt)) {
             if (pmemAddr) {
-                pkt->writeData(hostAddr);
+                memcpy(hostAddr, pkt->getConstPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %i bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
             }
@@ -432,20 +429,19 @@ AbstractMemory::access(PacketPtr pkt)
 void
 AbstractMemory::functionalAccess(PacketPtr pkt)
 {
-    assert(pkt->getAddrRange().isSubset(range));
+    assert(AddrRange(pkt->getAddr(),
+                     pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
 
     uint8_t *hostAddr = pmemAddr + pkt->getAddr() - range.start();
 
     if (pkt->isRead()) {
-        if (pmemAddr) {
-            pkt->setData(hostAddr);
-        }
+        if (pmemAddr)
+            memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
         TRACE_PACKET("Read");
         pkt->makeResponse();
     } else if (pkt->isWrite()) {
-        if (pmemAddr) {
-            pkt->writeData(hostAddr);
-        }
+        if (pmemAddr)
+            memcpy(hostAddr, pkt->getConstPtr<uint8_t>(), pkt->getSize());
         TRACE_PACKET("Write");
         pkt->makeResponse();
     } else if (pkt->isPrint()) {

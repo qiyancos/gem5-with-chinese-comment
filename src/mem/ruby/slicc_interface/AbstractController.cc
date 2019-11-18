@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017,2019 ARM Limited
+ * Copyright (c) 2017 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -41,21 +41,20 @@
 #include "mem/ruby/slicc_interface/AbstractController.hh"
 
 #include "debug/RubyQueue.hh"
+#include "mem/protocol/MemoryMsg.hh"
 #include "mem/ruby/network/Network.hh"
-#include "mem/ruby/protocol/MemoryMsg.hh"
 #include "mem/ruby/system/GPUCoalescer.hh"
 #include "mem/ruby/system/RubySystem.hh"
 #include "mem/ruby/system/Sequencer.hh"
 #include "sim/system.hh"
 
 AbstractController::AbstractController(const Params *p)
-    : ClockedObject(p), Consumer(this), m_version(p->version),
+    : MemObject(p), Consumer(this), m_version(p->version),
       m_clusterID(p->cluster_id),
-      m_masterId(p->system->getMasterId(this)), m_is_blocking(false),
+      m_masterId(p->system->getMasterId(name())), m_is_blocking(false),
       m_number_of_TBEs(p->number_of_TBEs),
       m_transitions_per_cycle(p->transitions_per_cycle),
       m_buffer_size(p->buffer_size), m_recycle_latency(p->recycle_latency),
-      m_mandatory_queue_latency(p->mandatory_queue_latency),
       memoryPort(csprintf("%s.memory", name()), this, ""),
       addrRanges(p->addr_ranges.begin(), p->addr_ranges.end())
 {
@@ -91,7 +90,7 @@ AbstractController::resetStats()
 void
 AbstractController::regStats()
 {
-    ClockedObject::regStats();
+    MemObject::regStats();
 
     m_fully_busy_cycles
         .name(name() + ".fully_busy_cycles")
@@ -230,8 +229,9 @@ AbstractController::isBlocked(Addr addr)
     return (m_block_map.count(addr) > 0);
 }
 
-Port &
-AbstractController::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort &
+AbstractController::getMasterPort(const std::string &if_name,
+                                  PortID idx)
 {
     return memoryPort;
 }
@@ -240,8 +240,8 @@ void
 AbstractController::queueMemoryRead(const MachineID &id, Addr addr,
                                     Cycles latency)
 {
-    RequestPtr req = std::make_shared<Request>(
-        addr, RubySystem::getBlockSizeBytes(), 0, m_masterId);
+    RequestPtr req = new Request(addr, RubySystem::getBlockSizeBytes(), 0,
+                                 m_masterId);
 
     PacketPtr pkt = Packet::createRead(req);
     uint8_t *newData = new uint8_t[RubySystem::getBlockSizeBytes()];
@@ -264,12 +264,14 @@ void
 AbstractController::queueMemoryWrite(const MachineID &id, Addr addr,
                                      Cycles latency, const DataBlock &block)
 {
-    RequestPtr req = std::make_shared<Request>(
-        addr, RubySystem::getBlockSizeBytes(), 0, m_masterId);
+    RequestPtr req = new Request(addr, RubySystem::getBlockSizeBytes(), 0,
+                                 m_masterId);
 
     PacketPtr pkt = Packet::createWrite(req);
-    pkt->allocate();
-    pkt->setData(block.getData(0, RubySystem::getBlockSizeBytes()));
+    uint8_t *newData = new uint8_t[RubySystem::getBlockSizeBytes()];
+    pkt->dataDynamic(newData);
+    memcpy(newData, block.getData(0, RubySystem::getBlockSizeBytes()),
+           RubySystem::getBlockSizeBytes());
 
     SenderState *s = new SenderState(id);
     pkt->pushSenderState(s);
@@ -290,11 +292,12 @@ AbstractController::queueMemoryWritePartial(const MachineID &id, Addr addr,
                                             Cycles latency,
                                             const DataBlock &block, int size)
 {
-    RequestPtr req = std::make_shared<Request>(addr, size, 0, m_masterId);
+    RequestPtr req = new Request(addr, size, 0, m_masterId);
 
     PacketPtr pkt = Packet::createWrite(req);
-    pkt->allocate();
-    pkt->setData(block.getData(getOffset(addr), size));
+    uint8_t *newData = new uint8_t[size];
+    pkt->dataDynamic(newData);
+    memcpy(newData, block.getData(getOffset(addr), size), size);
 
     SenderState *s = new SenderState(id);
     pkt->pushSenderState(s);
@@ -315,7 +318,7 @@ AbstractController::functionalMemoryWrite(PacketPtr pkt)
     int num_functional_writes = 0;
 
     // Check the buffer from the controller to the memory.
-    if (memoryPort.trySatisfyFunctional(pkt)) {
+    if (memoryPort.checkFunctional(pkt)) {
         num_functional_writes++;
     }
 
@@ -353,6 +356,7 @@ AbstractController::recvTimingResp(PacketPtr pkt)
     }
 
     getMemoryQueue()->enqueue(msg, clockEdge(), cyclesToTicks(Cycles(1)));
+    delete pkt->req;
     delete pkt;
 }
 
@@ -382,7 +386,7 @@ AbstractController::MemoryPort::MemoryPort(const std::string &_name,
                                            const std::string &_label)
     : QueuedMasterPort(_name, _controller, reqQueue, snoopRespQueue),
       reqQueue(*_controller, *this, _label),
-      snoopRespQueue(*_controller, *this, false, _label),
+      snoopRespQueue(*_controller, *this, _label),
       controller(_controller)
 {
 }

@@ -29,49 +29,58 @@
 #ifndef __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__
 #define __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__
 
+#include <iostream>
+#include <vector>
+
+#include "mem/ruby/common/Address.hh"
 #include "mem/ruby/filters/AbstractBloomFilter.hh"
 
-struct H3BloomFilterParams;
-
-/**
- * Implementation of the bloom filter as described in "Implementing Signatures
- * for Transactional Memory", by Sanchez, Daniel, et al.
- */
 class H3BloomFilter : public AbstractBloomFilter
 {
   public:
-    H3BloomFilter(const H3BloomFilterParams* p);
+    H3BloomFilter(int size, int hashes, bool parallel);
     ~H3BloomFilter();
 
-    void merge(const AbstractBloomFilter* other) override;
-    void set(Addr addr) override;
-    int getCount(Addr addr) const override;
+    void clear();
+    void increment(Addr addr);
+    void decrement(Addr addr);
+    void merge(AbstractBloomFilter * other_filter);
+    void set(Addr addr);
+    void unset(Addr addr);
+
+    bool isSet(Addr addr);
+    int getCount(Addr addr);
+    int getTotalCount();
+    void print(std::ostream& out) const;
+
+    int getIndex(Addr addr);
+    int readBit(const int index);
+    void writeBit(const int index, const int value);
+
+    int
+    operator[](const int index) const
+    {
+        return this->m_filter[index];
+    }
 
   private:
-    /**
-     * Apply a hash functions to an address.
-     *
-     * @param addr The address to hash.
-     * @param hash_number Index of the H3 hash function to be used.
-     */
-    int hash(Addr addr, int hash_number) const;
+    int get_index(Addr addr, int hashNumber);
 
-    /**
-     * Apply one of the H3 hash functions to a value.
-     *
-     * @param value The value to hash.
-     * @param hash_number Index of the hash function to be used.
-     */
-    int hashH3(uint64_t value, int hash_number) const;
+    int hash_H3(uint64_t value, int index);
 
-    /** The number of hashes used in this filter. Can be at most 16. */
-    const int numHashes;
+    std::vector<int> m_filter;
+    int m_filter_size;
+    int m_num_hashes;
+    int m_filter_size_bits;
 
-    /** Whether hashing should be performed in parallel. */
+    int m_par_filter_size;
+    int m_par_filter_size_bits;
+
+    int primes_list[6];// = {9323,11279,10247,30637,25717,43711};
+    int mults_list[6]; //= {255,29,51,3,77,43};
+    int adds_list[6]; //= {841,627,1555,241,7777,65391};
+
     bool isParallel;
-
-    /** Size of the filter when doing parallel hashing. */
-    int parFilterSize;
 };
 
 #endif // __MEM_RUBY_FILTERS_H3BLOOMFILTER_HH__

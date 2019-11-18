@@ -31,7 +31,7 @@
 
 from m5.params import *
 from m5.SimObject import SimObject
-from m5.objects.ReplacementPolicy import ReplacementPolicy
+from ReplacementPolicy import ReplacementPolicy
 
 class LRUReplacementPolicy(ReplacementPolicy):
     type = 'LRUReplacementPolicy'

@@ -40,9 +40,9 @@
 #          Andreas Hansson
 
 from m5.params import *
-from m5.objects.ClockedObject import ClockedObject
+from MemObject import MemObject
 
-class AbstractMemory(ClockedObject):
+class AbstractMemory(MemObject):
     type = 'AbstractMemory'
     abstract = True
     cxx_header = "mem/abstract_mem.hh"

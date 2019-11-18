@@ -37,22 +37,21 @@
 #define __MEM_CACHE_PREFETCH_TAGGED_HH__
 
 #include "mem/cache/prefetch/queued.hh"
-#include "mem/packet.hh"
+#include "params/TaggedPrefetcher.hh"
 
-struct TaggedPrefetcherParams;
 
 class TaggedPrefetcher : public QueuedPrefetcher
 {
   protected:
-      const int degree;
+      int degree;
 
   public:
     TaggedPrefetcher(const TaggedPrefetcherParams *p);
 
     ~TaggedPrefetcher() {}
 
-    void calculatePrefetch(const PrefetchInfo &pfi,
-                           std::vector<AddrPriority> &addresses) override;
+    void calculatePrefetch(const PacketPtr &pkt,
+                           std::vector<AddrPriority> &addresses);
 };
 
 #endif // __MEM_CACHE_PREFETCH_TAGGED_HH__

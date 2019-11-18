@@ -90,8 +90,8 @@ LinuxAlphaSystem::initState()
      * kernel arguments directly into the kernel's memory.
      */
     virtProxy.writeBlob(CommandLine(),
-                        params()->boot_osflags.c_str(),
-                        params()->boot_osflags.length() + 1);
+                        (uint8_t*)params()->boot_osflags.c_str(),
+                        params()->boot_osflags.length()+1);
 
     /**
      * find the address of the est_cycle_freq variable and insert it
@@ -122,6 +122,10 @@ LinuxAlphaSystem::setupFuncEvents()
     AlphaSystem::setupFuncEvents();
 #ifndef NDEBUG
     kernelPanicEvent = addKernelFuncEventOrPanic<BreakPCEvent>("panic");
+
+#if 0
+    kernelDieEvent = addKernelFuncEventOrPanic<BreakPCEvent>("die_if_kernel");
+#endif
 
 #endif
 
@@ -176,9 +180,8 @@ LinuxAlphaSystem::setDelayLoop(ThreadContext *tc)
     if (kernelSymtab->findAddress("loops_per_jiffy", addr)) {
         Tick cpuFreq = tc->getCpuPtr()->frequency();
         assert(intrFreq);
-        PortProxy &vp = tc->getVirtProxy();
-        vp.write(addr, (uint32_t)((cpuFreq / intrFreq) * 0.9988),
-                 GuestByteOrder);
+        FSTranslatingPortProxy &vp = tc->getVirtProxy();
+        vp.writeHtoG(addr, (uint32_t)((cpuFreq / intrFreq) * 0.9988));
     }
 }
 

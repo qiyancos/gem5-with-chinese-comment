@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2018 ARM Limited
+# Copyright (c) 2012-2016 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -45,9 +45,7 @@
 #          Erfan Azarkhish
 
 from m5.params import *
-from m5.proxy import *
-from m5.objects.AbstractMemory import *
-from m5.objects.QoSMemCtrl import *
+from AbstractMemory import *
 
 # Enum for memory scheduling algorithms, currently First-Come
 # First-Served and a First-Row Hit then First-Come First-Served
@@ -70,7 +68,7 @@ class PageManage(Enum): vals = ['open', 'open_adaptive', 'close',
 # that aims to model the most important system-level performance
 # effects of a DRAM without getting into too much detail of the DRAM
 # itself.
-class DRAMCtrl(QoSMemCtrl):
+class DRAMCtrl(AbstractMemory):
     type = 'DRAMCtrl'
     cxx_header = "mem/dram_ctrl.hh"
 
@@ -135,10 +133,6 @@ class DRAMCtrl(QoSMemCtrl):
     # to be instantiated for a multi-channel configuration
     channels = Param.Unsigned(1, "Number of channels")
 
-    # Enable DRAM powerdown states if True. This is False by default due to
-    # performance being lower when enabled
-    enable_dram_powerdown = Param.Bool(False, "Enable powerdown states")
-
     # For power modelling we need to know if the DRAM has a DLL or not
     dll = Param.Bool(True, "DRAM has DLL or not")
 
@@ -188,13 +182,6 @@ class DRAMCtrl(QoSMemCtrl):
     # tBURST is equivalent to tCCD_S; no explicit parameter required
     # for CAS-to-CAS delay for bursts to different bank groups
     tCCD_L = Param.Latency("0ns", "Same bank group CAS to CAS delay")
-
-    # Write-to-Write delay for bursts to the same bank group
-    # only utilized with bank group architectures; set to 0 for default case
-    # This will be used to enable different same bank group delays
-    # for writes versus reads
-    tCCD_L_WR = Param.Latency(Self.tCCD_L,
-        "Same bank group Write to Write delay")
 
     # time taken to complete one refresh cycle (N rows in all banks)
     tRFC = Param.Latency("Refresh cycle time")

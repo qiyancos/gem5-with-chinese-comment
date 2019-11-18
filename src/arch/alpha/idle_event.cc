@@ -40,11 +40,8 @@ void
 IdleStartEvent::process(ThreadContext *tc)
 {
     if (tc->getKernelStats()) {
-        RegVal val = tc->readMiscRegNoEffect(IPR_PALtemp23);
-        auto *stats = dynamic_cast<AlphaISA::Kernel::Statistics *>(
-                tc->getKernelStats());
-        assert(stats);
-        stats->setIdleProcess(val, tc);
+        MiscReg val = tc->readMiscRegNoEffect(IPR_PALtemp23);
+        tc->getKernelStats()->setIdleProcess(val, tc);
     }
     remove();
 }

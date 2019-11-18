@@ -74,12 +74,13 @@ namespace AlphaISA
 
       public:
 
-        RegVal readMiscRegNoEffect(int misc_reg, ThreadID tid = 0) const;
-        RegVal readMiscReg(int misc_reg, ThreadContext *tc, ThreadID tid = 0);
+        MiscReg readMiscRegNoEffect(int misc_reg, ThreadID tid = 0) const;
+        MiscReg readMiscReg(int misc_reg, ThreadContext *tc, ThreadID tid = 0);
 
-        void setMiscRegNoEffect(int misc_reg, RegVal val, ThreadID tid=0);
-        void setMiscReg(int misc_reg, RegVal val, ThreadContext *tc,
-                        ThreadID tid=0);
+        void setMiscRegNoEffect(int misc_reg, const MiscReg &val,
+                                ThreadID tid = 0);
+        void setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc,
+                        ThreadID tid = 0);
 
         void
         clear()
@@ -117,12 +118,6 @@ namespace AlphaISA
 
         int
         flattenVecElemIndex(int reg) const
-        {
-            return reg;
-        }
-
-        int
-        flattenVecPredIndex(int reg) const
         {
             return reg;
         }

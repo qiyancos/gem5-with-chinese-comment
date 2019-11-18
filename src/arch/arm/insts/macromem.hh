@@ -73,7 +73,7 @@ class MicroOp : public PredOp
 
   public:
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCState &pcState) const
     {
         if (flags[IsLastMicroop]) {
             pcState.uEnd();
@@ -94,7 +94,7 @@ class MicroOpX : public ArmStaticInst
 
   public:
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCState &pcState) const
     {
         if (flags[IsLastMicroop]) {
             pcState.uEnd();
@@ -263,8 +263,7 @@ class MicroSetPCCPSR : public MicroOp
     {
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 /**
@@ -282,8 +281,7 @@ class MicroIntMov : public MicroOp
     {
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 /**
@@ -302,8 +300,7 @@ class MicroIntImmOp : public MicroOp
     {
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class MicroIntImmXOp : public MicroOpX
@@ -319,8 +316,7 @@ class MicroIntImmXOp : public MicroOpX
     {
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 /**
@@ -338,8 +334,7 @@ class MicroIntOp : public MicroOp
     {
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class MicroIntRegXOp : public MicroOp
@@ -358,8 +353,7 @@ class MicroIntRegXOp : public MicroOp
     {
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 /**
@@ -398,8 +392,7 @@ class MicroMemOp : public MicroIntImmOp
     {
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 class MicroMemPairOp : public MicroOp
@@ -419,8 +412,7 @@ class MicroMemPairOp : public MicroOp
     {
     }
 
-    std::string generateDisassembly(
-            Addr pc, const SymbolTable *symtab) const override;
+    std::string generateDisassembly(Addr pc, const SymbolTable *symtab) const;
 };
 
 /**

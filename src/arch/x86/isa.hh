@@ -51,7 +51,7 @@ namespace X86ISA
     class ISA : public SimObject
     {
       protected:
-        RegVal regVal[NUM_MISCREGS];
+        MiscReg regVal[NUM_MISCREGS];
         void updateHandyM5Reg(Efer efer, CR0 cr0,
                 SegAttr csAttr, SegAttr ssAttr, RFLAGS rflags,
                 ThreadContext *tc);
@@ -64,11 +64,11 @@ namespace X86ISA
         ISA(Params *p);
         const Params *params() const;
 
-        RegVal readMiscRegNoEffect(int miscReg) const;
-        RegVal readMiscReg(int miscReg, ThreadContext *tc);
+        MiscReg readMiscRegNoEffect(int miscReg) const;
+        MiscReg readMiscReg(int miscReg, ThreadContext *tc);
 
-        void setMiscRegNoEffect(int miscReg, RegVal val);
-        void setMiscReg(int miscReg, RegVal val, ThreadContext *tc);
+        void setMiscRegNoEffect(int miscReg, MiscReg val);
+        void setMiscReg(int miscReg, MiscReg val, ThreadContext *tc);
 
         RegId
         flattenRegId(const RegId& regId) const
@@ -112,12 +112,6 @@ namespace X86ISA
 
         int
         flattenVecElemIndex(int reg) const
-        {
-            return reg;
-        }
-
-        int
-        flattenVecPredIndex(int reg) const
         {
             return reg;
         }

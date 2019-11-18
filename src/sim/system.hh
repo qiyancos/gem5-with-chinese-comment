@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, 2018 ARM Limited
+ * Copyright (c) 2012, 2014 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -57,15 +57,13 @@
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
 #include "enums/MemoryMode.hh"
-#include "mem/mem_master.hh"
+#include "mem/mem_object.hh"
 #include "mem/physical.hh"
 #include "mem/port.hh"
 #include "mem/port_proxy.hh"
 #include "params/System.hh"
 #include "sim/futex_map.hh"
-#include "sim/redirect_path.hh"
 #include "sim/se_signal.hh"
-#include "sim/sim_object.hh"
 
 /**
  * To avoid linking errors with LTO, only include the header if we
@@ -81,7 +79,7 @@ class KvmVM;
 class ObjectFile;
 class ThreadContext;
 
-class System : public SimObject
+class System : public MemObject
 {
   private:
 
@@ -97,7 +95,7 @@ class System : public SimObject
         /**
          * Create a system port with a name and an owner.
          */
-        SystemPort(const std::string &_name, SimObject *_owner)
+        SystemPort(const std::string &_name, MemObject *_owner)
             : MasterPort(_name, _owner)
         { }
         bool recvTimingResp(PacketPtr pkt) override
@@ -129,8 +127,8 @@ class System : public SimObject
     /**
      * Additional function to return the Port of a memory object.
      */
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    BaseMasterPort& getMasterPort(const std::string &if_name,
+                                  PortID idx = InvalidPortID) override;
 
     /** @{ */
     /**
@@ -322,96 +320,31 @@ class System : public SimObject
      * It's used to uniquely id any master in the system by name for things
      * like cache statistics.
      */
-    std::vector<MasterInfo> masters;
+    std::vector<std::string> masterIds;
 
     ThermalModel * thermalModel;
 
-  protected:
-    /**
-     * Strips off the system name from a master name
-     */
-    std::string stripSystemName(const std::string& master_name) const;
-
   public:
 
-    /**
-     * Request an id used to create a request object in the system. All objects
+    /** Request an id used to create a request object in the system. All objects
      * that intend to issues requests into the memory system must request an id
      * in the init() phase of startup. All master ids must be fixed by the
      * regStats() phase that immediately precedes it. This allows objects in
      * the memory system to understand how many masters may exist and
      * appropriately name the bins of their per-master stats before the stats
-     * are finalized.
-     *
-     * Registers a MasterID:
-     * This method takes two parameters, one of which is optional.
-     * The first one is the master object, and it is compulsory; in case
-     * a object has multiple (sub)masters, a second parameter must be
-     * provided and it contains the name of the submaster. The method will
-     * create a master's name by concatenating the SimObject name with the
-     * eventual submaster string, separated by a dot.
-     *
-     * As an example:
-     * For a cpu having two masters: a data master and an instruction master,
-     * the method must be called twice:
-     *
-     * instMasterId = getMasterId(cpu, "inst");
-     * dataMasterId = getMasterId(cpu, "data");
-     *
-     * and the masters' names will be:
-     * - "cpu.inst"
-     * - "cpu.data"
-     *
-     * @param master SimObject related to the master
-     * @param submaster String containing the submaster's name
-     * @return the master's ID.
+     * are finalized
      */
-    MasterID getMasterId(const SimObject* master,
-                         std::string submaster = std::string());
+    MasterID getMasterId(std::string req_name);
 
-    /**
-     * Registers a GLOBAL MasterID, which is a MasterID not related
-     * to any particular SimObject; since no SimObject is passed,
-     * the master gets registered by providing the full master name.
-     *
-     * @param masterName full name of the master
-     * @return the master's ID.
-     */
-    MasterID getGlobalMasterId(const std::string& master_name);
-
-    /**
-     * Get the name of an object for a given request id.
+    /** Get the name of an object for a given request id.
      */
     std::string getMasterName(MasterID master_id);
 
-    /**
-     * Looks up the MasterID for a given SimObject
-     * returns an invalid MasterID (invldMasterId) if not found.
-     */
-    MasterID lookupMasterId(const SimObject* obj) const;
-
-    /**
-     * Looks up the MasterID for a given object name string
-     * returns an invalid MasterID (invldMasterId) if not found.
-     */
-    MasterID lookupMasterId(const std::string& name) const;
-
     /** Get the number of masters registered in the system */
-    MasterID maxMasters() { return masters.size(); }
-
-  protected:
-    /** helper function for getMasterId */
-    MasterID _getMasterId(const SimObject* master,
-                          const std::string& master_name);
-
-    /**
-     * Helper function for constructing the full (sub)master name
-     * by providing the root master and the relative submaster name.
-     */
-    std::string leafMasterName(const SimObject* master,
-                               const std::string& submaster);
-
-  public:
+    MasterID maxMasters()
+    {
+        return masterIds.size();
+    }
 
     void regStats() override;
     /**
@@ -629,11 +562,6 @@ class System : public SimObject
     // receiver will delete the signal upon reception.
     std::list<BasicSignal> signalList;
 
-    // Used by syscall-emulation mode. This member contains paths which need
-    // to be redirected to the faux-filesystem (a duplicate filesystem
-    // intended to replace certain files on the host filesystem).
-    std::vector<RedirectPath*> redirectPaths;
-
   protected:
 
     /**
@@ -653,6 +581,7 @@ class System : public SimObject
      * @param section relevant section in the checkpoint
      */
     virtual void unserializeSymtab(CheckpointIn &cp) {}
+
 };
 
 void printSystems();

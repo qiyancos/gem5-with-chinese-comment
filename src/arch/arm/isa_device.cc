@@ -58,14 +58,14 @@ BaseISADevice::setISA(ISA *_isa)
 }
 
 void
-DummyISADevice::setMiscReg(int misc_reg, RegVal val)
+DummyISADevice::setMiscReg(int misc_reg, MiscReg val)
 {
     warn("Ignoring write of 0x%lx to miscreg %s\n",
           val,
           miscRegName[misc_reg]);
 }
 
-RegVal
+MiscReg
 DummyISADevice::readMiscReg(int misc_reg)
 {
     warn("Returning zero for read from miscreg %s\n", miscRegName[misc_reg]);

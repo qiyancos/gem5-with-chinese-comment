@@ -50,10 +50,10 @@
 #include "sim/system.hh"
 
 RubyTester::RubyTester(const Params *p)
-  : ClockedObject(p),
+  : MemObject(p),
     checkStartEvent([this]{ wakeup(); }, "RubyTester tick",
                     false, Event::CPU_Tick_Pri),
-    _masterId(p->system->getMasterId(this)),
+    _masterId(p->system->getMasterId(name())),
     m_checkTable_ptr(nullptr),
     m_num_cpus(p->num_cpus),
     m_checks_to_complete(p->checks_to_complete),
@@ -128,17 +128,17 @@ RubyTester::init()
     m_checkTable_ptr = new CheckTable(m_num_writers, m_num_readers, this);
 }
 
-Port &
-RubyTester::getPort(const std::string &if_name, PortID idx)
+BaseMasterPort &
+RubyTester::getMasterPort(const std::string &if_name, PortID idx)
 {
     if (if_name != "cpuInstPort" && if_name != "cpuInstDataPort" &&
         if_name != "cpuDataPort") {
         // pass it along to our super class
-        return ClockedObject::getPort(if_name, idx);
+        return MemObject::getMasterPort(if_name, idx);
     } else {
         if (if_name == "cpuInstPort") {
             if (idx > m_num_inst_only_ports) {
-                panic("RubyTester::getPort: unknown inst port %d\n",
+                panic("RubyTester::getMasterPort: unknown inst port %d\n",
                       idx);
             }
             //
@@ -147,7 +147,7 @@ RubyTester::getPort(const std::string &if_name, PortID idx)
             return *readPorts[idx];
         } else if (if_name == "cpuInstDataPort") {
             if (idx > m_num_inst_data_ports) {
-                panic("RubyTester::getPort: unknown inst+data port %d\n",
+                panic("RubyTester::getMasterPort: unknown inst+data port %d\n",
                       idx);
             }
             int read_idx = idx + m_num_inst_only_ports;
@@ -162,7 +162,7 @@ RubyTester::getPort(const std::string &if_name, PortID idx)
             //
             if (idx > (static_cast<int>(readPorts.size()) -
                        (m_num_inst_only_ports + m_num_inst_data_ports))) {
-                panic("RubyTester::getPort: unknown data port %d\n",
+                panic("RubyTester::getMasterPort: unknown data port %d\n",
                       idx);
             }
             int read_idx = idx + m_num_inst_only_ports + m_num_inst_data_ports;
@@ -186,6 +186,7 @@ RubyTester::CpuPort::recvTimingResp(PacketPtr pkt)
     // Now that the tester has completed, delete the senderState
     // (includes sublock) and the packet, then return
     delete pkt->senderState;
+    delete pkt->req;
     delete pkt;
     return true;
 }

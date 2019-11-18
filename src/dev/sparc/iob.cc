@@ -40,7 +40,6 @@
 #include <cstring>
 
 #include "arch/sparc/faults.hh"
-#include "arch/sparc/interrupts.hh"
 #include "arch/sparc/isa_traits.hh"
 #include "base/bitfield.hh"
 #include "base/trace.hh"
@@ -97,7 +96,7 @@ Iob::readIob(PacketPtr pkt)
         if (accessAddr < IntManAddr + IntManSize) {
             int index = (accessAddr - IntManAddr) >> 3;
             uint64_t data = intMan[index].cpu << 8 | intMan[index].vector << 0;
-            pkt->setBE(data);
+            pkt->set(data);
             return;
         }
 
@@ -105,12 +104,12 @@ Iob::readIob(PacketPtr pkt)
             int index = (accessAddr - IntCtlAddr) >> 3;
             uint64_t data = intCtl[index].mask  ? 1 << 2 : 0 |
                 intCtl[index].pend  ? 1 << 0 : 0;
-            pkt->setBE(data);
+            pkt->set(data);
             return;
         }
 
         if (accessAddr == JIntVecAddr) {
-            pkt->setBE(jIntVec);
+            pkt->set(jIntVec);
             return;
         }
 
@@ -130,23 +129,23 @@ Iob::readJBus(PacketPtr pkt)
 
         if (accessAddr >= JIntData0Addr && accessAddr < JIntData1Addr) {
             index = (accessAddr - JIntData0Addr) >> 3;
-            pkt->setBE(jBusData0[index]);
+            pkt->set(jBusData0[index]);
             return;
         }
 
         if (accessAddr >= JIntData1Addr && accessAddr < JIntDataA0Addr) {
             index = (accessAddr - JIntData1Addr) >> 3;
-            pkt->setBE(jBusData1[index]);
+            pkt->set(jBusData1[index]);
             return;
         }
 
         if (accessAddr == JIntDataA0Addr) {
-            pkt->setBE(jBusData0[cpuid]);
+            pkt->set(jBusData0[cpuid]);
             return;
         }
 
         if (accessAddr == JIntDataA1Addr) {
-            pkt->setBE(jBusData1[cpuid]);
+            pkt->set(jBusData1[cpuid]);
             return;
         }
 
@@ -154,13 +153,13 @@ Iob::readJBus(PacketPtr pkt)
             index = (accessAddr - JIntBusyAddr) >> 3;
             data = jIntBusy[index].busy ? 1 << 5 : 0 |
                    jIntBusy[index].source;
-            pkt->setBE(data);
+            pkt->set(data);
             return;
         }
         if (accessAddr == JIntABusyAddr) {
             data = jIntBusy[cpuid].busy ? 1 << 5 : 0 |
                    jIntBusy[cpuid].source;
-            pkt->setBE(data);
+            pkt->set(data);
             return;
         };
 
@@ -192,7 +191,7 @@ Iob::writeIob(PacketPtr pkt)
         assert(IntManAddr == 0);
         if (accessAddr < IntManAddr + IntManSize) {
             index = (accessAddr - IntManAddr) >> 3;
-            data = pkt->getBE<uint64_t>();
+            data = pkt->get<uint64_t>();
             intMan[index].cpu = bits(data,12,8);
             intMan[index].vector = bits(data,5,0);
             DPRINTF(Iob, "Wrote IntMan %d cpu %d, vec %d\n", index,
@@ -202,7 +201,7 @@ Iob::writeIob(PacketPtr pkt)
 
         if (accessAddr >= IntCtlAddr && accessAddr < IntCtlAddr + IntCtlSize) {
             index = (accessAddr - IntCtlAddr) >> 3;
-            data = pkt->getBE<uint64_t>();
+            data = pkt->get<uint64_t>();
             intCtl[index].mask = bits(data,2,2);
             if (bits(data,1,1))
                 intCtl[index].pend = false;
@@ -212,7 +211,7 @@ Iob::writeIob(PacketPtr pkt)
         }
 
         if (accessAddr == JIntVecAddr) {
-            jIntVec = bits(pkt->getBE<uint64_t>(), 5,0);
+            jIntVec = bits(pkt->get<uint64_t>(), 5,0);
             DPRINTF(Iob, "Wrote jIntVec %d\n", jIntVec);
             return;
         }
@@ -222,7 +221,7 @@ Iob::writeIob(PacketPtr pkt)
             int cpu_id;
             int vector;
             index = (accessAddr - IntManAddr) >> 3;
-            data = pkt->getBE<uint64_t>();
+            data = pkt->get<uint64_t>();
             type = (Type)bits(data,17,16);
             cpu_id = bits(data, 12,8);
             vector = bits(data,5,0);
@@ -243,14 +242,14 @@ Iob::writeJBus(PacketPtr pkt)
 
         if (accessAddr >= JIntBusyAddr && accessAddr < JIntBusyAddr + JIntBusySize) {
             index = (accessAddr - JIntBusyAddr) >> 3;
-            data = pkt->getBE<uint64_t>();
+            data = pkt->get<uint64_t>();
             jIntBusy[index].busy = bits(data,5,5);
             DPRINTF(Iob, "Wrote jIntBusy index %d busy: %d\n", index,
                     jIntBusy[index].busy);
             return;
         }
         if (accessAddr == JIntABusyAddr) {
-            data = pkt->getBE<uint64_t>();
+            data = pkt->get<uint64_t>();
             jIntBusy[cpuid].busy = bits(data,5,5);
             DPRINTF(Iob, "Wrote jIntBusy index %d busy: %d\n", cpuid,
                     jIntBusy[cpuid].busy);

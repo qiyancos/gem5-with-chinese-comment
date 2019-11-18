@@ -1294,6 +1294,12 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
     zero() const
     {
         return data(0)->zero();
+#if 0
+        for (off_type i = 0; i < size(); ++i)
+            if (!data(i)->zero())
+                return false;
+        return true;
+#endif
     }
 
     /**
@@ -2084,8 +2090,6 @@ class Node
      *
      */
     virtual std::string str() const = 0;
-
-    virtual ~Node() {};
 };
 
 /** Shared pointer to a function Node. */
@@ -2316,7 +2320,7 @@ class BinaryNode : public Node
     BinaryNode(NodePtr &a, NodePtr &b) : l(a), r(b) {}
 
     const VResult &
-    result() const override
+    result() const
     {
         Op op;
         const VResult &lvec = l->result();
@@ -2348,7 +2352,7 @@ class BinaryNode : public Node
     }
 
     Result
-    total() const override
+    total() const
     {
         const VResult &vec = this->result();
         const VResult &lvec = l->result();
@@ -2380,7 +2384,7 @@ class BinaryNode : public Node
     }
 
     size_type
-    size() const override
+    size() const
     {
         size_type ls = l->size();
         size_type rs = r->size();
@@ -2395,7 +2399,7 @@ class BinaryNode : public Node
     }
 
     std::string
-    str() const override
+    str() const
     {
         return csprintf("(%s %s %s)", l->str(), OpString<Op>::str(), r->str());
     }
@@ -2533,9 +2537,6 @@ class Distribution : public DistBase<Distribution, DistStor>
         params->min = min;
         params->max = max;
         params->bucket_size = bkt;
-        // Division by zero is especially serious in an Aarch64 host,
-        // where it gets rounded to allocate 32GiB RAM.
-        assert(bkt > 0);
         params->buckets = (size_type)ceil((max - min + 1.0) / bkt);
         this->setParams(params);
         this->doInit();

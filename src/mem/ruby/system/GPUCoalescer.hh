@@ -14,9 +14,9 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from this
- * software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software
+ * without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,7 +30,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Sooraj Puthoor
+ * Author: Sooraj Puthoor
  */
 
 #ifndef __MEM_RUBY_SYSTEM_GPU_COALESCER_HH__
@@ -40,15 +40,15 @@
 #include <unordered_map>
 
 #include "base/statistics.hh"
+#include "mem/protocol/HSAScope.hh"
+#include "mem/protocol/HSASegment.hh"
+#include "mem/protocol/PrefetchBit.hh"
+#include "mem/protocol/RubyAccessMode.hh"
+#include "mem/protocol/RubyRequestType.hh"
+#include "mem/protocol/SequencerRequestType.hh"
 #include "mem/request.hh"
 #include "mem/ruby/common/Address.hh"
 #include "mem/ruby/common/Consumer.hh"
-#include "mem/ruby/protocol/HSAScope.hh"
-#include "mem/ruby/protocol/HSASegment.hh"
-#include "mem/ruby/protocol/PrefetchBit.hh"
-#include "mem/ruby/protocol/RubyAccessMode.hh"
-#include "mem/ruby/protocol/RubyRequestType.hh"
-#include "mem/ruby/protocol/SequencerRequestType.hh"
 #include "mem/ruby/system/Sequencer.hh"
 
 class DataBlock;
@@ -58,8 +58,8 @@ class CacheMemory;
 
 class RubyGPUCoalescerParams;
 
-HSAScope reqScopeToHSAScope(const RequestPtr &req);
-HSASegment reqSegmentToHSASegment(const RequestPtr &req);
+HSAScope reqScopeToHSAScope(Request* req);
+HSASegment reqSegmentToHSASegment(Request* req);
 
 struct GPUCoalescerRequest
 {
@@ -265,6 +265,11 @@ class GPUCoalescer : public RubyPort
 
     CacheMemory* m_dataCache_ptr;
     CacheMemory* m_instCache_ptr;
+
+    // The cache access latency for this GPU data cache. This is assessed at the
+    // beginning of each access. This should be very similar to the
+    // implementation in Sequencer() as this is very much like a Sequencer
+    Cycles m_data_cache_hit_latency;
 
     // We need to track both the primary and secondary request types.
     // The secondary request type comprises a subset of RubyRequestTypes that

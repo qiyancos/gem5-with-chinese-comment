@@ -14,9 +14,9 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from this
- * software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software
+ * without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,7 +30,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Sooraj Puthoor
+ * Author: Sooraj Puthoor
  */
 
 #include "base/logging.hh"
@@ -213,16 +213,12 @@ VIPERCoalescer::invL1()
     for (int i = 0; i < size; i++) {
         Addr addr = m_dataCache_ptr->getAddressAtIdx(i);
         // Evict Read-only data
-        RubyRequestType request_type = RubyRequestType_REPLACEMENT;
         std::shared_ptr<RubyRequest> msg = std::make_shared<RubyRequest>(
             clockEdge(), addr, (uint8_t*) 0, 0, 0,
-            request_type, RubyAccessMode_Supervisor,
+            RubyRequestType_REPLACEMENT, RubyAccessMode_Supervisor,
             nullptr);
         assert(m_mandatory_q_ptr != NULL);
-        Tick latency = cyclesToTicks(
-                            m_controller->mandatoryQueueLatency(request_type));
-        assert(latency > 0);
-        m_mandatory_q_ptr->enqueue(msg, clockEdge(), latency);
+        m_mandatory_q_ptr->enqueue(msg, clockEdge(), m_data_cache_hit_latency);
         m_outstanding_inv++;
     }
     DPRINTF(GPUCoalescer,
@@ -244,16 +240,12 @@ VIPERCoalescer::wbL1()
     for (int i = 0; i < size; i++) {
         Addr addr = m_dataCache_ptr->getAddressAtIdx(i);
         // Write dirty data back
-        RubyRequestType request_type = RubyRequestType_FLUSH;
         std::shared_ptr<RubyRequest> msg = std::make_shared<RubyRequest>(
             clockEdge(), addr, (uint8_t*) 0, 0, 0,
-            request_type, RubyAccessMode_Supervisor,
+            RubyRequestType_FLUSH, RubyAccessMode_Supervisor,
             nullptr);
         assert(m_mandatory_q_ptr != NULL);
-        Tick latency = cyclesToTicks(
-                            m_controller->mandatoryQueueLatency(request_type));
-        assert(latency > 0);
-        m_mandatory_q_ptr->enqueue(msg, clockEdge(), latency);
+        m_mandatory_q_ptr->enqueue(msg, clockEdge(), m_data_cache_hit_latency);
         m_outstanding_wb++;
     }
     DPRINTF(GPUCoalescer,
@@ -272,32 +264,24 @@ VIPERCoalescer::invwbL1()
     for (int i = 0; i < size; i++) {
         Addr addr = m_dataCache_ptr->getAddressAtIdx(i);
         // Evict Read-only data
-        RubyRequestType request_type = RubyRequestType_REPLACEMENT;
         std::shared_ptr<RubyRequest> msg = std::make_shared<RubyRequest>(
             clockEdge(), addr, (uint8_t*) 0, 0, 0,
-            request_type, RubyAccessMode_Supervisor,
+            RubyRequestType_REPLACEMENT, RubyAccessMode_Supervisor,
             nullptr);
         assert(m_mandatory_q_ptr != NULL);
-        Tick latency = cyclesToTicks(
-                            m_controller->mandatoryQueueLatency(request_type));
-        assert(latency > 0);
-        m_mandatory_q_ptr->enqueue(msg, clockEdge(), latency);
+        m_mandatory_q_ptr->enqueue(msg, clockEdge(), m_data_cache_hit_latency);
         m_outstanding_inv++;
     }
     // Walk the cache
     for (int i = 0; i< size; i++) {
         Addr addr = m_dataCache_ptr->getAddressAtIdx(i);
         // Write dirty data back
-        RubyRequestType request_type = RubyRequestType_FLUSH;
         std::shared_ptr<RubyRequest> msg = std::make_shared<RubyRequest>(
             clockEdge(), addr, (uint8_t*) 0, 0, 0,
-            request_type, RubyAccessMode_Supervisor,
+            RubyRequestType_FLUSH, RubyAccessMode_Supervisor,
             nullptr);
         assert(m_mandatory_q_ptr != NULL);
-        Tick latency = cyclesToTicks(
-                m_controller->mandatoryQueueLatency(request_type));
-        assert(latency > 0);
-        m_mandatory_q_ptr->enqueue(msg, clockEdge(), latency);
+        m_mandatory_q_ptr->enqueue(msg, clockEdge(), m_data_cache_hit_latency);
         m_outstanding_wb++;
     }
 }

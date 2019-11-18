@@ -29,7 +29,6 @@
 #          Brad Beckmann
 
 from __future__ import print_function
-from __future__ import absolute_import
 
 import m5
 from m5.objects import *
@@ -60,9 +59,7 @@ parser.add_option("-f", "--wakeup_freq", metavar="N", default=10,
 #
 Ruby.define_options(parser)
 
-exec(compile( \
-    open(os.path.join(config_root, "common", "Options.py")).read(), \
-    os.path.join(config_root, "common", "Options.py"), 'exec'))
+execfile(os.path.join(config_root, "common", "Options.py"))
 
 (options, args) = parser.parse_args()
 

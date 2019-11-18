@@ -26,9 +26,6 @@
 #
 # Authors: Nathan Binkert
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 # Simple importer that allows python to import data from a dict of
 # code objects.  The keys are the module path, and the items are the
 # filename and bytecode of the file.
@@ -38,7 +35,7 @@ class CodeImporter(object):
 
     def add_module(self, filename, abspath, modpath, code):
         if modpath in self.modules:
-            raise AttributeError("%s already found in importer" % modpath)
+            raise AttributeError, "%s already found in importer" % modpath
 
         self.modules[modpath] = (filename, abspath, code)
 
@@ -70,7 +67,7 @@ class CodeImporter(object):
 
             override = os.environ.get('M5_OVERRIDE_PY_SOURCE', 'false').lower()
             if override in ('true', 'yes') and  os.path.exists(abspath):
-                src = open(abspath, 'r').read()
+                src = file(abspath, 'r').read()
                 code = compile(src, abspath, 'exec')
 
             if os.path.basename(srcfile) == '__init__.py':
@@ -80,7 +77,7 @@ class CodeImporter(object):
                 mod.__package__ = fullname.rpartition('.')[0]
             mod.__file__ = srcfile
 
-            exec(code, mod.__dict__)
+            exec code in mod.__dict__
         except Exception:
             del sys.modules[fullname]
             raise

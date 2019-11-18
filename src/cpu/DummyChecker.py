@@ -36,7 +36,7 @@
 # Authors: Geoffrey Blake
 
 from m5.params import *
-from m5.objects.CheckerCPU import CheckerCPU
+from CheckerCPU import CheckerCPU
 
 class DummyChecker(CheckerCPU):
     type = 'DummyChecker'

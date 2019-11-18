@@ -61,6 +61,7 @@
 #include "dev/net/etherdump.hh"
 #include "dev/net/etherint.hh"
 #include "dev/net/etherlink.hh"
+#include "dev/net/etherobject.hh"
 #include "dev/net/etherpkt.hh"
 #include "dev/net/tcp_iface.hh"
 #include "params/EtherLink.hh"
@@ -71,7 +72,7 @@
 using namespace std;
 
 DistEtherLink::DistEtherLink(const Params *p)
-    : SimObject(p), linkDelay(p->delay)
+    : EtherObject(p), linkDelay(p->delay)
 {
     DPRINTF(DistEthernet,"DistEtherLink::DistEtherLink() "
             "link delay:%llu ticksPerByte:%f\n", p->delay, p->speed);
@@ -108,12 +109,15 @@ DistEtherLink::~DistEtherLink()
     delete distIface;
 }
 
-Port &
-DistEtherLink::getPort(const std::string &if_name, PortID idx)
+EtherInt*
+DistEtherLink::getEthPort(const std::string &if_name, int idx)
 {
-    if (if_name == "int0")
-        return *localIface;
-    return SimObject::getPort(if_name, idx);
+    if (if_name != "int0") {
+        return nullptr;
+    } else {
+        panic_if(localIface->getPeer(), "interface already connected to");
+    }
+    return localIface;
 }
 
 void

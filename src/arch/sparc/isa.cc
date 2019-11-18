@@ -173,7 +173,7 @@ ISA::clear()
         panic("Tick comparison event active when clearing the ISA object.\n");
 }
 
-RegVal
+MiscReg
 ISA::readMiscRegNoEffect(int miscReg) const
 {
 
@@ -248,7 +248,7 @@ ISA::readMiscRegNoEffect(int miscReg) const
       case MISCREG_TBA:
         return tba;
       case MISCREG_PSTATE:
-        return (RegVal)pstate;
+        return (MiscReg)pstate;
       case MISCREG_TL:
         return tl;
       case MISCREG_PIL:
@@ -271,7 +271,7 @@ ISA::readMiscRegNoEffect(int miscReg) const
 
         /** Hyper privileged registers */
       case MISCREG_HPSTATE:
-        return (RegVal)hpstate;
+        return (MiscReg)hpstate;
       case MISCREG_HTSTATE:
         return htstate[tl-1];
       case MISCREG_HINTP:
@@ -334,7 +334,7 @@ ISA::readMiscRegNoEffect(int miscReg) const
     }
 }
 
-RegVal
+MiscReg
 ISA::readMiscReg(int miscReg, ThreadContext * tc)
 {
     switch (miscReg) {
@@ -383,7 +383,7 @@ ISA::readMiscReg(int miscReg, ThreadContext * tc)
 }
 
 void
-ISA::setMiscRegNoEffect(int miscReg, RegVal val)
+ISA::setMiscRegNoEffect(int miscReg, MiscReg val)
 {
     switch (miscReg) {
 //      case MISCREG_Y:
@@ -480,7 +480,6 @@ ISA::setMiscRegNoEffect(int miscReg, RegVal val)
         break;
       case MISCREG_HINTP:
         hintp = val;
-        break;
       case MISCREG_HTBA:
         htba = val;
         break;
@@ -564,9 +563,9 @@ ISA::setMiscRegNoEffect(int miscReg, RegVal val)
 }
 
 void
-ISA::setMiscReg(int miscReg, RegVal val, ThreadContext * tc)
+ISA::setMiscReg(int miscReg, MiscReg val, ThreadContext * tc)
 {
-    RegVal new_val = val;
+    MiscReg new_val = val;
 
     switch (miscReg) {
       case MISCREG_ASI:

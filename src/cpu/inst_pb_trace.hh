@@ -93,9 +93,6 @@ class InstPBTrace : public InstTracer
                                     StaticInstPtr mi = NULL) override;
 
   protected:
-    std::unique_ptr<uint8_t []> buf;
-    size_t bufSize;
-
     /** One output stream for the entire simulation.
      * We encode the CPU & system ID so all we need is a single file
      */

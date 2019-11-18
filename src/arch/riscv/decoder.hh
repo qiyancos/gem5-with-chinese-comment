@@ -48,7 +48,7 @@ class ISA;
 class Decoder
 {
   private:
-    DecodeCache::InstMap<ExtMachInst> instMap;
+    DecodeCache::InstMap instMap;
     bool aligned;
     bool mid;
     bool more;

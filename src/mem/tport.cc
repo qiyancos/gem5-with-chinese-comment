@@ -42,10 +42,11 @@
  */
 
 #include "mem/tport.hh"
-#include "sim/sim_object.hh"
+
+#include "mem/mem_object.hh"
 
 SimpleTimingPort::SimpleTimingPort(const std::string& _name,
-                                   SimObject* _owner) :
+                                   MemObject* _owner) :
     QueuedSlavePort(_name, _owner, queueImpl), queueImpl(*_owner, *this)
 {
 }
@@ -53,7 +54,7 @@ SimpleTimingPort::SimpleTimingPort(const std::string& _name,
 void
 SimpleTimingPort::recvFunctional(PacketPtr pkt)
 {
-    if (!respQueue.trySatisfyFunctional(pkt)) {
+    if (!respQueue.checkFunctional(pkt)) {
         // do an atomic access and throw away the returned latency
         recvAtomic(pkt);
     }

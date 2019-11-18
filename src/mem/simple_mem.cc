@@ -48,6 +48,8 @@
 #include "base/trace.hh"
 #include "debug/Drain.hh"
 
+using namespace std;
+
 SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     AbstractMemory(p),
     port(name() + ".port", *this), latency(p->latency),
@@ -80,16 +82,6 @@ SimpleMemory::recvAtomic(PacketPtr pkt)
     return getLatency();
 }
 
-Tick
-SimpleMemory::recvAtomicBackdoor(PacketPtr pkt, MemBackdoorPtr &_backdoor)
-{
-    Tick latency = recvAtomic(pkt);
-
-    if (backdoor.ptr())
-        _backdoor = &backdoor;
-    return latency;
-}
-
 void
 SimpleMemory::recvFunctional(PacketPtr pkt)
 {
@@ -101,7 +93,7 @@ SimpleMemory::recvFunctional(PacketPtr pkt)
     auto p = packetQueue.begin();
     // potentially update the packets in our packet queue as well
     while (!done && p != packetQueue.end()) {
-        done = pkt->trySatisfyFunctional(p->pkt);
+        done = pkt->checkFunctional(p->pkt);
         ++p;
     }
 
@@ -174,7 +166,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         auto i = packetQueue.end();
         --i;
         while (i != packetQueue.begin() && when_to_send < i->tick &&
-               !i->pkt->matchAddr(pkt))
+               i->pkt->getAddr() != pkt->getAddr())
             --i;
 
         // emplace inserts the element before the position pointed to by
@@ -241,11 +233,11 @@ SimpleMemory::recvRespRetry()
     dequeue();
 }
 
-Port &
-SimpleMemory::getPort(const std::string &if_name, PortID idx)
+BaseSlavePort &
+SimpleMemory::getSlavePort(const std::string &if_name, PortID idx)
 {
     if (if_name != "port") {
-        return AbstractMemory::getPort(if_name, idx);
+        return MemObject::getSlavePort(if_name, idx);
     } else {
         return port;
     }
@@ -279,13 +271,6 @@ Tick
 SimpleMemory::MemoryPort::recvAtomic(PacketPtr pkt)
 {
     return memory.recvAtomic(pkt);
-}
-
-Tick
-SimpleMemory::MemoryPort::recvAtomicBackdoor(
-        PacketPtr pkt, MemBackdoorPtr &_backdoor)
-{
-    return memory.recvAtomicBackdoor(pkt, _backdoor);
 }
 
 void

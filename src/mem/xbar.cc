@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, 2018 ARM Limited
+ * Copyright (c) 2011-2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -56,7 +56,7 @@
 #include "debug/XBar.hh"
 
 BaseXBar::BaseXBar(const BaseXBarParams *p)
-    : ClockedObject(p),
+    : MemObject(p),
       frontendLatency(p->frontend_latency),
       forwardLatency(p->forward_latency),
       responseLatency(p->response_latency),
@@ -76,19 +76,32 @@ BaseXBar::~BaseXBar()
         delete s;
 }
 
-Port &
-BaseXBar::getPort(const std::string &if_name, PortID idx)
+void
+BaseXBar::init()
+{
+}
+
+BaseMasterPort &
+BaseXBar::getMasterPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "master" && idx < masterPorts.size()) {
         // the master port index translates directly to the vector position
         return *masterPorts[idx];
     } else  if (if_name == "default") {
         return *masterPorts[defaultPortID];
-    } else if (if_name == "slave" && idx < slavePorts.size()) {
+    } else {
+        return MemObject::getMasterPort(if_name, idx);
+    }
+}
+
+BaseSlavePort &
+BaseXBar::getSlavePort(const std::string &if_name, PortID idx)
+{
+    if (if_name == "slave" && idx < slavePorts.size()) {
         // the slave port index translates directly to the vector position
         return *slavePorts[idx];
     } else {
-        return ClockedObject::getPort(if_name, idx);
+        return MemObject::getSlavePort(if_name, idx);
     }
 }
 
@@ -131,7 +144,7 @@ BaseXBar::calcPacketTiming(PacketPtr pkt, Tick header_delay)
 }
 
 template <typename SrcType, typename DstType>
-BaseXBar::Layer<SrcType, DstType>::Layer(DstType& _port, BaseXBar& _xbar,
+BaseXBar::Layer<SrcType,DstType>::Layer(DstType& _port, BaseXBar& _xbar,
                                        const std::string& _name) :
     port(_port), xbar(_xbar), _name(_name), state(IDLE),
     waitingForPeer(NULL), releaseEvent([this]{ releaseLayer(); }, name())
@@ -139,7 +152,7 @@ BaseXBar::Layer<SrcType, DstType>::Layer(DstType& _port, BaseXBar& _xbar,
 }
 
 template <typename SrcType, typename DstType>
-void BaseXBar::Layer<SrcType, DstType>::occupyLayer(Tick until)
+void BaseXBar::Layer<SrcType,DstType>::occupyLayer(Tick until)
 {
     // ensure the state is busy at this point, as the layer should
     // transition from idle as soon as it has decided to forward the
@@ -160,7 +173,7 @@ void BaseXBar::Layer<SrcType, DstType>::occupyLayer(Tick until)
 
 template <typename SrcType, typename DstType>
 bool
-BaseXBar::Layer<SrcType, DstType>::tryTiming(SrcType* src_port)
+BaseXBar::Layer<SrcType,DstType>::tryTiming(SrcType* src_port)
 {
     // if we are in the retry state, we will not see anything but the
     // retrying port (or in the case of the snoop ports the snoop
@@ -191,7 +204,7 @@ BaseXBar::Layer<SrcType, DstType>::tryTiming(SrcType* src_port)
 
 template <typename SrcType, typename DstType>
 void
-BaseXBar::Layer<SrcType, DstType>::succeededTiming(Tick busy_time)
+BaseXBar::Layer<SrcType,DstType>::succeededTiming(Tick busy_time)
 {
     // we should have gone from idle or retry to busy in the tryTiming
     // test
@@ -203,7 +216,7 @@ BaseXBar::Layer<SrcType, DstType>::succeededTiming(Tick busy_time)
 
 template <typename SrcType, typename DstType>
 void
-BaseXBar::Layer<SrcType, DstType>::failedTiming(SrcType* src_port,
+BaseXBar::Layer<SrcType,DstType>::failedTiming(SrcType* src_port,
                                               Tick busy_time)
 {
     // ensure no one got in between and tried to send something to
@@ -225,7 +238,7 @@ BaseXBar::Layer<SrcType, DstType>::failedTiming(SrcType* src_port,
 
 template <typename SrcType, typename DstType>
 void
-BaseXBar::Layer<SrcType, DstType>::releaseLayer()
+BaseXBar::Layer<SrcType,DstType>::releaseLayer()
 {
     // releasing the bus means we should now be idle
     assert(state == BUSY);
@@ -249,7 +262,7 @@ BaseXBar::Layer<SrcType, DstType>::releaseLayer()
 
 template <typename SrcType, typename DstType>
 void
-BaseXBar::Layer<SrcType, DstType>::retryWaiting()
+BaseXBar::Layer<SrcType,DstType>::retryWaiting()
 {
     // this should never be called with no one waiting
     assert(!waitingForLayer.empty());
@@ -284,7 +297,7 @@ BaseXBar::Layer<SrcType, DstType>::retryWaiting()
 
 template <typename SrcType, typename DstType>
 void
-BaseXBar::Layer<SrcType, DstType>::recvRetry()
+BaseXBar::Layer<SrcType,DstType>::recvRetry()
 {
     // we should never get a retry without having failed to forward
     // something to this port
@@ -308,34 +321,41 @@ BaseXBar::Layer<SrcType, DstType>::recvRetry()
 }
 
 PortID
-BaseXBar::findPort(AddrRange addr_range)
+BaseXBar::findPort(Addr addr)
 {
     // we should never see any address lookups before we've got the
     // ranges of all connected slave modules
     assert(gotAllAddrRanges);
 
+    // Check the cache
+    PortID dest_id = checkPortCache(addr);
+    if (dest_id != InvalidPortID)
+        return dest_id;
+
     // Check the address map interval tree
-    auto i = portMap.contains(addr_range);
+    auto i = portMap.find(addr);
     if (i != portMap.end()) {
-        return i->second;
+        dest_id = i->second;
+        updatePortCache(dest_id, i->first);
+        return dest_id;
     }
 
     // Check if this matches the default range
     if (useDefaultRange) {
-        if (addr_range.isSubset(defaultRange)) {
-            DPRINTF(AddrRanges, "  found addr %s on default\n",
-                    addr_range.to_string());
+        if (defaultRange.contains(addr)) {
+            DPRINTF(AddrRanges, "  found addr %#llx on default\n",
+                    addr);
             return defaultPortID;
         }
     } else if (defaultPortID != InvalidPortID) {
-        DPRINTF(AddrRanges, "Unable to find destination for %s, "
-                "will use default port\n", addr_range.to_string());
+        DPRINTF(AddrRanges, "Unable to find destination for addr %#llx, "
+                "will use default port\n", addr);
         return defaultPortID;
     }
-
+    return defaultPortID;
     // we should use the range for the default port and it did not
     // match, or the default port is not set
-    fatal("Unable to find destination for %s on %s\n", addr_range.to_string(),
+    fatal("Unable to find destination for addr %#llx on %s\n", addr,
           name());
 }
 
@@ -400,9 +420,8 @@ BaseXBar::recvRangeChange(PortID master_port_id)
             DPRINTF(AddrRanges, "Adding range %s for id %d\n",
                     r.to_string(), master_port_id);
             if (portMap.insert(r, master_port_id) == portMap.end()) {
-                PortID conflict_id = portMap.intersects(r)->second;
-                fatal("%s has two ports responding within range "
-                      "%s:\n\t%s\n\t%s\n",
+                PortID conflict_id = portMap.find(r)->second;
+                fatal("%s has two ports responding within range %s:\n\t%s\n\t%s\n",
                       name(),
                       r.to_string(),
                       masterPorts[master_port_id]->getSlavePort().name(),
@@ -477,7 +496,7 @@ BaseXBar::recvRangeChange(PortID master_port_id)
             }
         }
 
-        // also check that no range partially intersects with the
+        // also check that no range partially overlaps with the
         // default range, this has to be done after all ranges are set
         // as there are no guarantees for when the default range is
         // update with respect to the other ones
@@ -498,6 +517,8 @@ BaseXBar::recvRangeChange(PortID master_port_id)
         for (const auto& s: slavePorts)
             s->sendRangeChange();
     }
+
+    clearPortCache();
 }
 
 AddrRangeList
@@ -568,7 +589,7 @@ BaseXBar::regStats()
 
 template <typename SrcType, typename DstType>
 DrainState
-BaseXBar::Layer<SrcType, DstType>::drain()
+BaseXBar::Layer<SrcType,DstType>::drain()
 {
     //We should check that we're not "doing" anything, and that noone is
     //waiting. We might be idle but have someone waiting if the device we
@@ -583,7 +604,7 @@ BaseXBar::Layer<SrcType, DstType>::drain()
 
 template <typename SrcType, typename DstType>
 void
-BaseXBar::Layer<SrcType, DstType>::regStats()
+BaseXBar::Layer<SrcType,DstType>::regStats()
 {
     using namespace Stats;
 
@@ -606,5 +627,5 @@ BaseXBar::Layer<SrcType, DstType>::regStats()
  * file, but since there are only two given options (MasterPort and
  * SlavePort) it seems a bit excessive at this point.
  */
-template class BaseXBar::Layer<SlavePort, MasterPort>;
-template class BaseXBar::Layer<MasterPort, SlavePort>;
+template class BaseXBar::Layer<SlavePort,MasterPort>;
+template class BaseXBar::Layer<MasterPort,SlavePort>;

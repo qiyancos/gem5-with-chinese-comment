@@ -40,9 +40,9 @@
 #          Andreas Hansson
 
 from m5.params import *
-from m5.objects.ClockedObject import ClockedObject
+from MemObject import MemObject
 
-class Bridge(ClockedObject):
+class Bridge(MemObject):
     type = 'Bridge'
     cxx_header = "mem/bridge.hh"
     slave = SlavePort('Slave port')

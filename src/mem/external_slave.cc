@@ -49,7 +49,7 @@
  *  a message.  The stub port can be used to configure and test a system
  *  where the external port is used for a peripheral before connecting
  *  the external port */
-class StubSlavePort : public ExternalSlave::ExternalPort
+class StubSlavePort : public ExternalSlave::Port
 {
   public:
     void processResponseEvent();
@@ -66,7 +66,7 @@ class StubSlavePort : public ExternalSlave::ExternalPort
 
     StubSlavePort(const std::string &name_,
         ExternalSlave &owner_) :
-        ExternalSlave::ExternalPort(name_, owner_),
+        ExternalSlave::Port(name_, owner_),
         responseEvent([this]{ processResponseEvent(); }, name()),
         responsePacket(NULL), mustRetry(false)
     { }
@@ -83,7 +83,7 @@ class StubSlavePortHandler : public
     ExternalSlave::Handler
 {
   public:
-    ExternalSlave::ExternalPort *getExternalPort(
+    ExternalSlave::Port *getExternalPort(
         const std::string &name_,
         ExternalSlave &owner,
         const std::string &port_data)
@@ -175,13 +175,13 @@ std::map<std::string, ExternalSlave::Handler *>
     ExternalSlave::portHandlers;
 
 AddrRangeList
-ExternalSlave::ExternalPort::getAddrRanges() const
+ExternalSlave::Port::getAddrRanges() const
 {
     return owner.addrRanges;
 }
 
 ExternalSlave::ExternalSlave(ExternalSlaveParams *params) :
-    SimObject(params),
+    MemObject(params),
     externalPort(NULL),
     portName(params->name + ".port"),
     portType(params->port_type),
@@ -193,8 +193,9 @@ ExternalSlave::ExternalSlave(ExternalSlaveParams *params) :
         registerHandler("stub", new StubSlavePortHandler);
 }
 
-Port &
-ExternalSlave::getPort(const std::string &if_name, PortID idx)
+BaseSlavePort &
+ExternalSlave::getSlavePort(const std::string &if_name,
+    PortID idx)
 {
     if (if_name == "port") {
         DPRINTF(ExternalPort, "Trying to bind external port: %s %s\n",
@@ -216,7 +217,7 @@ ExternalSlave::getPort(const std::string &if_name, PortID idx)
         }
         return *externalPort;
     } else {
-        return SimObject::getPort(if_name, idx);
+        return MemObject::getSlavePort(if_name, idx);
     }
 }
 

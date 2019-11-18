@@ -37,7 +37,7 @@
 #          Andreas Hansson
 #          Thomas Grass
 
-from m5.objects.Probe import *
+from Probe import *
 
 class ElasticTrace(ProbeListenerObject):
     type = 'ElasticTrace'

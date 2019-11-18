@@ -54,7 +54,8 @@
 #include "sim/clocked_object.hh"
 
 /**
- * The MemObject class extends the ClockedObject for historical reasons.
+ * The MemObject class extends the ClockedObject with accessor functions
+ * to get its master and slave ports.
  */
 class MemObject : public ClockedObject
 {
@@ -64,6 +65,32 @@ class MemObject : public ClockedObject
     { return dynamic_cast<const Params *>(_params); }
 
     MemObject(const Params *params);
+
+    /**
+     * Get a master port with a given name and index. This is used at
+     * binding time and returns a reference to a protocol-agnostic
+     * base master port.
+     *
+     * @param if_name Port name
+     * @param idx Index in the case of a VectorPort
+     *
+     * @return A reference to the given port
+     */
+    virtual BaseMasterPort& getMasterPort(const std::string& if_name,
+                                          PortID idx = InvalidPortID);
+
+    /**
+     * Get a slave port with a given name and index. This is used at
+     * binding time and returns a reference to a protocol-agnostic
+     * base master port.
+     *
+     * @param if_name Port name
+     * @param idx Index in the case of a VectorPort
+     *
+     * @return A reference to the given port
+     */
+    virtual BaseSlavePort& getSlavePort(const std::string& if_name,
+                                        PortID idx = InvalidPortID);
 };
 
 #endif //__MEM_MEM_OBJECT_HH__

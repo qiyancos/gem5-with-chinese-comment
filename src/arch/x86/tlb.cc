@@ -170,7 +170,7 @@ TLB::demapPage(Addr va, uint64_t asn)
 }
 
 Fault
-TLB::translateInt(const RequestPtr &req, ThreadContext *tc)
+TLB::translateInt(RequestPtr req, ThreadContext *tc)
 {
     DPRINTF(TLB, "Addresses references internal memory.\n");
     Addr vaddr = req->getVaddr();
@@ -185,10 +185,10 @@ TLB::translateInt(const RequestPtr &req, ThreadContext *tc)
         if (!msrAddrToIndex(regNum, vaddr))
             return std::make_shared<GeneralProtection>(0);
 
-        //The index is multiplied by the size of a RegVal so that
+        //The index is multiplied by the size of a MiscReg so that
         //any memory dependence calculations will not see these as
         //overlapping.
-        req->setPaddr((Addr)regNum * sizeof(RegVal));
+        req->setPaddr((Addr)regNum * sizeof(MiscReg));
         return NoFault;
     } else if (prefix == IntAddrPrefixIO) {
         // TODO If CPL > IOPL or in virtual mode, check the I/O permission
@@ -200,7 +200,7 @@ TLB::translateInt(const RequestPtr &req, ThreadContext *tc)
         assert(!(IOPort & ~0xFFFF));
         if (IOPort == 0xCF8 && req->getSize() == 4) {
             req->setFlags(Request::MMAPPED_IPR);
-            req->setPaddr(MISCREG_PCI_CONFIG_ADDRESS * sizeof(RegVal));
+            req->setPaddr(MISCREG_PCI_CONFIG_ADDRESS * sizeof(MiscReg));
         } else if ((IOPort & ~mask(2)) == 0xCFC) {
             req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
             Addr configAddress =
@@ -224,8 +224,7 @@ TLB::translateInt(const RequestPtr &req, ThreadContext *tc)
 }
 
 Fault
-TLB::finalizePhysical(const RequestPtr &req,
-                      ThreadContext *tc, Mode mode) const
+TLB::finalizePhysical(RequestPtr req, ThreadContext *tc, Mode mode) const
 {
     Addr paddr = req->getPaddr();
 
@@ -266,8 +265,7 @@ TLB::finalizePhysical(const RequestPtr &req,
 }
 
 Fault
-TLB::translate(const RequestPtr &req,
-        ThreadContext *tc, Translation *translation,
+TLB::translate(RequestPtr req, ThreadContext *tc, Translation *translation,
         Mode mode, bool &delayedResponse, bool timing)
 {
     Request::Flags flags = req->getFlags();
@@ -427,14 +425,14 @@ TLB::translate(const RequestPtr &req,
 }
 
 Fault
-TLB::translateAtomic(const RequestPtr &req, ThreadContext *tc, Mode mode)
+TLB::translateAtomic(RequestPtr req, ThreadContext *tc, Mode mode)
 {
     bool delayedResponse;
     return TLB::translate(req, tc, NULL, mode, delayedResponse, false);
 }
 
 void
-TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
+TLB::translateTiming(RequestPtr req, ThreadContext *tc,
         Translation *translation, Mode mode)
 {
     bool delayedResponse;
@@ -443,8 +441,6 @@ TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
         TLB::translate(req, tc, translation, mode, delayedResponse, true);
     if (!delayedResponse)
         translation->finish(fault, req, tc, mode);
-    else
-        translation->markDelayed();
 }
 
 Walker *
@@ -457,7 +453,7 @@ void
 TLB::regStats()
 {
     using namespace Stats;
-    BaseTLB::regStats();
+
     rdAccesses
         .name(name() + ".rdAccesses")
         .desc("TLB accesses on read requests");
@@ -513,10 +509,10 @@ TLB::unserialize(CheckpointIn &cp)
     }
 }
 
-Port *
-TLB::getTableWalkerPort()
+BaseMasterPort *
+TLB::getMasterPort()
 {
-    return &walker->getPort("port");
+    return &walker->getMasterPort("port");
 }
 
 } // namespace X86ISA

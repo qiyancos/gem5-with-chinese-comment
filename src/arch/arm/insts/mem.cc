@@ -78,6 +78,20 @@ MemoryReg::printOffset(std::ostream &os) const
 }
 
 string
+Swap::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+{
+    stringstream ss;
+    printMnemonic(ss);
+    printIntReg(ss, dest);
+    ss << ", ";
+    printIntReg(ss, op1);
+    ss << ", [";
+    printIntReg(ss, base);
+    ss << "]";
+    return ss.str();
+}
+
+string
 RfeOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 {
     stringstream ss;

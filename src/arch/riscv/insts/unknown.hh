@@ -59,7 +59,7 @@ class Unknown : public RiscvStaticInst
     Fault
     execute(ExecContext *, Trace::InstRecord *) const override
     {
-        return std::make_shared<UnknownInstFault>(machInst);
+        return std::make_shared<UnknownInstFault>();
     }
 
     std::string

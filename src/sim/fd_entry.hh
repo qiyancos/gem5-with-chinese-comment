@@ -30,7 +30,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Brandon Potter
+ * Author: Brandon Potter
  */
 
 #ifndef __FD_ENTRY_HH__
@@ -57,9 +57,9 @@ class FDEntry : public Serializable
 
     virtual std::shared_ptr<FDEntry> clone() const = 0;
 
-    bool getCOE() const { return _closeOnExec; }
+    inline bool getCOE() const { return _closeOnExec; }
 
-    void setCOE(bool close_on_exec) { _closeOnExec = close_on_exec; }
+    inline void setCOE(bool close_on_exec) { _closeOnExec = close_on_exec; }
 
     virtual void serialize(CheckpointOut &cp) const;
     virtual void unserialize(CheckpointIn &cp);
@@ -80,21 +80,11 @@ class HBFDEntry: public FDEntry
         : FDEntry(close_on_exec), _flags(flags), _simFD(sim_fd)
     { }
 
-    HBFDEntry(HBFDEntry const& reg, bool close_on_exec = false)
-        : FDEntry(close_on_exec), _flags(reg._flags), _simFD(reg._simFD)
-    { }
+    inline int getFlags() const { return _flags; }
+    inline int getSimFD() const { return _simFD; }
 
-    std::shared_ptr<FDEntry>
-    clone() const override
-    {
-        return std::make_shared<HBFDEntry>(*this);
-    }
-
-    int getFlags() const { return _flags; }
-    int getSimFD() const { return _simFD; }
-
-    void setFlags(int flags) { _flags = flags; }
-    void setSimFD(int sim_fd) { _simFD = sim_fd; }
+    inline void setFlags(int flags) { _flags = flags; }
+    inline void setSimFD(int sim_fd) { _simFD = sim_fd; }
 
   protected:
     int _flags;
@@ -123,17 +113,17 @@ class FileFDEntry: public HBFDEntry
           _fileName(reg._fileName), _fileOffset(reg._fileOffset)
     { }
 
-    std::shared_ptr<FDEntry>
+    inline std::shared_ptr<FDEntry>
     clone() const override
     {
         return std::make_shared<FileFDEntry>(*this);
     }
 
-    std::string const& getFileName() const { return _fileName; }
-    uint64_t getFileOffset() const { return _fileOffset; }
+    inline std::string getFileName() const { return _fileName; }
+    inline uint64_t getFileOffset() const { return _fileOffset; }
 
-    void setFileName(std::string const& file_name) { _fileName = file_name; }
-    void setFileOffset(uint64_t f_off) { _fileOffset = f_off; }
+    inline void setFileName(std::string file_name) { _fileName = file_name; }
+    inline void setFileOffset (uint64_t f_off) { _fileOffset = f_off; }
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
@@ -167,17 +157,17 @@ class PipeFDEntry: public HBFDEntry
           _pipeEndType(pipe._pipeEndType)
     { }
 
-    std::shared_ptr<FDEntry>
+    inline std::shared_ptr<FDEntry>
     clone() const override
     {
         return std::make_shared<PipeFDEntry>(*this);
     }
 
-    EndType getEndType() const { return _pipeEndType; }
-    int getPipeReadSource() const { return _pipeReadSource; }
+    inline EndType getEndType() const { return _pipeEndType; }
+    inline int getPipeReadSource() const { return _pipeReadSource; }
 
-    void setPipeReadSource(int tgt_fd) { _pipeReadSource = tgt_fd; }
-    void setEndType(EndType type) { _pipeEndType = type; }
+    inline void setPipeReadSource(int tgt_fd) { _pipeReadSource = tgt_fd; }
+    inline void setEndType(EndType type) { _pipeEndType = type; }
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
@@ -210,8 +200,8 @@ class DeviceFDEntry : public FDEntry
         return std::make_shared<DeviceFDEntry>(*this);
     }
 
-    EmulatedDriver *getDriver() const { return _driver; }
-    std::string const& getFileName() const { return _fileName; }
+    inline EmulatedDriver *getDriver() const { return _driver; }
+    inline std::string getFileName() const { return _fileName; }
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
@@ -219,31 +209,6 @@ class DeviceFDEntry : public FDEntry
   private:
     EmulatedDriver *_driver;
     std::string _fileName;
-};
-
-class SocketFDEntry: public HBFDEntry
-{
-  public:
-    SocketFDEntry(int sim_fd, int domain, int type, int protocol,
-                  bool close_on_exec = false)
-        : HBFDEntry(0, sim_fd, close_on_exec),
-          _domain(domain), _type(type), _protocol(protocol)
-    { }
-
-    SocketFDEntry(SocketFDEntry const& reg, bool close_on_exec = false)
-        : HBFDEntry(reg._flags, reg._simFD, close_on_exec),
-          _domain(reg._domain), _type(reg._type), _protocol(reg._protocol)
-    { }
-
-    std::shared_ptr<FDEntry>
-    clone() const override
-    {
-        return std::make_shared<SocketFDEntry>(*this);
-    }
-
-    int _domain;
-    int _type;
-    int _protocol;
 };
 
 #endif // __FD_ENTRY_HH__

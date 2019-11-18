@@ -33,7 +33,6 @@ from m5.objects import *
 from m5.defines import buildEnv
 from Ruby import create_topology, create_directories
 from Ruby import send_evicts
-from common import FileSystemConfig
 
 #
 # Declare caches used by the protocol
@@ -75,7 +74,7 @@ def create_system(options, full_system, system, dma_ports, bootmem,
     #
     block_size_bits = int(math.log(options.cacheline_size, 2))
 
-    for i in range(options.num_cpus):
+    for i in xrange(options.num_cpus):
         #
         # First create the Ruby objects associated with this cpu
         #
@@ -175,7 +174,7 @@ def create_system(options, full_system, system, dma_ports, bootmem,
                                           clk_divider=3)
 
     mem_dir_cntrl_nodes, rom_dir_cntrl_node = create_directories(
-        options, bootmem, ruby_system, system)
+        options, system.mem_ranges, bootmem, ruby_system, system)
     dir_cntrl_nodes = mem_dir_cntrl_nodes[:]
     if rom_dir_cntrl_node is not None:
         dir_cntrl_nodes.append(rom_dir_cntrl_node)
@@ -256,33 +255,6 @@ def create_system(options, full_system, system, dma_ports, bootmem,
         io_controller.mandatoryQueue = MessageBuffer()
 
         all_cntrls = all_cntrls + [io_controller]
-    # Register configuration with filesystem
-    else:
-        for i in xrange(options.num_cpus):
-            FileSystemConfig.register_cpu(physical_package_id = 0,
-                                          core_siblings = [],
-                                          core_id = i,
-                                          thread_siblings = [])
-
-            FileSystemConfig.register_cache(level = 1,
-                                            idu_type = 'Instruction',
-                                            size = options.l1i_size,
-                                            line_size = options.cacheline_size,
-                                            assoc = options.l1i_assoc,
-                                            cpus = [i])
-            FileSystemConfig.register_cache(level = 1,
-                                            idu_type = 'Data',
-                                            size = options.l1d_size,
-                                            line_size = options.cacheline_size,
-                                            assoc = options.l1d_assoc,
-                                            cpus = [i])
-
-            FileSystemConfig.register_cache(level = 2,
-                                            idu_type = 'Unified',
-                                            size = options.l2_size,
-                                            line_size = options.cacheline_size,
-                                            assoc = options.l2_assoc,
-                                            cpus = [i])
 
     ruby_system.network.number_of_virtual_networks = 6
     topology = create_topology(all_cntrls, options)

@@ -27,8 +27,7 @@
 # Authors: Nathan Binkert
 
 from m5.params import *
-
-from m5.objects.BaseCPU import BaseCPU
+from BaseCPU import BaseCPU
 
 class CheckerCPU(BaseCPU):
     type = 'CheckerCPU'

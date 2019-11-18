@@ -51,6 +51,7 @@
 
 #include "base/types.hh"
 #include "dev/net/etherint.hh"
+#include "dev/net/etherobject.hh"
 #include "dev/net/etherpkt.hh"
 #include "params/EtherLink.hh"
 #include "sim/eventq.hh"
@@ -61,7 +62,7 @@ class Checkpoint;
 /*
  * Model for a fixed bandwidth full duplex ethernet link
  */
-class EtherLink : public SimObject
+class EtherLink : public EtherObject
 {
   protected:
     class Interface;
@@ -151,8 +152,7 @@ class EtherLink : public SimObject
         return dynamic_cast<const Params *>(_params);
     }
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    EtherInt *getEthPort(const std::string &if_name, int idx) override;
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;

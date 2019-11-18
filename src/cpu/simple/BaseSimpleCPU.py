@@ -30,10 +30,9 @@ from __future__ import print_function
 
 from m5.defines import buildEnv
 from m5.params import *
-
-from m5.objects.BaseCPU import BaseCPU
-from m5.objects.DummyChecker import DummyChecker
-from m5.objects.BranchPredictor import *
+from BaseCPU import BaseCPU
+from DummyChecker import DummyChecker
+from BranchPredictor import *
 
 class BaseSimpleCPU(BaseCPU):
     type = 'BaseSimpleCPU'
@@ -42,7 +41,7 @@ class BaseSimpleCPU(BaseCPU):
 
     def addCheckerCpu(self):
         if buildEnv['TARGET_ISA'] in ['arm']:
-            from m5.objects.ArmTLB import ArmTLB
+            from ArmTLB import ArmTLB
 
             self.checker = DummyChecker(workload = self.workload)
             self.checker.itb = ArmTLB(size = self.itb.size)

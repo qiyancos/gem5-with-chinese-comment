@@ -14,9 +14,9 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from this
- * software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software
+ * without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,7 +30,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Authors: Sooraj Puthoor
+ * Author: Sooraj Puthoor
  */
 
 #include "base/logging.hh"
@@ -70,7 +70,7 @@ RubyGPUCoalescerParams::create()
 }
 
 HSAScope
-reqScopeToHSAScope(const RequestPtr &req)
+reqScopeToHSAScope(Request* req)
 {
     HSAScope accessScope = HSAScope_UNSPECIFIED;
     if (req->isScoped()) {
@@ -90,7 +90,7 @@ reqScopeToHSAScope(const RequestPtr &req)
 }
 
 HSASegment
-reqSegmentToHSASegment(const RequestPtr &req)
+reqSegmentToHSASegment(Request* req)
 {
     HSASegment accessSegment = HSASegment_GLOBAL;
 
@@ -142,6 +142,8 @@ GPUCoalescer::GPUCoalescer(const Params *p)
     assert(m_deadlock_threshold > 0);
     assert(m_instCache_ptr);
     assert(m_dataCache_ptr);
+
+    m_data_cache_hit_latency = p->dcache_hit_latency;
 
     m_runningGarnetStandalone = p->garnet_standalone;
     assumingRfOCoherence = p->assume_rfo;
@@ -638,8 +640,10 @@ GPUCoalescer::hitCallback(GPUCoalescerRequest* srequest,
                 (type == RubyRequestType_RMW_Read) ||
                 (type == RubyRequestType_Locked_RMW_Read) ||
                 (type == RubyRequestType_Load_Linked)) {
-                pkt->setData(
-                    data.getData(getOffset(request_address), pkt->getSize()));
+                memcpy(pkt->getPtr<uint8_t>(),
+                       data.getData(getOffset(request_address),
+                                    pkt->getSize()),
+                       pkt->getSize());
             } else {
                 data.setData(pkt->getPtr<uint8_t>(),
                              getOffset(request_address), pkt->getSize());
@@ -948,12 +952,12 @@ GPUCoalescer::issueRequest(PacketPtr pkt, RubyRequestType secondary_type)
     fatal_if(secondary_type == RubyRequestType_IFETCH,
              "there should not be any I-Fetch requests in the GPU Coalescer");
 
-    Tick latency = cyclesToTicks(
-                        m_controller->mandatoryQueueLatency(secondary_type));
-    assert(latency > 0);
+    // Send the message to the cache controller
+    fatal_if(m_data_cache_hit_latency == 0,
+             "should not have a latency of zero");
 
     assert(m_mandatory_q_ptr);
-    m_mandatory_q_ptr->enqueue(msg, clockEdge(), latency);
+    m_mandatory_q_ptr->enqueue(msg, clockEdge(), m_data_cache_hit_latency);
 }
 
 template <class KEY, class VALUE>
@@ -984,6 +988,9 @@ GPUCoalescer::print(ostream& out) const
 void
 GPUCoalescer::checkCoherence(Addr addr)
 {
+#ifdef CHECK_COHERENCE
+    m_ruby_system->checkGlobalCoherenceInvariant(addr);
+#endif
 }
 
 void
@@ -1090,8 +1097,10 @@ GPUCoalescer::atomicCallback(Addr address,
         if (pkt->getPtr<uint8_t>() &&
             srequest->m_type != RubyRequestType_ATOMIC_NO_RETURN) {
             /* atomics are done in memory, and return the data *before* the atomic op... */
-            pkt->setData(
-                data.getData(getOffset(request_address), pkt->getSize()));
+            memcpy(pkt->getPtr<uint8_t>(),
+                   data.getData(getOffset(request_address),
+                                pkt->getSize()),
+                   pkt->getSize());
         } else {
             DPRINTF(MemoryAccess,
                     "WARNING.  Data not transfered from Ruby to M5 for type " \

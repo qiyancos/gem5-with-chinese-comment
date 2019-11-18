@@ -25,7 +25,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from collections import OrderedDict
+from m5.util import orderdict
 
 from slicc.util import PairContainer
 from slicc.symbols.Symbol import Symbol
@@ -89,9 +89,9 @@ class Type(Symbol):
         self.isStateDecl = ("state_decl" in self)
         self.statePermPairs = []
 
-        self.data_members = OrderedDict()
+        self.data_members = orderdict()
         self.methods = {}
-        self.enums = OrderedDict()
+        self.enums = orderdict()
 
     @property
     def isPrimitive(self):
@@ -201,16 +201,15 @@ class Type(Symbol):
 #include <iostream>
 
 #include "mem/ruby/slicc_interface/RubySlicc_Util.hh"
-
 ''')
 
         for dm in self.data_members.values():
             if not dm.type.isPrimitive:
-                code('#include "mem/ruby/protocol/$0.hh"', dm.type.c_ident)
+                code('#include "mem/protocol/$0.hh"', dm.type.c_ident)
 
         parent = ""
         if "interface" in self:
-            code('#include "mem/ruby/protocol/$0.hh"', self["interface"])
+            code('#include "mem/protocol/$0.hh"', self["interface"])
             parent = " :  public %s" % self["interface"]
 
         code('''
@@ -405,7 +404,7 @@ operator<<(std::ostream& out, const ${{self.c_ident}}& obj)
 #include <iostream>
 #include <memory>
 
-#include "mem/ruby/protocol/${{self.c_ident}}.hh"
+#include "mem/protocol/${{self.c_ident}}.hh"
 #include "mem/ruby/system/RubySystem.hh"
 
 using namespace std;
@@ -457,7 +456,7 @@ out << "${{dm.ident}} = " << printAddress(m_${{dm.ident}}) << " ";''')
 
 ''')
         if self.isStateDecl:
-            code('#include "mem/ruby/protocol/AccessPermission.hh"')
+            code('#include "mem/protocol/AccessPermission.hh"')
 
         if self.isMachineType:
             code('#include <functional>')
@@ -559,7 +558,7 @@ std::ostream& operator<<(std::ostream& out, const ${{self.c_ident}}& obj);
 #include <string>
 
 #include "base/logging.hh"
-#include "mem/ruby/protocol/${{self.c_ident}}.hh"
+#include "mem/protocol/${{self.c_ident}}.hh"
 
 using namespace std;
 
@@ -589,8 +588,7 @@ AccessPermission ${{self.c_ident}}_to_permission(const ${{self.c_ident}}& obj)
         if self.isMachineType:
             for enum in self.enums.itervalues():
                 if enum.primary:
-                    code('#include "mem/ruby/protocol/${{enum.ident}}'
-                            '_Controller.hh"')
+                    code('#include "mem/protocol/${{enum.ident}}_Controller.hh"')
             code('#include "mem/ruby/common/MachineID.hh"')
 
         code('''
@@ -726,7 +724,7 @@ ${{self.c_ident}}_base_number(const ${{self.c_ident}}& obj)
             # For each field
             code.indent()
             code('  case ${{self.c_ident}}_NUM:')
-            for enum in reversed(list(self.enums.values())):
+            for enum in reversed(self.enums.values()):
                 # Check if there is a defined machine with this type
                 if enum.primary:
                     code('    base += ${{enum.ident}}_Controller::getNumControllers();')

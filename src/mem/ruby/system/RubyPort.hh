@@ -45,17 +45,17 @@
 #include <cassert>
 #include <string>
 
+#include "mem/protocol/RequestStatus.hh"
 #include "mem/ruby/common/MachineID.hh"
 #include "mem/ruby/network/MessageBuffer.hh"
-#include "mem/ruby/protocol/RequestStatus.hh"
 #include "mem/ruby/system/RubySystem.hh"
+#include "mem/mem_object.hh"
 #include "mem/tport.hh"
 #include "params/RubyPort.hh"
-#include "sim/clocked_object.hh"
 
 class AbstractController;
 
-class RubyPort : public ClockedObject
+class RubyPort : public MemObject
 {
   public:
     class MemMasterPort : public QueuedMasterPort
@@ -148,8 +148,10 @@ class RubyPort : public ClockedObject
 
     void init() override;
 
-    Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+    BaseMasterPort &getMasterPort(const std::string &if_name,
+                                  PortID idx = InvalidPortID) override;
+    BaseSlavePort &getSlavePort(const std::string &if_name,
+                                PortID idx = InvalidPortID) override;
 
     virtual RequestStatus makeRequest(PacketPtr pkt) = 0;
     virtual int outstandingCount() const = 0;
