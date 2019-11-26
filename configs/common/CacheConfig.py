@@ -172,7 +172,7 @@ def config_cache(options, system):
                     size = options.l2_size, assoc = options.l2_assoc)
             if options.l2_hwp_type:
                 hwpClass = HWPConfig.get(options.l2_hwp_type)
-                if system.l2.prefetcher != "Null":
+                if system.cpu[i].l2.prefetcher != "Null":
                     print("Warning: l2-hwp-type is set (", hwpClass, "), but",
                         "the current l2 has a default Hardware Prefetcher",
                         "of type", type(system.cpu[i].l2.prefetcher), ", using the",

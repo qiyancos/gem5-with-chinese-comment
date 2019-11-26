@@ -52,7 +52,7 @@ setGem5(){
         # Clock for blocks running at CPU speed
         fastForwardInsts="" # []
         # number of instruction put into warm up region
-        warmupInsts="" # []
+        warmupInsts="600000" # []
         # warmup period in total instructions
         maxInsts="" # []
         # max number of instructions will be run
@@ -98,13 +98,13 @@ setGem5(){
         L2assoc="8"
         L2prefetcher="StridePrefetcher"
 
-    enableL3Cache="No"
+    enableL3Cache="Yes"
         numL3Caches=""
         L3size="4194304"
         L3assoc="16"
         L3prefetcher="StridePrefetcher"
 
-    enableSWCache="No" # [Yes/No]
+    enableSWCache="Yes" # [Yes/No]
         numCpuPerGroup=2
 
     enableDebug="No" # [Yes/No]
@@ -114,10 +114,10 @@ setGem5(){
         debugStartTick=""
         debugEndTick=""
     
-    enableCheckPoint="No" # [Yes/No]
-        loadCheckPointPos="300000000"
+    enableCheckPoint="Yes" # [Yes/No]
+        loadCheckPointPos="250000000"
         # num of instructions already run to load checkpoint
-        saveCheckPointPos= #"300000000"
+        saveCheckPointPos= #"250000000"
         # num of instructions to take checkpoint
         checkPointDir="$gem5Dir/check_points/"
         # where to put or load the checkpoint file
