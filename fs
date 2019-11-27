@@ -42,7 +42,7 @@ setGem5(){
     # for the following two options.
     
     enableGlobal="Yes" # [Yes]
-        cpuType="AtomicSimpleCPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
+        cpuType="DerivO3CPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
         # type of cpu to run with
         cpuVoltage="" # []
         # Top-level voltage for blocks running at system power supply
@@ -104,7 +104,7 @@ setGem5(){
         L3assoc="16"
         L3prefetcher="StridePrefetcher"
 
-    enableSWCache="Yes" # [Yes/No]
+    enableSWCache="No" # [Yes/No]
         numCpuPerGroup=2
 
     enableDebug="No" # [Yes/No]

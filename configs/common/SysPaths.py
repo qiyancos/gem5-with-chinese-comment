@@ -46,7 +46,7 @@ class PathSearchFunc(object):
             try:
                 paths = os.environ['M5_PATH'].split(':')
             except KeyError:
-                paths = [ '/dist/m5/system', '/home/lishuoke/final/data/image_dir/bodytrack/parsec_disk' ]
+                paths = [ '/dist/m5/system', '/home/lishuoke/gem5-with-chinese-comment/gem5_fs_images/parsec_disk' ]
 
             # expand '~' and '~user' in paths
             paths = map(os.path.expanduser, paths)
