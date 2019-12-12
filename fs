@@ -84,7 +84,7 @@ setGem5(){
         # How many cpu connected in one row (Used in Mesh_XY)
         rubyNetwork="simple" #[simple garnet2.0]
 
-    enableCache="Yes"
+    enableCache="No"
         cacheLineSize=""
         L1Dsize="32768"
         L1Dassoc="4"
@@ -100,13 +100,13 @@ setGem5(){
         L1Iassoc="4"
         L1Iprefetcher="StridePrefetcher"
 
-    enableL2Cache="Yes"
+    enableL2Cache="No"
         numL2Caches=""
         L2size="1048576"
         L2assoc="8"
         L2prefetcher="StridePrefetcher"
 
-    enableL3Cache="Yes"
+    enableL3Cache="No"
         numL3Caches=""
         L3size="4194304"
         L3assoc="16"

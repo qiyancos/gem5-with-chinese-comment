@@ -43,12 +43,12 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="No" # [Yes/No] 
+    forceNotBuild="Yes" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
     m5outDir=""
     # m5outDir option [default m5out]
 
-    enableSmt="Yes" # [Yes/No]
+    enableSmt="No" # [Yes/No]
     enableSimpoint="No" # [Yes/No]
     enableCountAsInstruction="Yes" # [Yes/No]
     # Whether we should take the number as instruction count
@@ -71,10 +71,11 @@ setGem5(){
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
-        numCpus="1" # []
+        numCpus="8" # []
         # number of cpu you want to run with
 
     enableMem="Yes"
+        numDirs=""
         memType="" 
         # ['HBM_1000_4H_1x128', 'DRAMCtrl', 'DDR3_2133_8x8', 'HBM_1000_4H_1x64',
         # 'GDDR5_4000_2x32', 'HMC_2500_1x32', 'LPDDR3_1600_1x32', 'WideIO_200_1x128', 
@@ -85,14 +86,21 @@ setGem5(){
         # number of memory channels
         memRanks=""
         # number of memory ranks per channel
-        memSize="4096MB"
+        memSize="2GB"
         # Specify the physical memory size (single memory)
+
+    enableRuby="No"
+        rubyTopology="MeshDirCorners_XY" # [Mesh_XY Cluster CrossBar CrossbarGarnet
+        # MeshDirCorners_XY Mesh_westfirst Pt2Pt]
+        rubyMeshRows="4"
+        # How many cpu connected in one row (Used in Mesh_XY)
+        rubyNetwork="simple" #[simple garnet2.0]
 
     enableCache="Yes"
         numDirs=""
         cacheLineSize=""
-        L1Dsize=""
-        L1Dassoc=""
+        L1Dsize="32kB"
+        L1Dassoc="4"
         L1Dprefetcher="StridePrefetcher"
         # Prefetcher used for L1DCache
         # Following prefetchers are available
@@ -101,20 +109,20 @@ setGem5(){
 	    #  SBOOEPrefetcher, IndirectMemoryPrefetcher, SignaturePathPrefetcher
 	    #  SignaturePathPrefetcherV2, PIFPrefetcher, SlimAMPMPrefetcher
 	    #  AMPMPrefetcher, StridePrefetcher]
-        L1Isize=""
-        L1Iassoc=""
+        L1Isize="64kB"
+        L1Iassoc="4"
         L1Iprefetcher="StridePrefetcher"
 
     enableL2Cache="Yes"
         numL2Caches=""
-        L2size=""
-        L2assoc=""
+        L2size="256kB"
+        L2assoc="8"
         L2prefetcher="StridePrefetcher"
 
-    enableL3Cache="No"
+    enableL3Cache="Yes"
         numL3Caches=""
-        L3size=""
-        L3assoc=""
+        L3size="8MB"
+        L3assoc="16"
         L3prefetcher="StridePrefetcher"
 
     enableSWCache="No" # [Yes/No]
@@ -127,7 +135,7 @@ setGem5(){
         debugStartTick=""
         debugEndTick=""
 
-    enableCheckPoint="Yes" # [Yes/No]
+    enableCheckPoint="No" # [Yes/No]
         loadCheckPointPos= #"248554000"
         # num of instructions already run to load checkpoint
         saveCheckPointPos="250000000"

@@ -45,6 +45,7 @@ from common.Benchmarks import *
 
 from common import CpuConfig
 from common import BPConfig
+from common import HWPConfig
 from common import MemConfig
 from common import PlatformConfig
 
@@ -54,6 +55,10 @@ def _listCpuTypes(option, opt, value, parser):
 
 def _listBPTypes(option, opt, value, parser):
     BPConfig.print_bp_list()
+    sys.exit(0)
+
+def _listHWPTypes(option, opt, value, parser):
+    HWPConfig.print_hwp_list()
     sys.exit(0)
 
 def _listMemTypes(option, opt, value, parser):
@@ -169,6 +174,35 @@ def addCommonOptions(parser):
                       type of branch predictor to run with
                       (if not set, use the default branch predictor of
                       the selected CPU)""")
+    parser.add_option("--list-hwp-types",
+                      action="callback", callback=_listHWPTypes,
+                      help="List available hardware prefetcher types")
+    parser.add_option("--l1i-hwp-type", type="choice", default=None,
+                      choices=HWPConfig.hwp_names(),
+                      help = """
+                      type of hardware prefetcher to use with the L1
+                      instruction cache.
+                      (if not set, use the default prefetcher of
+                      the selected cache)""")
+    parser.add_option("--l1d-hwp-type", type="choice", default=None,
+                      choices=HWPConfig.hwp_names(),
+                      help = """
+                      type of hardware prefetcher to use with the L1
+                      data cache.
+                      (if not set, use the default prefetcher of
+                      the selected cache)""")
+    parser.add_option("--l2-hwp-type", type="choice", default=None,
+                      choices=HWPConfig.hwp_names(),
+                      help = """
+                      type of hardware prefetcher to use with the L2 cache.
+                      (if not set, use the default prefetcher of
+                      the selected cache)""")
+    parser.add_option("--l3-hwp-type", type="choice", default=None,
+                      choices=HWPConfig.hwp_names(),
+                      help = """
+                      type of hardware prefetcher to use with the L2 cache.
+                      (if not set, use the default prefetcher of
+                      the selected cache)""")
     parser.add_option("--checker", action="store_true");
     parser.add_option("--cpu-clock", action="store", type="string",
                       default='2GHz',
