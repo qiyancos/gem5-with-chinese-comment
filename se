@@ -3,9 +3,9 @@ root=$PWD
 
 ################# settings for script #################
 setScript(){
-    specDir="/home/lee/project/spec2006"
+    specDir="/home/lishuoke/spec2006"
     # root directory path for spec2006
-    gem5Dir="/home/lee/project/gem5"
+    gem5Dir="/home/lishuoke/gem5-with-chinese-comment"
     # root directory path for gem5
     tempDir=$root
     # Where the temporary files should be stored
@@ -48,6 +48,12 @@ setGem5(){
     m5outDir=""
     # m5outDir option [default m5out]
 
+    enableSmt="Yes" # [Yes/No]
+    enableSimpoint="No" # [Yes/No]
+    enableCountAsInstruction="Yes" # [Yes/No]
+    # Whether we should take the number as instruction count
+    # for the following two options.
+
     enableGlobal="Yes" # [Yes]
         cpuType="DerivO3CPU" # [TimingSimpleCPU AtomicSimpleCPU DerivO3CPU MinorCPU]
         # type of cpu to run with
@@ -57,13 +63,16 @@ setGem5(){
         # Top-level clock for blocks running at system speed
         cpuClock="" # []
         # Clock for blocks running at CPU speed
+        fastForwardInsts="" # []
+        # number of instruction put into warm up region
+        warmupInsts= #"600000" # []
+        # warmup period in total instructions
+        maxInsts= #"50000000" # []
+        # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
-        numCpus="4" # []
+        numCpus="1" # []
         # number of cpu you want to run with
-
-    enableSmt="No" # [Yes/No]
-    enableSimpoint="No" # [Yes/No]
 
     enableMem="Yes"
         memType="" 
@@ -84,18 +93,29 @@ setGem5(){
         cacheLineSize=""
         L1Dsize=""
         L1Dassoc=""
+        L1Dprefetcher="StridePrefetcher"
+        # Prefetcher used for L1DCache
+        # Following prefetchers are available
+        # [TaggedPrefetcher, BOPPrefetcher, STeMSPrefetcher
+        #  IrregularStreamBufferPrefetcher, DCPTPrefetcher, MultiPrefetcher
+	    #  SBOOEPrefetcher, IndirectMemoryPrefetcher, SignaturePathPrefetcher
+	    #  SignaturePathPrefetcherV2, PIFPrefetcher, SlimAMPMPrefetcher
+	    #  AMPMPrefetcher, StridePrefetcher]
         L1Isize=""
         L1Iassoc=""
+        L1Iprefetcher="StridePrefetcher"
 
     enableL2Cache="Yes"
         numL2Caches=""
         L2size=""
         L2assoc=""
+        L2prefetcher="StridePrefetcher"
 
-    enableL3Cache="Yes"
+    enableL3Cache="No"
         numL3Caches=""
         L3size=""
         L3assoc=""
+        L3prefetcher="StridePrefetcher"
 
     enableSWCache="No" # [Yes/No]
         numCpuPerGroup=2
@@ -106,6 +126,14 @@ setGem5(){
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
         debugStartTick=""
         debugEndTick=""
+
+    enableCheckPoint="Yes" # [Yes/No]
+        loadCheckPointPos= #"248554000"
+        # num of instructions already run to load checkpoint
+        saveCheckPointPos="250000000"
+        # num of instructions to take checkpoint
+        checkPointDir="$gem5Dir/check_points/$numCpus/"
+        # where to put or load the checkpoint file
 }
 
 ################# settings for spec #################
@@ -340,23 +368,27 @@ setSpec(){
 ################# settings for settingParser #################
 setArgLevel(){
     # argument level
-    argLevel=("Global" "Simpoint" "Smt" "Mem" "Cache" "L2Cache" "L3Cache" "SWCache")
-    formatLevel=("" "--simpoint" "--smt" "" "--caches" "--l2cache" "--l3cache" "--swcache")
+    argLevel=("Global" "CheckPoint" "Simpoint" "Smt" "Mem" "Ruby" "Cache" "L2Cache" "L3Cache" "SWCache" "CountAsInstruction")
+    formatLevel=("" "" "--simpoint" "--smt" "" "--ruby" "--caches" "--l2cache" "--l3cache" "--swcache" "--at-instruction")
 
     # argument list
-    argListGlobal=("cpuType" "cpuVoltage" "sysClock" "cpuClock" "maxTime" "numCpus")
-    argListMem=("memType" "memChannels" "memRanks" "memSize")
-    argListCache=("numDirs" "cacheLineSize" "L1Dsize" "L1Dassoc" "L1Isize" "L1Iassoc")
-    argListL2Cache=("numL2Caches" "L2size" "L2assoc")
-    argListL3Cache=("numL3Caches" "L3size" "L3assoc")
+    argListGlobal=("cpuType" "cpuVoltage" "sysClock" "cpuClock" "fastForwardInsts" "warmupInsts" "maxInsts" "maxTime" "numCpus")
+    argListCheckPoint=("loadCheckPointPos" "saveCheckPointPos" "checkPointDir")
+    argListMem=("numDirs" "memType" "memChannels" "memRanks" "memSize")
+    argListRuby=("rubyTopology" "rubyMeshRows" "rubyNetwork")
+    argListCache=("cacheLineSize" "L1Dsize" "L1Dassoc" "L1Dprefetcher" "L1Isize" "L1Iassoc" "L1Iprefetcher")
+    argListL2Cache=("numL2Caches" "L2size" "L2assoc" "L2prefetcher")
+    argListL3Cache=("numL3Caches" "L3size" "L3assoc" "L3prefetcher")
     argListSWCache=("numCpuPerGroup")
 
     # format list for arguments
-    formatListGlobal=("--cpu-type" "--sys-voltage" "--sys-clock" "--cpu-clock" "--maxtime" "--num-cpus")
-    formatListMem=("--mem-type" "--mem-channels" "--mem-ranks" "--mem-size")
-    formatListCache=("--num-dirs" "--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1i_size" "--l1i_assoc")
-    formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc")
-    formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc")
+    formatListGlobal=("--cpu-type" "--sys-voltage" "--sys-clock" "--cpu-clock" "--fast-forward" "--warmup-insts" "--maxinsts" "--maxtime" "--num-cpus")
+    formatListCheckPoint=("--checkpoint-restore" "--take-checkpoints" "--checkpoint-dir")
+    formatListMem=("--num-dirs" "--mem-type" "--mem-channels" "--mem-ranks" "--mem-size")
+    formatListRuby=("--topology" "--mesh-rows" "--network")
+    formatListCache=("--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1d-hwp-type" "--l1i_size" "--l1i_assoc" "--l1i-hwp-type")
+    formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc" "--l2-hwp-type")
+    formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc" "--l3-hwp-type")
     formatListSWCache=("--cpu_per_group")
 
     buildOption="CPU_MODELS=$cpuModel"
