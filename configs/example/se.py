@@ -220,13 +220,19 @@ if options.simpoint_profile:
     if np > 1:
         fatal("SimPoint generation not supported with more than one CPUs")
 
+# multiprocess check
+if len(multiprocesses) > np:
+    fatal("Not enough cpu for given processes.")
+
 for i in range(np):
     if options.smt:
         system.cpu[i].workload = multiprocesses
-    elif len(multiprocesses) == 1:
-        system.cpu[i].workload = multiprocesses[0]
     else:
-        system.cpu[i].workload = multiprocesses[i]
+        if i < len(multiprocesses):
+            j = i
+        else:
+            print("Warning: not enough process for cpu(" + str(i) + ").")
+        system.cpu[i].workload = multiprocesses[j]
 
     if options.simpoint_profile:
         system.cpu[i].addSimPointProbe(options.simpoint_interval)
