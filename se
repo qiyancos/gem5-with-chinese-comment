@@ -71,7 +71,7 @@ setGem5(){
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
-        numCpus="8" # []
+        numCpus="1" # []
         # number of cpu you want to run with
 
     enableMem="Yes"
@@ -1027,6 +1027,10 @@ buildSpecTemp(){
         processedTarget="$processedTarget $fullTarget"
     done
     
+    for file in $specDiffFileList
+    do rm -rf $file
+    done
+    
     cd $tempDir/spec/$realTarget
 }
 
@@ -1060,9 +1064,6 @@ buildSpecOptions(){
         specArgList=${specArgList:1:$[${#specArgList} - 1]}
         specInputList=${specInputList:1:$[${#specInputList} - 1]}
         mixSpecOptions="-c '$specExecList' -o '$specArgList' -i '$specInputList'"
-        for file in $specDiffFileList
-        do rm -rf $file
-        done
     else
         echo -e "\033[1;31m ==================== Running Spec $fullTargets! ====================\033[0m"
         target=$targets
@@ -1085,9 +1086,7 @@ buildSpecOptions(){
             if [ $runSpecSuites = No ]
             then break
             fi
-            for file in ${diffFileList[$suiteID]}
-            do rm -rf $file
-            done
+            specDiffFileList="$specDiffFileList ${diffFileList[$suiteID]}"
             suiteID=$[suiteID + 1]
         done
     fi
@@ -1111,8 +1110,8 @@ argParser
 settingParser
 buildGem5
 set -e
-buildSpecTemp
 buildSpecOptions
+buildSpecTemp
 printOutputInfo
 runGem5
 printTimingInfo
