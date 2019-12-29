@@ -102,7 +102,7 @@ class BaseCache(MemObject):
          "Notify the hardware prefetcher on every access (not just misses)")
 
     tags = Param.BaseTags(BaseSetAssoc(), "Tag store")
-    replacement_policy = Param.BaseReplacementPolicy(LRURP(),
+    replacement_policy = Param.BaseReplacementPolicy(TreePLRURP(),
         "Replacement policy")
 
     sequential_access = Param.Bool(False,
