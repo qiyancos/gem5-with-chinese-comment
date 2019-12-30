@@ -140,7 +140,7 @@ class TaggedPrefetcher(QueuedPrefetcher):
     cxx_class = 'TaggedPrefetcher'
     cxx_header = "mem/cache/prefetch/tagged.hh"
 
-    degree = Param.Int(4, "Number of prefetches to generate")
+    degree = Param.Int(2, "Number of prefetches to generate")
 
 class IndirectMemoryPrefetcher(QueuedPrefetcher):
     type = 'IndirectMemoryPrefetcher'

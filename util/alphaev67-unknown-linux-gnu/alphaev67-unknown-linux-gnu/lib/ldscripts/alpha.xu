@@ -1,0 +1,47 @@
+/* Script for ld -Ur: link w/out relocation, do create constructors */
+OUTPUT_FORMAT("ecoff-littlealpha")
+ENTRY(__start)
+SECTIONS
+{
+  .text : {
+    ;
+    ;
+    ;
+    *(.text)
+    ;
+    ;
+  }
+  .rdata : {
+    *(.rdata)
+  }
+  .rconst : {
+    *(.rconst)
+  }
+  .pdata : {
+    *(.pdata)
+  }
+  .data : {
+    *(.data)
+    CONSTRUCTORS
+  }
+  .xdata : {
+    *(.xdata)
+  }
+  .lit8 : {
+    *(.lit8)
+  }
+  .lita : {
+    *(.lita)
+  }
+  .sdata : {
+    *(.sdata)
+  }
+  .sbss : {
+    *(.sbss)
+    *(.scommon)
+  }
+  .bss : {
+    *(.bss)
+    *(COMMON)
+  }
+}
