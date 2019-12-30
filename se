@@ -1056,7 +1056,7 @@ buildSpecOptions(){
             specVarName="${target}_${testSet}_${suiteID}"
             specExecList="$specExecList;./`eval echo -e '$'"{$specVarName[0]}"`"
             specArgList="$specArgList;`eval echo -e '$'"{$specVarName[2]}"`"
-            specInputList="$specINputList;`eval echo -e '$'"{$specVarName[3]}"`"
+            specInputList="$specInputList;`eval echo -e '$'"{$specVarName[3]}"`"
             specDiffFileList="$specDiffFileList `eval echo -e '$'"{$specVarName[1]}"`"
         done
         specSuiteID=${specSuiteID:1:$[${#specSuiteID} - 1]}
