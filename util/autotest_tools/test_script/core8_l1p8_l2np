@@ -36,6 +36,13 @@ setScript(){
     # Decide if we shall print time-info for running
 }
 
+################# Other Change for Source File in Gem5 #################
+additionalChange() {
+    # Change Tagged Prefetcher Degree
+    sed -i "143c\    degree = Param.Int(8, \"Number of prefetches to generate\")" \
+            $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+}
+
 ################# settings for gem5 #################
 setGem5(){
     # build options
@@ -43,7 +50,7 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="Yes" # [Yes/No] 
+    forceNotBuild="No" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
     m5outDir=""
     # m5outDir option [default m5out]
@@ -67,7 +74,7 @@ setGem5(){
         # number of instruction put into warm up region
         warmupInsts="1000000" # []
         # warmup period in total instructions
-        maxInsts="20000000" # []
+        maxInsts="10000000" # []
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
@@ -101,7 +108,7 @@ setGem5(){
         cacheLineSize=""
         L1Dsize="32kB"
         L1Dassoc="8"
-        L1Dprefetcher= #"TaggedPrefetcher"
+        L1Dprefetcher="TaggedPrefetcher"
         # Prefetcher used for L1DCache
         # Following prefetchers are available
         # [TaggedPrefetcher, BOPPrefetcher, STeMSPrefetcher
@@ -115,11 +122,11 @@ setGem5(){
 
     enableL2Cache="Yes"
         numL2Caches=""
-        L2size="256kB"
+        L2size="4MB"
         L2assoc="8"
         L2prefetcher= #"TaggedPrefetcher"
 
-    enableL3Cache="Yes"
+    enableL3Cache="No"
         numL3Caches=""
         L3size="8MB"
         L3assoc="16"
@@ -450,6 +457,7 @@ printOutputInfo(){
 
 ################# build gem5.opt #################
 buildGem5(){
+    additionalChange
     if [ ${needBuild}x = 1x ]
     then 
         if [ ! -f $gem5Dir/build/$ISA/gem5.$buildModel -o $forceNotBuild != Yes ]
@@ -1044,7 +1052,6 @@ buildSpecOptions(){
     then
         echo -e "\033[1;31m ==================== Running Mixed Spec ! ====================\033[0m"
         echo -e "-- SpecList: \033[1;31m $fullTargets \033[0m"
-        echo $targets
         for target in $targets
         do
             single=`eval echo -e '$'"${target}_${testSet}_single"`
