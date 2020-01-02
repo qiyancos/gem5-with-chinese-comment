@@ -8,8 +8,9 @@ cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
 cpuNum=$[cpuNum * 3 / 5]
 testList=`$root/script/se -l`
 # testList=`$root/script/se -l | sed 's/\./ /g' | awk '{print $1}'`
-# testFile=`ls $root/test_script`
-testFile="core8_l1np_l2np  core8_l1p2_l2np  core8_l1p4_l2np core8_l1p8_l2np"
+# testTarget="core8_l1np_l2np  core8_l1p2_l2np  core8_l1p4_l2np core8_l1p8_l2np"
+testTarget="3l_size_effect"
+testFolder=pre_test_1
 testTaskNums="8"
 newTaskGap="1m"
 
@@ -17,9 +18,9 @@ newTaskGap="1m"
 
 runTask() {
     echo "-- Start running test \"$file\" for $testName with $taskNum task(s):"
-    taskDir=$root/data/pre_test/$file/$testName/$taskNum
+    taskDir=$root/data/$testFolder/$file/$testName/$taskNum
     mkdir -p $taskDir
-    cd $root/data/pre_test/$file/$testName/$taskNum
+    cd $root/data/$testFolder/$file/$testName/$taskNum
     rm -rf $taskDir/spec
     testNum=`echo $testName | sed 's/\..*//g'`
     unset realTestName realTestDir
@@ -47,13 +48,17 @@ runTask() {
 
 initRunTask() {
     echo "-- Generating task list..."
-    for file in $testFile
+    for target in $testTarget
     do
-        fileName=(`echo $file | sed 's/_/ /g'`)
-        for taskNum in $testTaskNums
+        testFile=`cd $root/test_script && find ./$target -type f`
+        for file in $testFile
         do
-            for testName in $testList
-            do runTasks="$runTasks ${file}:${taskNum}:${testName}"
+            fileName=(`basename $file | sed 's/_/ /g'`)
+            for taskNum in $testTaskNums
+            do
+                for testName in $testList
+                do runTasks="$runTasks ${file}:${taskNum}:${testName}"
+                done
             done
         done
     done
@@ -160,11 +165,12 @@ retryRunTask() {
 }
 
 initRunTask
-while [ x$retryFlag != x -o x$retryFlag = x1 ]
+while [ x$retryFlag = x -o x$retryFlag = x1 ]
 do
     rm -rf /tmp/retry.list
     echo "-- Start running left tasks."
     runAllTask
     echo "-- Left tasks running over."
     retryRunTask
+    exit
 done

@@ -7,7 +7,7 @@ root=$PWD
 cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
 testList=`$root/script/se -l`
 # testFile=`ls $root/test_script`
-eval "$(grep "testFile=" $root/script/auto_run_single_mix.sh)"
+eval "$(grep "^testTarget=" $root/script/auto_run_single_mix.sh)"
 testTaskNums="8"
 statsTitle="TestName, Task Number, Test Subset"
 
@@ -92,7 +92,7 @@ multiStats() {
 }
 
 statsFile() {
-    taskDir=$root/data/pre_test/$file/$testName/$taskNum
+    taskDir=$root/data/pre_test_1/$file/$testName/$taskNum
     fileName="$taskDir/stats*"
     if [ -f $fileName ]
     then
@@ -127,16 +127,20 @@ then
     exit -1
 fi
 
-for file in $testFile
+for target in $testTarget
 do
-    coreNum=`echo $file | sed 's/core\([0-9]*\).*/\1/g'`
-    echo "-- Processing Test File $file"
-    for testName in $testList
+    testFile=`cd $root/test_script && find ./$target -type f`
+    for file in $testFile
     do
-        for taskNum in $testTaskNums
-        do statsFile $targetFile
+        coreNum=`basename $file | sed 's/core\([0-9]*\).*/\1/g'`
+        echo "-- Processing Test File $file"
+        for testName in $testList
+        do
+            for taskNum in $testTaskNums
+            do statsFile $targetFile
+            done
+            echo "   $testName Done."
         done
-        echo "   $testName Done."
     done
 done
 sed -i "1i\\$statsTitle" $targetFile
