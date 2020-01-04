@@ -5,12 +5,12 @@ cd $root/..
 root=$PWD
 
 cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
-cpuNum=$[cpuNum * 3 / 5]
+cpuNum=$[cpuNum * 7 / 10]
 testList=`$root/script/se -l`
 # testList=`$root/script/se -l | sed 's/\./ /g' | awk '{print $1}'`
-# testTarget="core8_l1np_l2np  core8_l1p2_l2np  core8_l1p4_l2np core8_l1p8_l2np"
-testTarget="3l_size_effect"
-testFolder=pre_test_1
+testTarget="."
+# testTarget="l1_agressive_test  l1_size_test l2_preftype_test  l3_agressive_test  l3_size_test l1_preftype_test l2_agressive_test l2_size_test l3_preftype_test"
+testFolder=std_test
 testTaskNums="8"
 newTaskGap="1m"
 
@@ -54,11 +54,11 @@ initRunTask() {
         for file in $testFile
         do
             fileName=(`basename $file | sed 's/_/ /g'`)
-            for taskNum in $testTaskNums
+            taskNum=`basename $file | sed 's/task\([0-9]*\)_.*/\1/g'`
+            for testName in $testList
             do
-                for testName in $testList
-                do runTasks="$runTasks ${file}:${taskNum}:${testName}"
-                done
+                echo "    ${file}:${taskNum}:${testName}"
+                runTasks="$runTasks ${file}:${taskNum}:${testName}"
             done
         done
     done
@@ -156,7 +156,7 @@ retryRunTask() {
     then
         echo "-- Following task didn't run properly:"
         for task in $retryTasks
-        do echo -e "\t$task"
+        do echo -e "    $task"
         done
         runTasks=$retryTasks
         retryFlag=1

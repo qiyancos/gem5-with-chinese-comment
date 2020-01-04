@@ -8,6 +8,7 @@ cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
 testList=`$root/script/se -l`
 # testFile=`ls $root/test_script`
 eval "$(grep "^testTarget=" $root/script/auto_run_single_mix.sh)"
+eval "$(grep "^testFolder=" $root/script/auto_run_single_mix.sh)"
 testTaskNums="8"
 statsTitle="TestName, Task Number, Test Subset"
 
@@ -92,7 +93,7 @@ multiStats() {
 }
 
 statsFile() {
-    taskDir=$root/data/pre_test_1/$file/$testName/$taskNum
+    taskDir=$root/data/$testFolder/$file/$testName/$taskNum
     fileName="$taskDir/stats*"
     if [ -f $fileName ]
     then
