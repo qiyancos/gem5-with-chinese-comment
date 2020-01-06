@@ -59,12 +59,14 @@ class L1_ICache(L1Cache):
     is_read_only = True
     # Writeback clean lines as well
     writeback_clean = True
+    cacheLevel = 0
 
 class L1_DCache(L1Cache):
-    pass
+    cacheLevel = 1
 
 class L2Cache(Cache):
     assoc = 8
+    cacheLevel = 2
     tag_latency = 20
     data_latency = 20
     response_latency = 20
@@ -84,6 +86,7 @@ class IOCache(Cache):
 # https://blog.csdn.net/tristan_tian/article/details/79851063
 class L3Cache(Cache):
     assoc = 64
+    cacheLevel = 3
     tag_latency = 32
     data_latency = 32
     response_latency = 32

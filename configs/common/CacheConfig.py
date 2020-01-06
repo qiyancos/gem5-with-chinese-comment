@@ -49,6 +49,7 @@ from Caches import *
 from common import HWPConfig
 
 def config_cache(options, system):
+    allCpuIds=[i for i in range(0, options.num_cpus)]
     if options.external_memory_system and (options.caches or options.l2cache \
             or options.l3cache):
         print("External caches and internal caches are exclusive options.\n")
@@ -58,19 +59,19 @@ def config_cache(options, system):
         print("Can not setup L3-Cache without L2-Cache.\n")
         sys.exit(1)
     
-    if options.swcache:
+    if options.group_cache:
         if (not options.l2cache or not options.l3cache):
             print("""SW cache structure can not be set up with out l2 cache or
                   l3 cache.\n""")
             sys.exit(1)
-        if options.num_cpus < options.cpu_per_group * 2:
+        if options.num_cpus < options.group_cache_size * 2:
             print("Too few cpus (<= %d) set for SW cache structures.\n" % \
-                    options.cpu_per_group * 2)
+                    options.group_cache_size * 2)
             sys.exit(1)
-        if options.num_cpus % options.cpu_per_group != 0:
+        if options.num_cpus % options.group_cache_size != 0:
             print("Total cpu number(%d) must be an integeral multiple of" % \
                     options.num_cpus)
-            print(" cpu number per group(%d).\n" % options.cpu_per_group)
+            print(" cpu number per group(%d).\n" % options.group_cache_size)
             sys.exit(1)
 
     if options.external_memory_system:
@@ -103,7 +104,7 @@ def config_cache(options, system):
     if (options.l2cache or options.l3cache) and options.elastic_trace_en:
         fatal("When elastic trace is enabled, do not configure L2/L3 caches.")
 
-    if options.l2cache and options.l3cache and options.swcache:
+    if options.l2cache and options.l3cache and options.group_cache:
         # Provide a clock for the L2 and the L1-to-L2 bus here as they
         # are not connected using addTwoLevelCacheHierarchy. Use the
         # same clock as the CPUs.
@@ -112,6 +113,7 @@ def config_cache(options, system):
         system.l3 = l3_cache_class(clk_domain=system.cpu_clk_domain,
                                size=options.l3_size,
                                assoc=options.l3_assoc)
+        system.l3.cpuIds = allCpuIds
 
         if options.l3_hwp_type:
             hwpClass = HWPConfig.get(options.l3_hwp_type)
@@ -125,11 +127,13 @@ def config_cache(options, system):
        
         last_cpu_with_cache = 0
         for i in xrange(options.num_cpus):
-            if i % options.cpu_per_group == 0:
+            if i % options.group_cache_size == 0:
                 last_cpu_with_cache = i
                 system.cpu[i].l2 = l2_cache_class(
                         clk_domain=system.cpu_clk_domain,
                         size = options.l2_size, assoc = options.l2_assoc)
+                tempCpuIds = [i + x for x in range(options.group_cache_size)]
+                system.cpu[i].l2.cpuIds = tempCpuIds
                 if options.l2_hwp_type:
                     hwpClass = HWPConfig.get(options.l2_hwp_type)
                     if system.cpu[i].l2.prefetcher != "Null":
@@ -140,6 +144,7 @@ def config_cache(options, system):
                     system.cpu[i].l2.prefetcher = hwpClass()
                 system.cpu[i].tol2bus = L2XBar(clk_domain = \
                         system.cpu_clk_domain)
+                system.cpu[i].l2.cpu_side = system.cpu[i].tol2bus.master
                 system.cpu[i].l2.mem_side = system.tol3bus.slave
             
         
@@ -155,7 +160,8 @@ def config_cache(options, system):
         system.l3 = l3_cache_class(clk_domain=system.cpu_clk_domain,
                                size=options.l3_size,
                                assoc=options.l3_assoc)
-
+        system.l3.cpuIds = allCpuIds
+        
         if options.l3_hwp_type:
             hwpClass = HWPConfig.get(options.l3_hwp_type)
             if system.l3.prefetcher != "Null":
@@ -169,6 +175,7 @@ def config_cache(options, system):
         for i in xrange(options.num_cpus):
             system.cpu[i].l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
                     size = options.l2_size, assoc = options.l2_assoc)
+            system.cpu[i].l2.cpuIds = [i]
             if options.l2_hwp_type:
                 hwpClass = HWPConfig.get(options.l2_hwp_type)
                 if system.cpu[i].l2.prefetcher != "Null":
@@ -191,6 +198,7 @@ def config_cache(options, system):
         system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
                                    size=options.l2_size,
                                    assoc=options.l2_assoc)
+        system.l2.cpuIds = allCpuIds
 
         system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
         if options.l2_hwp_type:
@@ -212,8 +220,10 @@ def config_cache(options, system):
         if options.caches:
             icache = icache_class(size=options.l1i_size,
                                   assoc=options.l1i_assoc)
+            icache.cpuIds = [i]
             dcache = dcache_class(size=options.l1d_size,
                                   assoc=options.l1d_assoc)
+            dcache.cpuIds = [i]
 
             # If we have a walker cache specified, instantiate two
             # instances here
@@ -289,10 +299,9 @@ def config_cache(options, system):
         if options.l2cache and options.l3cache:
             system.cpu[i].connectAllPorts(
                     system.cpu[last_cpu_with_cache].tol2bus, system.membus)
-            if options.swcache:
-                if i % options.cpu_per_group == 0:
+            if options.group_cache:
+                if i % options.group_cache_size == 0:
                     last_cpu_with_cache = i
-                    system.cpu[i].tol2bus.master = system.cpu[i].l2.cpu_side 
             else:
                 last_cpu_with_cache = i + 1
         elif options.l2cache:

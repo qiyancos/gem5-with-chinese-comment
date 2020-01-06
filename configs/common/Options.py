@@ -125,9 +125,9 @@ def addNoISAOptions(parser):
     parser.add_option("--cacheline_size", type="int", default=64)
 
     # SW Cache Structure
-    parser.add_option("--swcache", action="store_true",
-                      help="Enable ShenWei Cache Strcuture.")
-    parser.add_option("--cpu_per_group", type="int", default=2,
+    parser.add_option("--group-cache", action="store_true",
+                      help="Enable Group CPU & Cache Strcuture.")
+    parser.add_option("--group-cache-size", type="int", default=2,
                       help="How many cpu assigned to one group.")
 
     # Enable Ruby
