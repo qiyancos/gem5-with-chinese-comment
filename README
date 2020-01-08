@@ -1,2 +1,9 @@
-### Gem5 with Chinese Comment
+Gem5 with Chinese Comment
 Still in progress
+
+Branch Status
+master: Old gem5 branch, only for learning.
+sync: New gem5 branch syncronized with gem5 in 4/1 2019, used for expriment.
+prefetch: Branch modified based on sync, used for prefetch expriment.
+arm_profile: Branch modified based on sync, used for arm inst stats.
+parsec: Old gem5 branch supports running parsec in full-system mode. 
