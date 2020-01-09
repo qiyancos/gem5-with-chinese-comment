@@ -121,7 +121,7 @@ class StridePrefetcher(QueuedPrefetcher):
     on_inst = False
 
     max_conf = Param.Int(7, "Maximum confidence level")
-    thresh_conf = Param.Int(2, "Threshold confidence level")
+    thresh_conf = Param.Int(4, "Threshold confidence level")
     min_conf = Param.Int(0, "Minimum confidence level")
     start_conf = Param.Int(4, "Starting confidence for new entries")
 
@@ -129,7 +129,7 @@ class StridePrefetcher(QueuedPrefetcher):
     table_assoc = Param.Int(4, "Associativity of PC lookup table")
     use_master_id = Param.Bool(True, "Use master id based history")
 
-    degree = Param.Int(2, "Number of prefetches to generate")
+    degree = Param.Int(4, "Number of prefetches to generate")
 
     # Get replacement policy
     replacement_policy = Param.BaseReplacementPolicy(RandomRP(),
