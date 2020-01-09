@@ -78,6 +78,8 @@ BaseCache::CacheSlavePort::CacheSlavePort(const std::string &_name,
 
 BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
     : MemObject(p),
+      cpuIds(p->cpuIds.begin(), p->cpuIds.end()),
+      cacheLevel(p->cacheLevel),
       cpuSidePort (p->name + ".cpu_side", this, "CpuSidePort"),
       memSidePort(p->name + ".mem_side", this, "MemSidePort"),
       mshrQueue("MSHRs", p->mshrs, 0, p->demand_mshr_reserve), // see below
@@ -118,6 +120,22 @@ BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
     // whether the connected master is actually snooping or not
 
     tempBlock = new TempCacheBlk(blkSize);
+  
+    /*
+    if (cacheLevel >= 0) {
+        switch(cacheLevel) {
+        case 0: printf("Init L1 ICache for CPU:");break;
+        case 1: printf("Init L1 DCache for CPU:");break;
+        case 2: printf("Init L2 Cache for CPU:");break;
+        case 3: printf("Init L3 Cache for CPU:");break;
+        default: printf("Unknown cache level %d:", cacheLevel);
+        }
+        for (auto cpuId : cpuIds) {
+            printf(" %d", cpuId);
+        }
+        printf("\n");
+    }
+    */
 
     tags->tagsInit();
     if (prefetcher)

@@ -93,7 +93,14 @@ struct BaseCacheParams;
  */
 class BaseCache : public MemObject
 {
-  protected:
+    /**
+     * Add by lsk: Used for stats
+     */
+    public:
+        const std::set<int> cpuIds;
+        const int cacheLevel;
+        
+    protected:
     /**
      * Indexes to enumerate the MSHR queues.
      */
