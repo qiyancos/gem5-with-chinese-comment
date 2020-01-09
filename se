@@ -21,7 +21,7 @@ setScript(){
     # Do not change this
     threads=`lscpu | awk '/^CPU\(s\):/{print $2}'`
     # num of threads you want to use when building gem5.opt
-    testSet="train" # [ref test train]
+    testSet="ref" # [ref test train]
     # Test_set setting
     runSpecSuites="No" # [Yes/No]
     # Decide if you want to run all the tests in the given testSet
@@ -36,6 +36,18 @@ setScript(){
     # Decide if we shall print time-info for running
 }
 
+################# Other Change for Source File in Gem5 #################
+additionalChange() {
+    tagPrefDegree=2
+    stridePrefConfThresh=4 # 0-7
+    stridePrefDegree=4
+
+    # Change Tagged Prefetcher Degree
+    sed -i "143c\    degree = Param.Int($tagPrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "124c\    thresh_conf = Param.Int($stridePrefConfThresh, \"Threshold confidence level\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "132c\    degree = Param.Int($stridePrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+}
+
 ################# settings for gem5 #################
 setGem5(){
     # build options
@@ -43,7 +55,7 @@ setGem5(){
     # Gem5 building mode
     cpuModel="all" # [AtomicSimpleCPU CheckerCPU MinorCPU O3CPU TimingSimpleCPU all no]
     # CPU Model you want to build into gem5.opt/fast/debug
-    forceNotBuild="Yes" # [Yes/No] 
+    forceNotBuild="No" # [Yes/No] 
     # Set this to Yes to force this script not to build gem5 
     m5outDir=""
     # m5outDir option [default m5out]
@@ -67,26 +79,26 @@ setGem5(){
         # number of instruction put into warm up region
         warmupInsts="1000000" # []
         # warmup period in total instructions
-        maxInsts="20000000" # []
+        maxInsts="10000000" # []
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
-        numCpus="8" # []
+        numCpus="16" # []
         # number of cpu you want to run with
 
     enableMem="Yes"
         numDirs=""
-        memType="" 
+        memType="DDR4_2400_8x8" 
         # ['HBM_1000_4H_1x128', 'DRAMCtrl', 'DDR3_2133_8x8', 'HBM_1000_4H_1x64',
         # 'GDDR5_4000_2x32', 'HMC_2500_1x32', 'LPDDR3_1600_1x32', 'WideIO_200_1x128', 
         # 'DDR4_2400_8x8', 'DDR3_1600_8x8', 'DDR4_2400_4x16', 'DDR4_2400_16x4', 
         # 'SimpleMemory', 'LPDDR2_S4_1066_1x32']
         # type of memory to use
-        memChannels=""
+        memChannels="2"
         # number of memory channels
-        memRanks=""
+        memRanks="8"
         # number of memory ranks per channel
-        memSize="4GB"
+        memSize="8GB"
         # Specify the physical memory size (single memory)
 
     enableRuby="No"
@@ -101,7 +113,7 @@ setGem5(){
         cacheLineSize=""
         L1Dsize="32kB"
         L1Dassoc="8"
-        L1Dprefetcher= #"TaggedPrefetcher"
+        L1Dprefetcher=""
         # Prefetcher used for L1DCache
         # Following prefetchers are available
         # [TaggedPrefetcher, BOPPrefetcher, STeMSPrefetcher
@@ -110,18 +122,18 @@ setGem5(){
 	    #  SignaturePathPrefetcherV2, PIFPrefetcher, SlimAMPMPrefetcher
 	    #  AMPMPrefetcher, StridePrefetcher]
         L1Isize="64kB"
-        L1Iassoc="8"
-        L1Iprefetcher="StridePrefetcher"
+        L1Iassoc="4"
+        L1Iprefetcher=""
 
     enableL2Cache="Yes"
         numL2Caches=""
         L2size="256kB"
         L2assoc="8"
-        L2prefetcher= #"TaggedPrefetcher"
+        L2prefetcher=""
 
     enableL3Cache="Yes"
         numL3Caches=""
-        L3size="8MB"
+        L3size="16MB"
         L3assoc="16"
         L3prefetcher=""
 
@@ -450,6 +462,7 @@ printOutputInfo(){
 
 ################# build gem5.opt #################
 buildGem5(){
+    additionalChange
     if [ ${needBuild}x = 1x ]
     then 
         if [ ! -f $gem5Dir/build/$ISA/gem5.$buildModel -o $forceNotBuild != Yes ]
@@ -1044,7 +1057,6 @@ buildSpecOptions(){
     then
         echo -e "\033[1;31m ==================== Running Mixed Spec ! ====================\033[0m"
         echo -e "-- SpecList: \033[1;31m $fullTargets \033[0m"
-        echo $targets
         for target in $targets
         do
             single=`eval echo -e '$'"${target}_${testSet}_single"`

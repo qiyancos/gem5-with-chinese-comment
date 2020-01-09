@@ -3,10 +3,10 @@ root=`dirname $0`
 cd $root/..
 root=$PWD
 
-TaskCountList="1 2 4 8"
+TaskCountList="1 2 4 8 16"
 L1DSizeList="16kB 32kB 64kB"
 L2SizeList="128kB 256kB 512kB"
-L3SizeList="4MB 8MB 16MB"
+L3SizeList="8MB 16MB 32MB"
 PrefetcherList="TaggedPrefetcher BOPPrefetcher DCPTPrefetcher SignaturePathPrefetcherV2 StridePrefetcher"
 TaggedPrefDegreeList="2 4 8 16"
 StridePrefConfThreshList="2 4 6"
@@ -20,8 +20,8 @@ genL1SizeTest() {
     for l1dsize in $L1DSizeList
     do
         sed "s/L1Dsize=\"32kB/L1Dsize=\"$l1dsize/" $root/script/se \
-                > $targetDir/task8_$l1dsize
-        chmod +x $targetDir/task8_$l1dsize
+                > $targetDir/task16_$l1dsize
+        chmod +x $targetDir/task16_$l1dsize
     done
 }
 
@@ -33,8 +33,8 @@ genL2SizeTest() {
     for l2size in $L2SizeList
     do
         sed "s/L2size=\"256kB/L2size=\"$l2size/" $root/script/se \
-                > $targetDir/task8_$l2size
-        chmod +x $targetDir/task8_$l2size
+                > $targetDir/task16_$l2size
+        chmod +x $targetDir/task16_$l2size
     done
 }
 
@@ -46,14 +46,14 @@ genL3SizeTest() {
     for l3size in $L3SizeList
     do
         sed "s/L3size=\"8MB/L3size=\"$l3size/" $root/script/se \
-                > $targetDir/task8_$l3size
-        chmod +x $targetDir/task8_$l3size
+                > $targetDir/task16_$l3size
+        chmod +x $targetDir/task16_$l3size
     done
 }
 
 genL1PrefAgressiveTest() {
     echo ">> Generating test scripts for L1PrefAgressiveTest..."
-    targetDir=$root/test_script/l1_prefagressive_test
+    targetDir=$root/test_script/l1_pref_agressive_test
     rm -rf $targetDir
     mkdir -p $targetDir
     pref="StridePrefetcher"
@@ -76,7 +76,7 @@ genL1PrefAgressiveTest() {
 
 genL2PrefAgressiveTest() {
     echo ">> Generating test scripts for L2PrefAgressiveTest..."
-    targetDir=$root/test_script/l2_prefagressive_test
+    targetDir=$root/test_script/l2_pref_agressive_test
     rm -rf $targetDir
     mkdir -p $targetDir
     pref="StridePrefetcher"
@@ -99,7 +99,7 @@ genL2PrefAgressiveTest() {
 
 genL3PrefAgressiveTest() {
     echo ">> Generating test scripts for L3PrefAgressiveTest..."
-    targetDir=$root/test_script/l3_prefagressive_test
+    targetDir=$root/test_script/l3_pref_agressive_test
     rm -rf $targetDir
     mkdir -p $targetDir
     pref="StridePrefetcher"
@@ -122,7 +122,7 @@ genL3PrefAgressiveTest() {
 
 genL1PrefTypeTest() {
     echo ">> Generating test scripts for L1PrefTypeTest..."
-    targetDir=$root/test_script/l1_preftype_test
+    targetDir=$root/test_script/l1_pref_type_test
     rm -rf $targetDir
     mkdir -p $targetDir
     for taskNum in $TaskCountList
@@ -138,7 +138,7 @@ genL1PrefTypeTest() {
 
 genL2PrefTypeTest() {
     echo ">> Generating test scripts for L2PrefTypeTest..."
-    targetDir=$root/test_script/l2_preftype_test
+    targetDir=$root/test_script/l2_pref_type_test
     rm -rf $targetDir
     mkdir -p $targetDir
     for taskNum in $TaskCountList
@@ -154,7 +154,7 @@ genL2PrefTypeTest() {
 
 genL3PrefTypeTest() {
     echo ">> Generating test scripts for L3PrefTypeTest..."
-    targetDir=$root/test_script/l3_preftype_test
+    targetDir=$root/test_script/l3_pref_type_test
     rm -rf $targetDir
     mkdir -p $targetDir
     for taskNum in $TaskCountList
@@ -168,6 +168,28 @@ genL3PrefTypeTest() {
     done
 }
 
+genL2PrefSimpleTest() {
+    echo ">> Generating test scripts for L3PrefSimpleTest..."
+    targetDir=$root/test_script/l2_pref_simple_test
+    rm -rf $targetDir
+    mkdir -p $targetDir
+    pref="StridePrefetcher"
+    for taskNum in $TaskCountList
+    do
+        conf=4
+        for degree in 8 16
+        do
+            sed -e "s/L2prefetcher=\"/L2prefetcher=\"$pref/" \
+                    -e "s/stridePrefDegree=4/stridePrefDegree=$degree/" \
+                    $root/script/se > \
+                    $targetDir/task${taskNum}_${pref}_${conf}_${degree}
+            chmod +x $targetDir/task${taskNum}_${pref}_${conf}_${degree}
+            cp $root/script/se $targetDir/task${taskNum}_nopref
+            chmod +x $targetDir/task${taskNum}_nopref
+        done
+        
+    done
+}
 genL1SizeTest
 genL2SizeTest
 genL3SizeTest
@@ -177,3 +199,4 @@ genL3PrefAgressiveTest
 genL1PrefTypeTest
 genL2PrefTypeTest
 genL3PrefTypeTest
+genL2PrefSimpleTest

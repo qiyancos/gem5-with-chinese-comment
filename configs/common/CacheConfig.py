@@ -287,8 +287,9 @@ def config_cache(options, system):
 
         system.cpu[i].createInterruptController()
         if options.l2cache and options.l3cache:
+            system.cpu[i].connectAllPorts(system.tol3bus, system.membus)
             system.cpu[i].connectAllPorts(
-                    system.cpu[last_cpu_with_cache].tol2bus, system.membus)
+                    system.cpu[last_cpu_with_cache].tol2bus, system.tol3bus)
             if options.swcache:
                 if i % options.cpu_per_group == 0:
                     last_cpu_with_cache = i

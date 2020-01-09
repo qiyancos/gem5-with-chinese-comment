@@ -8,20 +8,17 @@ cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
 cpuNum=$[cpuNum * 7 / 10]
 testList=`$root/script/se -l`
 # testList=`$root/script/se -l | sed 's/\./ /g' | awk '{print $1}'`
-testTarget="."
+testTarget="l2_pref_agressive_test"
 # testTarget="l1_agressive_test  l1_size_test l2_preftype_test  l3_agressive_test  l3_size_test l1_preftype_test l2_agressive_test l2_size_test l3_preftype_test"
 testFolder=std_test
 testTaskNums="8"
-newTaskGap="1m"
+newTaskGap="75"
 
 ##############################################################################
 
 runTask() {
+    cd $taskDir
     echo "-- Start running test \"$file\" for $testName with $taskNum task(s):"
-    taskDir=$root/data/$testFolder/$file/$testName/$taskNum
-    mkdir -p $taskDir
-    cd $root/data/$testFolder/$file/$testName/$taskNum
-    rm -rf $taskDir/spec
     testNum=`echo $testName | sed 's/\..*//g'`
     unset realTestName realTestDir
     for((i = 0; i < $taskNum; i++))
@@ -34,23 +31,30 @@ runTask() {
     set +e
     $root/test_script/$file -p $realTestName
     set -e
+    if [ $taskNum = 1 ]
+    then realTestDir=$testName
+    fi
     if [ -s $taskDir/spec/$realTestDir/m5out/stats* ]
     then
         cp -r $taskDir/spec/$realTestDir/m5out/* $taskDir/
         echo "-- \"$file\" test over for $testName with $taskNum task(s)."
+        failFlag=0
     else
         echo -n "Error: some errors occurred with test: "
         echo "$file-$testName-$taskNum"
         echo $task >> /tmp/retry.list
+        failFlag=1
     fi
     rm -rf $taskDir/spec
 }
 
 initRunTask() {
     echo "-- Generating task list..."
-    for target in $testTarget
+    cd $root/test_script
+    taskCount=0
+    for target in `echo $testTarget`
     do
-        testFile=`cd $root/test_script && find ./$target -type f`
+        testFile=`find ./$target -type f`
         for file in $testFile
         do
             fileName=(`basename $file | sed 's/_/ /g'`)
@@ -59,10 +63,11 @@ initRunTask() {
             do
                 echo "    ${file}:${taskNum}:${testName}"
                 runTasks="$runTasks ${file}:${taskNum}:${testName}"
+                taskCount=$[taskCount + 1]
             done
         done
     done
-    
+
     if [ -f /tmp/mp.lock ]
     then
         echo "Error: Multi program is already locked."
@@ -77,7 +82,11 @@ initRunTask() {
             echo "$threadID idle" >> /tmp/mp.list
             threadID=$[threadID + 1]
         done
-        rm /tmp/mp.lock
+        echo "Fail 0" >> /tmp/mp.list
+        echo "Pass 0" >> /tmp/mp.list
+        echo "Over 0" >> /tmp/mp.list
+        echo "Total $taskCount" >> /tmp/mp.list
+        rm -rf /tmp/mp.lock
     fi
 }
 
@@ -102,11 +111,12 @@ atomicChange() {
     done
     echo ">> Control file locked."
     sed -i "/^$1 /c$1 $2" /tmp/mp.list
-    rm /tmp/mp.lock
+    rm -rf /tmp/mp.lock
     echo ">> Control file unlocked."
 }
 
 runAllTask() {
+    taskCount=0
     for task in $runTasks
     do
         echo "-- Trying to find idle cpu for new task($task)..."
@@ -142,11 +152,30 @@ runAllTask() {
         file=${taskArr[0]}
         taskNum=${taskArr[1]}
         testName=${taskArr[2]}
+        taskDir=$root/data/$testFolder/$file/$testName
+        rm -rf $taskDir
+        mkdir -p $taskDir
         {
             runTask
+            failCount=`awk '/Fail/ {print $2}' /tmp/mp.list`
+            passCount=`awk '/Pass/ {print $2}' /tmp/mp.list`
+            taskCount=`awk '/Over/ {print $2}' /tmp/mp.list`
+            if [ $failFlag = 1 ]
+            then atomicChange "Fail" "$[failCount + 1]"
+            else atomicChange "Pass" "$[passCount + 1]"
+            fi
+            atomicChange "Over" "$[taskCount + 1]"
             atomicChange $idleThreadID "idle"
         } &
-        sleep $newTaskGap
+        waitTime=0
+        while [ "x`find $taskDir -name "m5out"`" = x ]
+        do
+            sleep 4
+            waitTime=$[waitTime + 4]
+            if [ $waitTime -gt $newTaskGap ]
+            then break
+            fi
+        done
     done
 }
 
