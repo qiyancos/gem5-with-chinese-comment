@@ -112,7 +112,7 @@ setGem5(){
         L3assoc="16"
         L3prefetcher="StridePrefetcher"
 
-    enableSWCache="No" # [Yes/No]
+    enableGroupCache="No" # [Yes/No]
         numCpuPerGroup=2
 
     enableDebug="No" # [Yes/No]
@@ -134,8 +134,8 @@ setGem5(){
 ################# settings for settingParser #################
 setArgLevel(){
     # argument level
-    argLevel=("Global" "CheckPoint" "Simpoint" "Smt" "Mem" "Ruby" "Cache" "L2Cache" "L3Cache" "SWCache" "CountAsInstruction")
-    formatLevel=("" "" "--simpoint" "--smt" "" "--ruby" "--caches" "--l2cache" "--l3cache" "--swcache" "--at-instruction")
+    argLevel=("Global" "CheckPoint" "Simpoint" "Smt" "Mem" "Ruby" "Cache" "L2Cache" "L3Cache" "GroupCache" "CountAsInstruction")
+    formatLevel=("" "" "--simpoint" "--smt" "" "--ruby" "--caches" "--l2cache" "--l3cache" "--group-cache" "--at-instruction")
 
     # argument list
     argListGlobal=("cpuType" "cpuVoltage" "sysClock" "cpuClock" "fastForwardInsts" "warmupInsts" "maxInsts" "maxTime" "numCpus")
@@ -145,7 +145,7 @@ setArgLevel(){
     argListCache=("cacheLineSize" "L1Dsize" "L1Dassoc" "L1Dprefetcher" "L1Isize" "L1Iassoc" "L1Iprefetcher")
     argListL2Cache=("numL2Caches" "L2size" "L2assoc" "L2prefetcher")
     argListL3Cache=("numL3Caches" "L3size" "L3assoc" "L3prefetcher")
-    argListSWCache=("numCpuPerGroup")
+    argListGroupCache=("numCpuPerGroup")
 
     # format list for arguments
     formatListGlobal=("--cpu-type" "--sys-voltage" "--sys-clock" "--cpu-clock" "--fast-forward" "--warmup-insts" "--maxinsts" "--maxtime" "--num-cpus")
@@ -155,7 +155,7 @@ setArgLevel(){
     formatListCache=("--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1d-hwp-type" "--l1i_size" "--l1i_assoc" "--l1i-hwp-type")
     formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc" "--l2-hwp-type")
     formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc" "--l3-hwp-type")
-    formatListSWCache=("--cpu_per_group")
+    formatListGroupCache=("--group-cache-size")
 
     buildOption="CPU_MODELS=$cpuModel"
 }
