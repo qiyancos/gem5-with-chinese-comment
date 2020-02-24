@@ -30,12 +30,14 @@
 
 Import('*')
 
-SimObject('PPFEngine.py')
+SimObject('PrefetchFilter.py')
 
 Source('base.cc')
-Source('stats_engine.cc')
+Source('table.cc')
+Source('pref_info.cc')
+Source('ppf.cc')
 
-DebugFlag('PPFEngine')
+DebugFlag('PrefetchFilter')
 
 # CacheTags is so outrageously verbose, printing the cache's entire tag
 # array on each timing access, that you should probably have to ask for

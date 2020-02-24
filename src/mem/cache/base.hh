@@ -318,6 +318,12 @@ class BaseCache : public MemObject
     CpuSidePort cpuSidePort;
     MemSidePort memSidePort;
 
+  public:
+    
+    /** Prefetcher */
+    // 修改为public主要是用于filter判定预取器的设置情况
+    BasePrefetcher *prefetcher;
+
   protected:
 
     /** Miss status registers */
@@ -328,9 +334,6 @@ class BaseCache : public MemObject
 
     /** Tag and data Storage */
     BaseTags *tags;
-
-    /** Prefetcher */
-    BasePrefetcher *prefetcher;
 
     /** To probe when a cache hit occurs */
     ProbePointArg<PacketPtr> *ppHit;
