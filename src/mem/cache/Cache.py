@@ -78,7 +78,7 @@ class BaseCache(MemObject):
     cxx_header = "mem/cache/base.hh"
 
     cpuIds = VectorParam.Int([-2], "Ids of all the cpus which can access this cache.")
-    cacheLevel = Param.Int(-2, "Level ID of this cache.")
+    cacheLevel = Param.UInt8(-2, "Level ID of this cache.")
 
     size = Param.MemorySize("Capacity")
     assoc = Param.Unsigned("Associativity")

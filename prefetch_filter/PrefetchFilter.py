@@ -43,10 +43,8 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     type = 'PrefetchFilter'
     cxx_header = "mem/cache/prefetch_filter/ppf.hh"
     
-    ### 过滤设置
-    l1_threashold = Param.UInt16(?, "Threshold for prefetch to l1")
-    l2_threashold = Param.UInt16(?, "Threshold for prefetch to l2")
-    l3_threashold = Param.UInt16(?, "Threshold for prefetch to l3")
+    # 结构设置
+    share_table = Param.Bool(True, "If share table across differenct cores")
     
     prefetch_table_size = Param.UInt32(1024, "Size of the prefetch table")
     prefetch_table_assoc = Param.UInt8(4, "Associativity of the prefetch "
@@ -55,6 +53,11 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     reject_table_size = Param.UInt32(1024, "Size of the reject table")
     reject_table_assoc = Param.UInt8(4, "Associativity of the reject "
             "table")
+    
+    # 过滤设置
+    l1_threashold = Param.UInt16(?, "Threshold for prefetch to l1")
+    l2_threashold = Param.UInt16(?, "Threshold for prefetch to l2")
+    l3_threashold = Param.UInt16(?, "Threshold for prefetch to l3")
     
     # PPF自带的特征
     # Feature表示方式: "key1 key2 key3 x n" 表示从[key1]^[key2]^[key3]的结果中
@@ -79,7 +82,13 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
             "CoreID PageAddress 0 ?", # CoreID bitmap ^ Page address; ?
             "CoreID PrefHarm 0 ?", # CoreID bitmap ^ Prefetch Harmfulness; ?
             ], "List of added features used for PPF")
-
+    
+    # 训练设置
     fine_grained_training = Param.Bool(True, "Use differenct training speed "
             "for differentcache level")
+    
+    default_training_step = Param.Uint8(1, "Step for all feedback")
 
+    l1_training_step = Param.Uint8(3, "Step for training of l1 feedback")
+    l2_training_step = Param.Uint8(2, "Step for training of l1 feedback")
+    l3_training_step = Param.Uint8(1, "Step for training of l1 feedback")

@@ -32,28 +32,28 @@ namespace prefetch_filter {
 
 std::map<std::string, IndexInfo> IndexMap;
 
-int addNewFeature(const std::string& name, const uint8_t bits) {
+int addNewInfo(const std::string& name, const uint8_t bits) {
     const uint8_t index = static_cast<uint8_t>(IndexMap.size());
     IndexMap[name] = IndexInfo(index, bits);
     return index;
 }
 
 // Original
-DEF_FEATURE(PC1, 12) // 触发预取的指令PC, 12 bits
-DEF_FEATURE(PC2_1, 12) // 触发预取指令之前触发指令的PC(右移1bit), 12 bits
-DEF_FEATURE(PC3_2, 12) // 触发预取指令之前的之前触发指令的PC(右移2bit), 12 bits
-DEF_FEATURE(Confidence, 4) // 当前预取的可信度, 4 bits
-DEF_FEATURE(Address, 32) // 当前预取的目标地址, 32 bits
-DEF_FEATURE(PageAddress, 12) // 预取地址的物理页号低12bit, 12 bits
-DEF_FEATURE(Depth, 8) // 预取的深度, 8 bits 
-DEF_FEATURE(Delta, 7) // 预取的地址间隔, 7 bits
-DEF_FEATURE(Signature, 12) // SPP使用的签名, 12 bits
+DEF_INFO(PC1, 12) // 触发预取的指令PC, 12 bits
+DEF_INFO(PC2_1, 12) // 触发预取指令之前触发指令的PC(右移1bit), 12 bits
+DEF_INFO(PC3_2, 12) // 触发预取指令之前的之前触发指令的PC(右移2bit), 12 bits
+DEF_INFO(Confidence, 4) // 当前预取的可信度, 4 bits
+DEF_INFO(Address, 32) // 当前预取的目标地址, 32 bits
+DEF_INFO(PageAddress, 12) // 预取地址的物理页号低12bit, 12 bits
+DEF_INFO(Depth, 8) // 预取的深度, 8 bits 
+DEF_INFO(Delta, 7) // 预取的地址间隔, 7 bits
+DEF_INFO(Signature, 12) // SPP使用的签名, 12 bits
 // Added
-DEF_FEATURE(BPC1, 12) // 触发预取时最近的一个分支PC, 12 bits
-DEF_FEATURE(BPC2_1, 12) // 触发预取时最近分支之前的分支PC(右移1bit), 12 bits
-DEF_FEATURE(BPC2_2, 12) // 触发预取时最近分支之前的之前分支PC(右移2bit), 12 bits
-DEF_FEATURE(PrefHarm, 4) // 预取的有害度信息, 4 bits
-DEF_FEATURE(CoreIDMap, 8) // 相关核心的BitMap, 最多支持8核心, 8 bits
-DEF_FEATURE(CoreID, 6) // 相关核心的BitMap, 最多支持64核心, 6 bits
+DEF_INFO(BPC1, 12) // 触发预取时最近的一个分支PC, 12 bits
+DEF_INFO(BPC2_1, 12) // 触发预取时最近分支之前的分支PC(右移1bit), 12 bits
+DEF_INFO(BPC2_2, 12) // 触发预取时最近分支之前的之前分支PC(右移2bit), 12 bits
+DEF_INFO(PrefHarm, 4) // 预取的有害度信息, 4 bits
+DEF_INFO(CoreIDMap, 8) // 相关核心的BitMap, 最多支持8核心, 8 bits
+DEF_INFO(CoreID, 6) // 相关核心的BitMap, 最多支持64核心, 6 bits
 
 } // namespace prefetch_filter

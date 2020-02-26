@@ -28,8 +28,8 @@
  * Authors: Rock Lee
  */
 
-#ifndef __MEM_CACHE_PREFETCH_FILTER_BASE_HH__
-#define __MEM_CACHE_PREFETCH_FILTER_BASE_HH__
+#ifndef __MEM_CACHE_PREFETCH_FILTER_PPF_HH__
+#define __MEM_CACHE_PREFETCH_FILTER_PPF_HH__
 
 #include <cstdint>
 
@@ -47,8 +47,31 @@ struct PerceptronPrefetchFilterParams;
 
 namespace prefetch_filter {
 
+class Feature {
+public:
+    // 依据字符串初始化Feature
+    Feature(const std::string& feature);
+    
+    // 获取一个预取信息的索引
+    uint16_t getIndex(const PrefetchInfo& info);
+
+private:
+    // 当前Feature所使用的预取信息索引
+    std::vector<uint8_t> infoIndexList_;
+
+    // Feature索引对应结果的起始位次
+    uint8_t startBits;
+
+    // Feature索引对应结果的位数
+    uint8_t bits;
+};
+
 // 过滤器基类，仅仅添加了统计功能，不进行实际过滤
 class PerceptronPrefetchFilter : public ClockedObject {
+
+typedef CacheTable<std::vector<uint16_t>> FeatureIndexTable;
+typedef CacheTable<uint8_t> FeatureWeightTable;
+
 public:
     // 构造函数 
     PerceptronPrefetchFilter(const PerceptronPrefetchFilterParams *p);
@@ -76,10 +99,28 @@ public:
     void regStats() override;
 
 public:
-    // 多核有害的预取（他核心有害多于多单核心有害）
-    Stats::Vector prefCrossCoreHarmful;
+    // 被过滤掉的预取请求个数，区分核心，编号区分不同Cache等级预取
+    Stats::Vector prefRejected[3];
+
+    // 最终被处理成预取至L1的请求个数
+    Stats::Vector prefToL1;
+
+    // 最终被处理成预取至L2的请求个数，0对应没有降级的预取，1对应降1级的预取
+    Stats::Vector prefToL2[2];
+
+    // 最终被处理成预取至L3的请求个数，编号对应降级的数值
+    Stats::Vector prefToL3[3];
+
+    // 最终被处理成预取至L3的请求个数，编号对应降级的数值
+    Stats::Vector prefToL3[3];
+
+    // 不同Feature不同权重的数值出现次数
+    std::vector<std::vector<Stats::Vector>> featureWeightFrequency;
 
 private:
+    // 进行Feature权重动态统计的间隔
+    const uint64_t statsInterval_;
+
     // 将预取设置为到L1的可信度阈值
     const uint16_t l1PrefThreshold_;
 
@@ -89,14 +130,20 @@ private:
     // 将预取设置为到L3的可信度阈值
     const uint16_t l3PrefThreshold_;
     
+    // Feature权重的bit数
+    const uint8_t weightBits;
+
+    // 不同层级缓存相关反馈对应的训练幅度
+    const uint8_t trainStep_[3];
+
     // 没有被过滤的预取索引表格
-    FeatureIndexTable* prefetchTablePtr_;
+    std::vector<FeatureIndexTable*> prefetchTable_;
     
     // 被过滤的预取索引表格
-    FeatureIndexTable* rejectTablePtr_;
+    std::vector<FeatureIndexTable*> rejectTablePtr_;
     
     // 存放Feature权重的表格
-    std::vector<FeatureWeightTable*> featureTable_;
+    std::vector<std::vector<FeatureWeightTable*>> featureTable_;
 
     // 存放Feature的向量
     std::vector<Feature> featureList_;
@@ -104,4 +151,4 @@ private:
 
 } // namespace prefetch_filter
 
-#endif // __MEM_CACHE_PREFETCH_FILTER_BASE_HH__
+#endif // __MEM_CACHE_PREFETCH_FILTER_PPF_HH__

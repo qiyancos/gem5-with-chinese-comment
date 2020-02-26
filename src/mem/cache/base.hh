@@ -97,8 +97,12 @@ class BaseCache : public MemObject
      * Add by lsk: Used for stats
      */
     public:
+        // 和当前级别Cache连接的所有CPUID
         const std::set<int> cpuIds;
-        const int cacheLevel;
+
+        // 存放了每一个缓存等级和的
+        const static std::vector<std::string> levelName;
+        const uint8_t cacheLevel;
         
     protected:
     /**

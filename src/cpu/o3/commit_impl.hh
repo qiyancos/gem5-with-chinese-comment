@@ -226,7 +226,7 @@ DefaultCommit<Impl>::regStats()
         .init(cpu->numThreads)
         .name(name() + ".branches")
         .desc("Number of branches committed")
-        .flags(total)
+        .flags(none)
         ;
 
     statComFloating

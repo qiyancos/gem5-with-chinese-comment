@@ -66,6 +66,9 @@ class BaseSlavePort;
 
 using namespace std;
 
+const std::vector<std::string> BaseCache::levelName = 
+        {"L1I", "L1D", "L2", "L3", "DRAM"};
+
 BaseCache::CacheSlavePort::CacheSlavePort(const std::string &_name,
                                           BaseCache *_cache,
                                           const std::string &_label)
@@ -82,10 +85,10 @@ BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
       cacheLevel(p->cacheLevel),
       cpuSidePort (p->name + ".cpu_side", this, "CpuSidePort"),
       memSidePort(p->name + ".mem_side", this, "MemSidePort"),
+      prefetcher(p->prefetcher),
       mshrQueue("MSHRs", p->mshrs, 0, p->demand_mshr_reserve), // see below
       writeBuffer("write buffer", p->write_buffers, p->mshrs), // see below
       tags(p->tags),
-      prefetcher(p->prefetcher),
       writeAllocator(p->write_allocator),
       writebackClean(p->writeback_clean),
       tempBlockWriteback(nullptr),

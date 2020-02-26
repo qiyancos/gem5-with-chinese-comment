@@ -68,9 +68,9 @@ private:
         // 构造函数
         Set(const uint8_t assoc);
         // 读取数据
-        T& read(const uint64_t tag);
+        T& read(const uint64_t& tag);
         // 写入数据
-        int write(const uint64_t tag, const T& value);
+        int write(const uint64_t& tag, const T& value);
     }
     
     // 表格的数据实体
@@ -87,14 +87,30 @@ public:
     Table(const uint32_t size, const uint8_t assoc);
 
     // 读取某一个地址对应的数据
-    T& read(const uint64_t address);
+    T& read(const uint64_t& addr);
 
     // 写入一个地址对应的数据
-    int write(const uint64_t address, const T& value);
+    int write(const uint64_t& addr, const T& value);
 };
 
-typedef CacheTable<std::vector<uint16_t>> FeatureIndexTable;
-typedef CacheTable<uint8_t> FeatureWeightTable;
+class IdealPrefetchUsefulTable {
+public:
+    // 在数据被命中的时候进行处理
+    int updateHit(const uint64_t& addr, const DataType type);
+
+    // 在预取被替换掉的时候进行处理
+    int updateEvict(const uint64_t& addr);
+
+    // 当新的预取插入时添加表项
+    int addPref(const uint64_t& prefAddr, const uint64_t& evictAddr);
+
+private:
+    // 依据地址到有用信息的映射，用于对Cache中的预取数据
+    std::map<uint64_t, PrefetchUsefulInfo> prefMap_;
+    
+    // 依据地址到有用信息的映射，用于对Cache中被预取替换的数据
+    std::map<uint64_t, PrefetchUsefulInfo> evictMap_;
+};
 
 } // namespace prefetch_filter
 

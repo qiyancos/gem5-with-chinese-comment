@@ -50,9 +50,9 @@ enum DataType {Dmd, Pref};
 // Miss以及Fill时候的信息
 struct DataTypeInfo {
     // 插入的数据是什么属性
-    DataType inserted;
+    DataType source;
     // 被替换的数据是什么属性
-    DataType replaced;
+    DataType target;
 }
 
 // 一个预取信息项的索引和有效位数信息
@@ -67,17 +67,17 @@ struct IndexInfo {
 extern std::map<std::string, IndexInfo> IndexMap;
 
 // 注册一个新的信息项相关的函数
-int addNewFeature(const std::string& name, const uint8_t bits);
+int addNewInfo(const std::string& name, const uint8_t bits);
 
 // 注册新信息项的宏
-#define DEF_FEATURE(STRING, BITS) \
-    const int STRING = addNewFeature(#STRING, BITS);
+#define DEF_INFO(STRING, BITS) \
+    const int STRING = addNewInfo(#STRING, BITS);
 
 // 预取信息类，用来从预取器传递预取信息到PPFE中
 class PrefetchInfo {
 private:
     // 信息项主体
-    std::vector<uint32_t> info;
+    std::vector<uint32_t> info_;
 
 public:
     // 写入一个新的信息
@@ -85,6 +85,52 @@ public:
     
     // 写入一个新的信息
     uint32_t getInfo(const uint8_t index);
+};
+
+class PrefetchUsefulInfo {
+public:
+    // 依据CPU的个数进行大小配置
+    int resize(const uint8_t numCpus);
+    
+    // 更新一个预取有效命中
+    int updateUse(const uint64_t& coreBitMap);
+
+    // 更新一个预取有害命中
+    int updateHarm(const uint64_t& coreBitMap);
+
+public:
+    // 存放统计数据的结构体
+    // 没有记录Cycle是因为实际上每一个有用或者有害带来的
+    // 时钟周期损失/节省均为LLC的一次Miss Latency
+    struct Stats {
+        // 单核心预取产生的有效命中次数
+        uint64_t singleCoreUsefulCount_;
+        
+        // 单核心预取有害统计的次数
+        uint64_t singleCoreHarmCount_;
+        
+        // 多核心预取产生的有效命中次数
+        uint64_t crossCoreUsefulCount_;
+        
+        // 多核心预取有害统计的次数
+        uint64_t crossCoreHarmCount_;
+        
+        // 当前预取是否是一个新的预取，用于时间维度统计
+        bool newPref_;
+    };
+    
+    // 不同核心的Stats情况
+    std::vector<Stats> stats_; 
+    
+    // 当前预取对应的替换数据地址
+    uint64_t replacedAddress_;
+
+private:
+    // 所有相关的CPUID位图
+    uint64_t relatedCpuBitMap_;
+    
+    // 所有相关的CPUID
+    std::set<uint8_t> relatedCpuIds_;
 };
 
 } // namespace prefetch_filter

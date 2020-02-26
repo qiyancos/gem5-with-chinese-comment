@@ -59,83 +59,108 @@ public:
     int addCache(BaseCache* newCache);
 
     // 通知发生了Hit事件
-    virtual int notifyCacheHit(BaseCache* senderCache, const PacketPtr& pkt,
+    int notifyCacheHit(BaseCache* cache, const PacketPtr& pkt,
             const DataTypeInfo& info);
     
     // 通知发生了Miss事件
-    virtual int notifyCacheMiss(BaseCache* senderCache, const PacketPtr& pkt,
+    int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
             const DataTypeInfo& info);
     
     // 通知发生了Fill事件
-    virtual int notifyCacheFill(BaseCache* senderCache, const PacketPtr &pkt,
+    int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
             const DataTypeInfo& info);
 
     // 对一个预取进行过滤，返回发送的Cache Level或者不预取
-    virtual int filterPrefetch(BaseCache* senderCache, const PacketPtr &pkt,
+    int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
             const PrefetchInfo& info);
-    
+   
+    // 进行基本结构的初始化
+    void init();
+
+    // 该函数会对时间维度信息进行统计和打印
+    void updateTimingStats();
+
     // 注册统计变量
     void regStats() override;
 
-public:
-    // Demand Request命中不同层级, 区分不同核心和命中层级
-    Stats::Vector demandReqHitCount[4];
+private:
+    
 
+public:
+    // 用于处理未启用的统计变量
+    Stats::Vector emptyStatsVar_;
+    
+    // Demand Request总个数
+    Stats::Vector* demandReqHitTotal_;
+    
+    // Demand Request命中不同层级, 区分不同核心和命中层级
+    Stats::Vector* demandReqHitCount_[3];
 
     // L1预取器预取命中不同层级的个数，区分不同核心和命中层级
-    Stats::Vector l1PrefHitCount[3];
+    Stats::Vector* l1PrefHitCount_[3];
 
     // L2预取器预取命中不同层级的个数，区分不同核心和命中层级（分析重点）
-    Stats::Vector l2PrefHitCount[2];
+    Stats::Vector* l2PrefHitCount_[2];
 
     // L1预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
-    Stats::Vector shadowedPrefCount[3];
+    Stats::Vector* shadowedPrefCount_[3];
 
     // L1预取器发出预取的有益分数和，第一维度对应缓存等级，第二维度对应单多核
-    Stats::Vector prefTotalUsefulValue[3][2];
+    Stats::Vector* prefTotalUsefulValue_[3][2];
     
-    // L1预取器发出预取的十分有益的预取个数
+    // L1预取器发出预取的不同有益/有害程度的预取个数
     // 第一维度对应缓存等级，第二维度对应单多核，第三维度对应有益/有害水平
-    Stats::Vector prefUsefulValueCount[3][2][5];
+    Stats::Vector* prefUsefulDegree_[3][2][5];
    
-
     // 多核有用的预取（他核心有用多于单核心有用）
-    Stats::Vector prefCrossCoreUseful;
+    Stats::Vector* prefCrossCoreUseful_[3];
 
     // 单核有用的预取（单核心有用多于多他核心有用）
-    Stats::Vector prefInsideCoreUseful;
+    Stats::Vector* prefSingleCoreUseful_[3];
     
     // 自私的预取（单核心有用，他核心有害）
-    Stats::Vector prefSelfish;
+    Stats::Vector* prefSelfish_[3];
 
     // 无私的预取（单核心有害，他核心有用）
-    Stats::Vector prefSelfless;
+    Stats::Vector* prefSelfless_[3];
 
     // 无用预取（单核心无用，他核心无用）
-    Stats::Vector prefUseless;
+    Stats::Vector* prefUseless_[3];
 
     // 单核有害的预取（单核心有害多于多他核心有害）
-    Stats::Vector prefInsideCoreHarmful;
+    Stats::Vector* prefSingleCoreHarmful_[3];
     
     // 多核有害的预取（他核心有害多于多单核心有害）
-    Stats::Vector prefCrossCoreHarmful;
+    Stats::Vector* prefCrossCoreHarmful_[3];
     
 private:
     // 基于时间维度的统计
     const uint64_t statsPeriod_;
 
+    // 下一个统计周期开始的Tick位置
+    uint64_t nextPeriodTick_;
+
     // Demand请求的命中数量 
-    uint32_t demandHit_;
+    uint32_t demandHit_ = 0;
 
     // Demand请求的缺失数量 
-    uint32_t demandMiss_;
+    uint32_t demandMiss_ = 0;
 
     // 统计周期内的不同类型的预取个数
-    uint32_t prefStatusCount_[3][2];
+    uint32_t prefStatusCount_[3][2][5] = {0};
+
+    // 用于记录预取有害信息的结构，每一级缓存都会有一个
+    std::vector<IdealPrefetchUsefulTable> usefulTable_;
 
 private:
     // 当前Filter负责监视的所有Cache指针
     std::vector<std::vector<BaseCache*>> caches_;
+    
+    // 当前某一级缓存是否开启了预取
+    bool usePref_[4];
+
+    // 当前系统下的最高缓存等级
+    uint8_t maxCacheLevel_;
 
     // 当前系统下CPU的个数
     uint8_t numCpus_;
