@@ -38,6 +38,16 @@ int addNewInfo(const std::string& name, const uint8_t bits) {
     return index;
 }
 
+std::vector<PrefUsefulType> PrefUsefulTypeList;
+
+int addNewPrefUsefulType(const std::string& name,
+        std::function<bool(const uint64_t&, const uint64_t&, const uint64_t&,
+        const uint64_t&)> judgeFunc) {
+    const uint8_t index = static_cast<uint8_t>(PrefUsefulTypeList.size());
+    PrefUsefulTypeList.push_back(PrefUsefulType(name, judgeFunc));
+    return index;
+}
+
 // Original
 DEF_INFO(PC1, 12) // 触发预取的指令PC, 12 bits
 DEF_INFO(PC2_1, 12) // 触发预取指令之前触发指令的PC(右移1bit), 12 bits
@@ -55,5 +65,77 @@ DEF_INFO(BPC2_2, 12) // 触发预取时最近分支之前的之前分支PC(右�
 DEF_INFO(PrefHarm, 4) // 预取的有害度信息, 4 bits
 DEF_INFO(CoreIDMap, 8) // 相关核心的BitMap, 最多支持8核心, 8 bits
 DEF_INFO(CoreID, 6) // 相关核心的BitMap, 最多支持64核心, 6 bits
+
+
+// 多核有用的预取（他核心有用多于单核心有用）
+int CrossCoreUseful = addNewPrefUsefulType("cross_core_useful",
+        [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
+        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        -> bool {
+                return (singleCoreUseful >= singleCoreHarm) &&
+                (crossCoreUseful > crossCoreHarm) &&
+                (singleCoreUseful - singleCoreHarm) < 
+                (crossCoreUseful - crossCoreHarm);
+        });
+
+// 单核有用的预取（单核心有用多于多他核心有用）
+int SingleCoreUseful = addNewPrefUsefulType("single_core_useful",
+        [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
+        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        -> bool {
+                return (singleCoreUseful > singleCoreHarm) &&
+                (crossCoreUseful >= crossCoreHarm) &&
+                (singleCoreUseful - singleCoreHarm) >=
+                (crossCoreUseful - crossCoreHarm);
+        });
+
+// 自私的预取（单核心有用，他核心有害）
+int Selfish = addNewPrefUsefulType("selfish",
+        [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
+        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        -> bool {
+                return (singleCoreUseful > singleCoreHarm) &&
+                (crossCoreUseful < crossCoreHarm);
+        });
+
+// 无私的预取（单核心有害，他核心有用）
+int Selfless = addNewPrefUsefulType("selfless",
+        [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
+        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        -> bool {
+                return (singleCoreUseful < singleCoreHarm) &&
+                (crossCoreUseful > crossCoreHarm);
+        });
+
+// 无用预取（单核心无用，他核心无用）
+int Useless = addNewPrefUsefulType("useless",
+        [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
+        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        -> bool {
+                return (singleCoreUseful == singleCoreHarm) &&
+                (crossCoreUseful == crossCoreHarm);
+        });
+
+// 单核有害的预取（单核心有害多于多他核心有害）
+int SingleCoreHarmful = addNewPrefUsefulType("single_core_harmful",
+        [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
+        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        -> bool {
+                return (singleCoreUseful < singleCoreHarm) &&
+                (crossCoreUseful < crossCoreHarm) &&
+                (singleCoreHarm - singleCoreUseful) >
+                (crossCoreHarm - crossCoreUseful);
+        });
+
+// 多核有害的预取（他核心有害多于多单核心有害）
+int CrossCoreHarmful = addNewPrefUsefulType("cross_core_harmful",
+        [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
+        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        -> bool {
+                return (singleCoreUseful < singleCoreHarm) &&
+                (crossCoreUseful < crossCoreHarm) &&
+                (singleCoreHarm - singleCoreUseful) <=
+                (crossCoreHarm - crossCoreUseful);
+        });
 
 } // namespace prefetch_filter

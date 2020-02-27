@@ -87,13 +87,32 @@ public:
     uint32_t getInfo(const uint8_t index);
 };
 
+// 预取分类的结构体
+struct PrefUsefulType {
+    // 预取分类的名称
+    const std::string name;
+    // 进行判断的函数
+    std::funtion<bool(const uint64_t&, const uint64_t&, const uint64_t&,
+            const uint64_t&)> isType;
+}
+
+// 记录每一个预取分类的名称
+extern std::vector<PrefUsefulType> PrefUsefulTypeList;
+
+// 注册一个新的信息项相关的函数
+int addNewPrefUsefulType(const std::string& name,
+        std::funtion<bool(const uint64_t&, const uint64_t&, const uint64_t&,
+        const uint64_t&)> judgeFunc);
+
 class PrefetchUsefulInfo {
 public:
+    enum
     // 依据CPU的个数进行大小配置
     int resize(const uint8_t numCpus);
     
-    // 更新一个预取有效命中
-    int updateUse(const uint64_t& coreBitMap);
+    // 更新一个预取有效命中，同时对命中统计数据进行更新
+    int updateUse(const uint64_t& coreBitMap,
+            std::vector<Stats::Vector*>& cacheStats);
 
     // 更新一个预取有害命中
     int updateHarm(const uint64_t& coreBitMap);
@@ -129,8 +148,8 @@ private:
     // 所有相关的CPUID位图
     uint64_t relatedCpuBitMap_;
     
-    // 所有相关的CPUID
-    std::set<uint8_t> relatedCpuIds_;
+    // 所有相关的CPU和对应的预取相关Cache层级
+    std::map<uint8_t, std::vector<unint8_t>> relatedCpusInfo_;
 };
 
 } // namespace prefetch_filter

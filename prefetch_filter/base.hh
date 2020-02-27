@@ -68,23 +68,21 @@ public:
     
     // 通知发生了Fill事件
     int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
-            const DataTypeInfo& info);
+            const DataTypeInfo& info, uint64_t evictedAddr);
 
     // 对一个预取进行过滤，返回发送的Cache Level或者不预取
     int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
             const PrefetchInfo& info);
    
-    // 进行基本结构的初始化
-    void init();
-
-    // 该函数会对时间维度信息进行统计和打印
-    void updateTimingStats();
-
     // 注册统计变量
     void regStats() override;
 
 private:
-    
+    // 进行基本结构的初始化
+    void init();
+
+    // 该函数会对时间维度信息进行统计和打印
+    int checkUpdateTimingStats();
 
 public:
     // 用于处理未启用的统计变量
@@ -94,7 +92,10 @@ public:
     Stats::Vector* demandReqHitTotal_;
     
     // Demand Request命中不同层级, 区分不同核心和命中层级
-    Stats::Vector* demandReqHitCount_[3];
+    Stats::Vector* demandReqHitCount_[4];
+
+    // Demand Request发生Miss不同层级, 区分不同核心和命中层级
+    Stats::Vector* demandReqMissCount_[4];
 
     // L1预取器预取命中不同层级的个数，区分不同核心和命中层级
     Stats::Vector* l1PrefHitCount_[3];
@@ -104,7 +105,7 @@ public:
 
     // L1预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
     Stats::Vector* shadowedPrefCount_[3];
-
+    
     // L1预取器发出预取的有益分数和，第一维度对应缓存等级，第二维度对应单多核
     Stats::Vector* prefTotalUsefulValue_[3][2];
     
@@ -112,27 +113,9 @@ public:
     // 第一维度对应缓存等级，第二维度对应单多核，第三维度对应有益/有害水平
     Stats::Vector* prefUsefulDegree_[3][2][5];
    
-    // 多核有用的预取（他核心有用多于单核心有用）
-    Stats::Vector* prefCrossCoreUseful_[3];
+    // 不同分类的预取个数
+    std::vector<Stats::Vector*> prefUsefulType_[3];
 
-    // 单核有用的预取（单核心有用多于多他核心有用）
-    Stats::Vector* prefSingleCoreUseful_[3];
-    
-    // 自私的预取（单核心有用，他核心有害）
-    Stats::Vector* prefSelfish_[3];
-
-    // 无私的预取（单核心有害，他核心有用）
-    Stats::Vector* prefSelfless_[3];
-
-    // 无用预取（单核心无用，他核心无用）
-    Stats::Vector* prefUseless_[3];
-
-    // 单核有害的预取（单核心有害多于多他核心有害）
-    Stats::Vector* prefSingleCoreHarmful_[3];
-    
-    // 多核有害的预取（他核心有害多于多单核心有害）
-    Stats::Vector* prefCrossCoreHarmful_[3];
-    
 private:
     // 基于时间维度的统计
     const uint64_t statsPeriod_;
@@ -140,14 +123,14 @@ private:
     // 下一个统计周期开始的Tick位置
     uint64_t nextPeriodTick_;
 
-    // Demand请求的命中数量 
-    uint32_t demandHit_ = 0;
+    // Demand请求的命中数量
+    uint32_t demandHit_[4] = {0};
 
-    // Demand请求的缺失数量 
-    uint32_t demandMiss_ = 0;
+    // Demand请求的缺失数量
+    uint32_t demandMiss_[4] = {0};
 
     // 统计周期内的不同类型的预取个数
-    uint32_t prefStatusCount_[3][2][5] = {0};
+    uint32_t prefTypeCount_[3][2][5] = {0};
 
     // 用于记录预取有害信息的结构，每一级缓存都会有一个
     std::vector<IdealPrefetchUsefulTable> usefulTable_;

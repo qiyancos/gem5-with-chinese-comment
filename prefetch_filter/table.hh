@@ -95,14 +95,21 @@ public:
 
 class IdealPrefetchUsefulTable {
 public:
-    // 在数据被命中的时候进行处理
-    int updateHit(const uint64_t& addr, const DataType type);
+    // 在数据被命中的时候进行处理，同时会更新计数
+    int updateHit(const uint64_t& addr, const DataType type, 
+            std::vector<Stats::Vector*>& cacheStats);
 
     // 在预取被替换掉的时候进行处理
-    int updateEvict(const uint64_t& addr);
+    int updateEvict(const uint64_t& addr, Stats::Vector* totalUsefulValue[][],
+            Stats::Vector* usefulDegree[][][],
+            std::vector<Stats::Vector*>* usefulType[],
+            uint32_t timingStatus[][][]);
 
     // 当新的预取插入时添加表项
-    int addPref(const uint64_t& prefAddr, const uint64_t& evictAddr);
+    int addPref(const PacketPtr& prefPkt, const uint64_t& evictAddr);
+
+    // 判断一个预取是否被Demand Request覆盖了
+    int isPrefHit(const uint64_t& addr);
 
 private:
     // 依据地址到有用信息的映射，用于对Cache中的预取数据
