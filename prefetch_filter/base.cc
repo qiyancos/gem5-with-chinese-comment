@@ -33,19 +33,6 @@
 
 #include "mem/cache/prefetch_filter/base.hh"
 
-#include "base/compiler.hh"
-#include "base/logging.hh"
-#include "debug/Cache.hh"
-#include "debug/CachePort.hh"
-#include "debug/CacheRepl.hh"
-#include "debug/CacheVerbose.hh"
-#include "mem/cache/mshr.hh"
-#include "mem/cache/prefetch/base.hh"
-#include "mem/cache/queue_entry.hh"
-#include "params/BaseCache.hh"
-#include "params/WriteAllocator.hh"
-#include "sim/core.hh"
-
 class BaseCache;
 struct BasePrefetchFilterParams;
 
@@ -59,8 +46,8 @@ BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
 
 int BasePrefetchFilter::addCache(BaseCache* newCache) {
     int level = newCache->cacheLevel;
-    if (level > caches_.size()) {
-        caches_.resize(level);
+    if (level >= caches_.size()) {
+        caches_.resize(level + 1);
     }
     caches_[level].push_back(newCache);
     return 0;
@@ -169,7 +156,10 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                 // 如果一个预取替换了一个没有被Demand Request命中过的无用预取
                 // 则原预取将会被剔除，并进行记录，同时新的预取替换对象会继承
                 // 之前替换对象的地址
-
+                CHECK_RET_EXIT(usefulTable_[cacheIndex].replaceEvict(
+                        pkt, evictedAddr, prefTotalUsefulValue_,
+                        prefUsefulDegree_, prefUsefulType_, prefTypeCount_,
+                        "Failed to replace old pref with new pref");
             }
         }
     }
@@ -186,9 +176,9 @@ int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
     return cache->cacheLevel_;
 }
 
-void BasePrefetchFilter::init() {
-    maxCacheLevel_ = caches_.size();
-    numCpus_ = caches_[1].size();
+void BasePrefetchFilter::init() {   
+    maxCacheLevel_ = caches_.size() - 1;
+    numCpus_ = caches_[0].size();
     usefulTable.resize(maxCacheLevel_);
     for (int i = 0; i <= maxCacheLevel_; i++) {
         usePref_[level] = caches_[i][0]->prefetcher != NULL;
@@ -196,9 +186,57 @@ void BasePrefetchFilter::init() {
 }
 
 int BasePrefetchFilter::checkUpdateTimingStats() {
-    memset(demandHit_, 0, sizeof(demandHit_);
-    memset(demandMiss_, 0, sizeof(demandMiss_);
-    memset(prefTypeCount_, 0, sizeof(prefTypeCount_);
+    if (enableStats_ && curTick() > nextPeriodTick_) {
+        timingStatsPeriodCount_++;
+
+        // 更新时间维度的统计数据
+        for (int i = 0; i < 3; i++) {
+            CHECK_RET_EXIT(usefulTable_[i].updateTimingStats(prefTypeCount_),
+                    "Failed to update timing stats variable");
+        }
+        
+        // 打印时间维度的信息
+        std::stringstream outputInfo;
+        outputInfo << "Stats Period Id: " << timingStatsPeriodCount_ <<
+                std::endl;
+        outputInfo << "\tDemand Hit Count: " << demandHit_[0] << ", " <<
+                demandHit_[1] << ", " << demandHit_[2] << ", " <<
+                demandHit_[3] << ".\n";
+        outputInfo << "\tDemand Hit Count: " << demandMiss_[0] << ", " <<
+                demandMiss_[1] << ", " << demandMiss_[2] << ", " <<
+                demandMiss_[3] << ".\n";
+        outputInfo << "\tPref Type Count: \n";
+        for (int i = 0; i < 3; i++) {
+            outputInfo << "\t\t" << BaseCache::levelName[i + 1] << "(";
+            for (int j = 0; j < 2; j++) {
+                std::string usefulTypeStr = j ? "single_core" : "cross_core";
+                outputInfo << usefulTypeStr << "): ";
+                for (int k = 0; k < 5; k++) {
+                    outputInfo << prefTypeCount_[i][j][k] << ", ";
+                }
+            }
+            outputInfo << std::endl;
+        }
+        DPRINTF(PrefetchFilter, "%s", outputInfo.str());
+
+        // 方案1：该方案在全局固定的分割内进行采样，采样范围是对齐的
+        /*
+        while (nextPeriodTick_ - curTick() < statsPeriod_) {
+            nextPeriodTick_ += statsPeriod_;
+        }
+        */
+        // 方案2：动态的采样，每次都从当前的位置开启，采样范围不对齐
+        nextPeriodTick_ = curTick() + statsPeriod_;
+        
+        // 重置时间维度的统计数据
+        memset(demandHit_, 0, sizeof(demandHit_);
+        memset(demandMiss_, 0, sizeof(demandMiss_);
+        memset(prefTypeCount_, 0, sizeof(prefTypeCount_);
+    } else {
+        // 重置空统计变量防止溢出
+        emptyStatsVar = 0;
+    }
+    return 0;
 }
 
 void BasePrefetchFilter::regStats() {
@@ -208,7 +246,7 @@ void BasePrefetchFilter::regStats() {
     init();
 
     emptyStatsVar_
-            .name(name() + "empty_stats")
+            .name(name() + ".empty_stats")
             .desc("Empty stats variable for deleted stats")
             .flag(nozero);
     for (j = 0; j < numCpus_; j++) {
@@ -218,7 +256,7 @@ void BasePrefetchFilter::regStats() {
 
     if (enableStats_) {
         demandReqHitTotal_ = new Stats::Vector();
-                .name(name() + "total_demand_requests_hit")
+                .name(name() + ".total_demand_requests_hit")
                 .desc("Number of demand requests")
                 .flag(total);
         for (j = 0; j < numCpus_; j++) {
@@ -231,10 +269,10 @@ void BasePrefetchFilter::regStats() {
         if (i <= maxCacheLevel_ && enableStats_) {
             demandReqHitCount_[i] = new Stats::Vector();
             demandReqHitCount_[i]
-                    ->name(name() + "demand_requests_hit_" +
-                            BaseCache::levelName[i])
+                    ->name(name() + ".demand_requests_hit_" +
+                            BaseCache::levelName_[i])
                     .desc(std::string("Number of demand requests hit in ") +
-                            BaseCache::levelName[i])
+                            BaseCache::levelName_[i])
                     .flag(total);
             for (j = 0; j < numCpus_; j++) {
                 demandReqHitCount_[i]->subname(j, std::string("cpu") +
@@ -249,10 +287,10 @@ void BasePrefetchFilter::regStats() {
         if (i <= maxCacheLevel_ && enableStats_) {
             demandReqMissCount_[i] = new Stats::Vector();
             demandReqMissCount_[i]
-                    ->name(name() + "demand_requests_miss_" +
-                            BaseCache::levelName[i])
+                    ->name(name() + ".demand_requests_miss_" +
+                            BaseCache::levelName_[i])
                     .desc(std::string("Number of demand requests miss in ") +
-                            BaseCache::levelName[i])
+                            BaseCache::levelName_[i])
                     .flag(total);
             for (j = 0; j < numCpus_; j++) {
                 demandReqMissCount_[i]->subname(j, std::string("cpu") +
@@ -267,10 +305,10 @@ void BasePrefetchFilter::regStats() {
         for (i = 0; i < 3; i++) {
             l1PrefHitCount_[i] = new Stats::Vector();
             l1PrefHitCount_[i]
-                    ->name(name() + "L1_prefetch_requests_hit_" +
-                            BaseCache::levelName[i + 2])
+                    ->name(name() + ".L1_prefetch_requests_hit_" +
+                            BaseCache::levelName_[i + 2])
                     .desc(std::string("Number of prefetches request from L1 " +
-                            "hit in " + BaseCache::levelName[i + 1])
+                            "hit in " + BaseCache::levelName_[i + 1])
                     .flag(total);
             for (j = 0; j < numCpus_; j++) {
                 l1PrefHitCount_[i]->subname(j, std::string("cpu") +
@@ -287,10 +325,10 @@ void BasePrefetchFilter::regStats() {
         for (i = 0; i < 2; i++) {
             l2PrefHitCount_[i] = new Stats::Vector();
             l2PrefHitCount_[i]
-                    ->name(name() + "L2_prefetch_requests_hit_" +
-                            BaseCache::levelName[i + 3])
+                    ->name(name() + ".L2_prefetch_requests_hit_" +
+                            BaseCache::levelName_[i + 3])
                     .desc(std::string("Number of prefetches request from") +
-                            " L2 hit in " + BaseCache::levelName[i + 3])
+                            " L2 hit in " + BaseCache::levelName_[i + 3])
                     .flag(total);
             for (j = 0; j < numCpus_; j++) {
                 l2PrefHitCount_[i]->subname(j, std::string("cpu") +
@@ -307,10 +345,10 @@ void BasePrefetchFilter::regStats() {
         if (usePref_[i + 1] && enableStats_) {
             shadowedPrefCount_[i] = new Stats::Vector();
             shadowedPrefCount_[i]
-                    ->name(name() + BaseCache::levelName[i + 1] +
+                    ->name(name() + "." + BaseCache::levelName_[i + 1] +
                             "_shadowed_prefetches")
                     .desc(std::string("Number of prefetches shadowed by demand "
-                            "requests from " + BaseCache::levelName[i + 1])
+                            "requests from " + BaseCache::levelName_[i + 1])
                     .flag(total);
             for (j = 0; j < numCpus_; j++) {
                 shadowedPrefHitCount_[i]->subname(j, std::string("cpu") +
@@ -325,18 +363,14 @@ void BasePrefetchFilter::regStats() {
         if (usePref_[i + 1] && enableStats_) {
             std::string usefulTypeStr;
             for (j = 0; j < 2; j++) {
-                if (j == 0) {
-                    usefulTypeStr = "single_core";
-                } else {
-                    usefulTypeStr = "cross_core";
-                }
+                usefulTypeStr = j ? "single_core" : "cross_core";
                 prefTotalUsefulValue_[i][j] = new Stats::Vector();
                 prefTotalUsefulValue_[i][j]
-                        ->name(name() + BaseCache::levelName[i + 1] +
+                        ->name(name() + "." + BaseCache::levelName_[i + 1] +
                                 "_prefetch_" + usefulTypeStr + "_useful_value")
                         .desc(std::string("Total") + usefulTypeStr +
                                 "useful value for of prefetches from" +
-                                BaseCache::levelName[i + 1])
+                                BaseCache::levelName_[i + 1])
                         .flag(total);
                 for (k = 0; k < numCpus_; k++) {
                     shadowedPrefHitCount_[i][j]->subname(k, std::string("cpu") +
@@ -354,22 +388,19 @@ void BasePrefetchFilter::regStats() {
         if (usePref_[i + 1] && enableStats_) {
             std::string usefulTypeStr;
             for (j = 0; j < 2; j++) {
-                if (j == 0) {
-                    usefulTypeStr = "single_core";
-                } else {
-                    usefulTypeStr = "cross_core";
-                }
+                usefulTypeStr = j ? "single_core" : "cross_core";
                 for (k = 0; k < 5; k++) {
                     std::string degreeStr = std::to_string(k);
                     prefUsefulDegree_[i][j][k] = new Stats::Vector();
                     prefUsefulDegree_[i][j][k]
-                            ->name(name() + BaseCache::levelName[i + 1] +
+                            ->name(name() + "." +
+                                    BaseCache::levelName_[i + 1] +
                                     "_prefetch_" + usefulTypeStr +
                                     "_useful_degree_" + degreeStr)
                             .desc(std::string("Number of prefetches with " +
                                     usefulType + " useful degree " +
                                     degreeStr + " from " +
-                                    BaseCache::levelName[i + 1])
+                                    BaseCache::levelName_[i + 1])
                         .flag(total);
                 for (int n = 0; n < numCpus_; n++) {
                     prefUsefulDegreei_[i][j][k]->subname(n, std::string("cpu") +
@@ -390,11 +421,11 @@ void BasePrefetchFilter::regStats() {
             if (usePref_[i + 1] && enableStats_) {
                 prefUsefulType_[i].push_back(new Stats::Vector());
                 prefUsefulType_[i].back()
-                        ->name(name() + BaseCache::levelName[i + 1] +
+                        ->name(name() + "." + BaseCache::levelName_[i + 1] +
                                 + "_" + type.name + "_prefetches")
                         .desc(std::string("Number of ") + type.name +
                                 " prefetches from" +
-                                BaseCache::levelName[i + 1])
+                                BaseCache::levelName_[i + 1])
                         .flag(total);
                 for (j = 0; j < numCpus_; j++) {
                     prefUsefulType_[i].back()->subname(j, std::string("cpu") +

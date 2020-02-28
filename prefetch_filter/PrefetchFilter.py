@@ -60,6 +60,8 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     l3_threashold = Param.UInt16(?, "Threshold for prefetch to l3")
     
     # PPF自带的特征
+    feature_weight_bits = Param.UInt8(?, "Number of bits of weight for a "
+            "feature")
     # Feature表示方式: "key1 key2 key3 x n" 表示从[key1]^[key2]^[key3]的结果中
     #          取第x位开始共n个bits(包括第x位)的数据作为Weight Table的索引
     original_features = VectorParam.String([

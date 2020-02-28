@@ -76,15 +76,16 @@ private:
     // 表格的数据实体
     std::vector<Set> table_;
 
-private:
+public:
     // 表格的大小
     const uint32_t size_;
+    
     // 表格的组相联度
     const uint8_t assoc_;
 
 public:
-    // 构造函数
-    Table(const uint32_t size, const uint8_t assoc);
+    // 初始化函数
+    int init(const uint32_t size, const uint8_t assoc);
 
     // 读取某一个地址对应的数据
     T& read(const uint64_t& addr);
@@ -98,12 +99,22 @@ public:
     // 在数据被命中的时候进行处理，同时会更新计数
     int updateHit(const uint64_t& addr, const DataType type, 
             std::vector<Stats::Vector*>& cacheStats);
+    
+    // 当一个预取替换之前的无用预取时进行更新，同时更新统计计数
+    int replaceEvict(const PacketPtr& newPrefPkt, const uint64_t& oldPrefAddr,
+            const Stats::Vector* totalUsefulValue[][],
+            Stats::Vector* usefulDegree[][][],
+            std::vector<Stats::Vector*>* usefulType[],
+            uint32_t timingStatus[][][]);
 
-    // 在预取被替换掉的时候进行处理
+    // 在预取被Demand Request替换掉的时候进行处理，同时更新统计计数
     int updateEvict(const uint64_t& addr, Stats::Vector* totalUsefulValue[][],
             Stats::Vector* usefulDegree[][][],
             std::vector<Stats::Vector*>* usefulType[],
             uint32_t timingStatus[][][]);
+    
+    // 对时间维度的信息进行更新，并重置相关信息项
+    int updatePrefTiming(uint32_t timingStatus[][][]);
 
     // 当新的预取插入时添加表项
     int addPref(const PacketPtr& prefPkt, const uint64_t& evictAddr);

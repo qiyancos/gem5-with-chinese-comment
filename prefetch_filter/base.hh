@@ -42,6 +42,8 @@
 #include "sim/clocked_object.hh"
 #include "sim/probe/probe.hh"
 
+#include "debug/PrefetchFilter.hh"
+
 class BaseCache;
 struct BasePrefetchFilterParams;
 
@@ -122,6 +124,9 @@ private:
 
     // 下一个统计周期开始的Tick位置
     uint64_t nextPeriodTick_;
+    
+    // 时间维度统计周期的计数
+    uint64_t timingStatsPeriodCount_ = 0;
 
     // Demand请求的命中数量
     uint32_t demandHit_[4] = {0};
