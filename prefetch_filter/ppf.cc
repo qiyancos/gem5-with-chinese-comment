@@ -205,10 +205,10 @@ void regStats() {
         if (usePref_[i + 1]) {
             prefRejected_[i] = new Stats::Vector();
             prefRejected_[i]
-                    ->name(name() + ".rejected_prefetch_from_" +
+                    ->name(name() + ".accepted_prefetch_from_" +
                             BaseCache::levelName_[i + 1])
                     .desc(std::string("Number of prefetch requests from " +
-                            BaseCache::levelName_[i] + " rejected.")
+                            BaseCache::levelName_[i] + " accepted.")
                     .flag(total);
             for (j = 0; j < numCpus_; j++) {
                 prefRejected_[i]->subname(j, std::string("cpu") +
@@ -237,18 +237,101 @@ void regStats() {
         }
     }
     
-    Stats::Vector prefToL1;
+    for (i = 0; i < 3; i++) {
+        if (usePref_[i + 1]) {
+            prefThreshing_[i] = new Stats::Vector();
+            prefThreshing_[i]
+                    ->name(name() + ".threshing_prefetch_from_" +
+                            BaseCache::levelName_[i + 1])
+                    .desc(std::string("Number of threshing prefetch requests " +
+                            "from " + BaseCache::levelName_[i] + ".")
+                    .flag(total);
+            for (j = 0; j < numCpus_; j++) {
+                prefThreshing_[i]->subname(j, std::string("cpu") +
+                        std::to_string(j));
+            }
+        } else {
+            prefThreshing_[i] = &emptyStatsVar_;
+        }
+    }
 
-    // 最终被处理成预取至L2的请求个数，0对应没有降级的预取，1对应降1级的预取
-    Stats::Vector prefToL2[2];
+    if (usePref_[1]) {
+        prefToL1_[i] = new Stats::Vector();
+        prefToL1_[i]
+                ->name(name() + ".prefetch_sent_to_L1D")
+                .desc("Number of prefetch requests sent to L1D.")
+                .flag(total);
+        for (j = 0; j < numCpus_; j++) {
+            prefToL1_[i]->subname(j, std::string("cpu") +
+                    std::to_string(j));
+        }
+    } else {
+        prefToL1_[i] = &emptyStatsVar_;
+    }
+    
+    for (i = 0; i < 2; i++) {
+        if (usePref_[2 - i] && maxCacheLevel_ > 1) {
+            prefToL2_[i] = new Stats::Vector();
+            prefToL2_[i]
+                    ->name(name() + ".prefetch_sent_to_L2_from" +
+                            BaseCache::levelName_[2 - i])
+                    .desc(std::string("Number of prefetch requests sent to " +
+                            "L2 from " + BaseCache::levelName_[2 - i] + ".")
+                    .flag(total);
+            for (j = 0; j < numCpus_; j++) {
+                prefToL2_[i]->subname(j, std::string("cpu") +
+                        std::to_string(j));
+            }
+        } else {
+            prefToL2_[i] = &emptyStatsVar_;
+        }
+    }
 
-    // 最终被处理成预取至L3的请求个数，编号对应降级的数值
-    Stats::Vector prefToL3[3];
-
-    // 最终被处理成预取至L3的请求个数，编号对应降级的数值
-    Stats::Vector prefToL3[3];
-
-    // 不同Feature不同权重的数值出现次数
-    std::vector<std::vector<Stats::Vector>> featureWeightFrequency;
+    for (i = 0; i < 3; i++) {
+        if (usePref_[3 - i] && maxCacheLevel_ > 2) {
+            prefToL3_[i] = new Stats::Vector();
+            prefToL3_[i]
+                    ->name(name() + ".prefetch_sent_to_L3_from" +
+                            BaseCache::levelName_[3 - i])
+                    .desc(std::string("Number of prefetch requests sent to " +
+                            "L3 from " + BaseCache::levelName_[3 - i] + ".")
+                    .flag(total);
+            for (j = 0; j < numCpus_; j++) {
+                prefToL3_[i]->subname(j, std::string("cpu") +
+                        std::to_string(j));
+            }
+        } else {
+            prefToL3_[i] = &emptyStatsVar_;
+        }
+    }
+    
+    CHECK_ARGS_EXIT(weightBits_ > 0, "Bit number of the feature weight must%s",
+            " be greater than zero");
+    int weightNum = 1 << (weightBits_ - 1);
+    featureWeightFrequency_.resize(featureList.size(),
+            std::vector<Stats::Vector*> (weightNum));
+    for (int i = 0; i < featureList_.size(); i++) {
+        for (int j = 0; j < weightNum; j++) {
+            std::string weightStr = std::to_string(j);
+            // 需要至少一个缓存层级开启了预取器
+            if (usePref_[0] || usePref_[1] || usePref_[2] || usePref_[3]) {
+                featureWeightFrequency_[i][j] = new Stats::Vector();
+                featureWeightFrequency_[i][j]
+                        ->name(name() + ".feature_" + featureList_[i].name_ + 
+                                "_weight_" + weightStr + 
+                                BaseCache::levelName_[3 - i])
+                        .desc(std::string("Number of prefetch requests sent to " +
+                                "L3 from " + BaseCache::levelName_[3 - i] + ".")
+                        .flag(total);
+                for (j = 0; j < numCpus_; j++) {
+                    prefToL3_[i]->subname(j, std::string("cpu") +
+                            std::to_string(j));
+                }
+            } else {
+                featureWeightFrequency_[i][j] = &emptyStatsVar_;
+            }
+        }
+    }
+}
 
 } // namespace prefetch_filter

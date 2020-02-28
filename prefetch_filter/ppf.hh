@@ -58,6 +58,10 @@ public:
     // 获取当前Feature的表格大小
     uint16_t getSize();
 
+public:
+    // 特征的通用标识名称
+    std::string name_;
+
 private:
     // 当前Feature所使用的预取信息索引
     std::vector<uint8_t> infoIndexList_;
@@ -107,25 +111,25 @@ private:
 
 public:
     // 一直都未被过滤的预取请求个数，区分核心，编号区分缓存
-    Stats::Vector* prefAccepted[3];
+    Stats::Vector* prefAccepted_[3];
     
     // 一直都被过滤的预取请求个数，区分核心，编号区分缓存
-    Stats::Vector* prefRejected[3];
+    Stats::Vector* prefRejected_[3];
 
     // 在Prefetch Table和Reject Table之间存在切换的预取
-    Stats::Vector* prefThreshing[3];
+    Stats::Vector* prefThreshing_[3];
     
     // 最终被处理成预取至L1的请求个数
-    Stats::Vector* prefToL1;
+    Stats::Vector* prefToL1_;
 
     // 最终被处理成预取至L2的请求个数，0对应没有降级的预取，1对应降1级的预取
-    Stats::Vector* prefToL2[2];
+    Stats::Vector* prefToL2_[2];
 
     // 最终被处理成预取至L3的请求个数，编号对应降级的数值
-    Stats::Vector* prefToL3[3];
+    Stats::Vector* prefToL3_[3];
 
-    // 不同Feature不同权重的数值出现次数
-    std::vector<std::vector<Stats::Vector*>> featureWeightFrequency;
+    // 不同Feature不同权重的数值出现次数，用于计算Pearson相关因子
+    std::vector<std::vector<Stats::Vector*>> featureWeightFrequency_;
 
 private:
     // 初始化成功与否的标志

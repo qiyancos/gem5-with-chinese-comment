@@ -145,19 +145,19 @@ private:
     std::vector<std::vector<BaseCache*>> caches_;
     
     // 当前某一级缓存是否开启了预取
-    bool usePref_[4];
+    bool usePref_[4] = {0};
 
     // 当前系统下的最高缓存等级
-    uint8_t maxCacheLevel_;
+    uint8_t maxCacheLevel_ = 0;
 
     // 当前系统下CPU的个数
-    uint8_t numCpus_;
+    uint8_t numCpus_ = 0;
 
     // 是否开启统计操作，如果不做统计，则所有统计函数将会无效
-    const bool enableStats_;
+    const bool enableStats_ = 0;
     
     // 是否开启过滤器，如果不开启，则所有预取都不会改变
-    const bool enableFilter_;
+    const bool enableFilter_ = 0;
 };
 
 } // namespace prefetch_filter
