@@ -161,20 +161,38 @@ int PerceptronPrefetchFilter::init() {
 }
 
 // 通知发生了Hit事件
-int notifyCacheHit(BaseCache* senderCache, const PacketPtr& pkt,
-        const DataTypeInfo& info);
+int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
+        const PacketPtr& pkt, const DataTypeInfo& info) {
+    // 对于指令Cache的预取不进行过滤和训练处理
+    if (!cache->cacheLevel_) {
+        return 0;
+    }
+
+    if (info.source == Dmd) {
+        if (info.target == Pref) {
+        }
+    } else {
+        if (info.target == Dmd) {
+        } else {
+        }
+    }
+}
 
 // 通知发生了Miss事件
-int notifyCacheMiss(BaseCache* senderCache, const PacketPtr& pkt,
-        const DataTypeInfo& info);
+int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
+        const PacketPtr& pkt, const DataTypeInfo& info) {
+    
+}
 
 // 通知发生了Fill事件
-int notifyCacheFill(BaseCache* senderCache, const PacketPtr &pkt,
-        const DataTypeInfo& info);
+int PerceptronPrefetchFilter::notifyCacheFill(BaseCache* cache,
+        const PacketPtr &pkt, const DataTypeInfo& info) {
+}
 
 // 对一个预取进行过滤，返回发送的Cache Level或者不预取
-int filterPrefetch(BaseCache* senderCache, const PacketPtr &pkt,
-        const PrefetchInfo& info);
+int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
+        const PacketPtr &pkt, const PrefetchInfo& info) {
+}
 
 void regStats() {
     // 执行父类的统计数据初始化操作
@@ -318,13 +336,12 @@ void regStats() {
                 featureWeightFrequency_[i][j] = new Stats::Vector();
                 featureWeightFrequency_[i][j]
                         ->name(name() + ".feature_" + featureList_[i].name_ + 
-                                "_weight_" + weightStr + 
-                                BaseCache::levelName_[3 - i])
-                        .desc(std::string("Number of prefetch requests sent to " +
-                                "L3 from " + BaseCache::levelName_[3 - i] + ".")
+                                "_weight_" + weightStr)
+                        .desc(std::string("Time of appearence of a specific") +
+                                " weight for a feature.")
                         .flag(total);
                 for (j = 0; j < numCpus_; j++) {
-                    prefToL3_[i]->subname(j, std::string("cpu") +
+                    featureWeightFrequency[i]->subname(j, std::string("cpu") +
                             std::to_string(j));
                 }
             } else {

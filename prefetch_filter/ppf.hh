@@ -87,19 +87,19 @@ public:
     ~PerceptronPrefetchFilter() {}
 
     // 通知发生了Hit事件
-    int notifyCacheHit(BaseCache* senderCache, const PacketPtr& pkt,
+    int notifyCacheHit(BaseCache* cache, const PacketPtr& pkt,
             const DataTypeInfo& info);
     
     // 通知发生了Miss事件
-    int notifyCacheMiss(BaseCache* senderCache, const PacketPtr& pkt,
+    int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
             const DataTypeInfo& info);
     
     // 通知发生了Fill事件
-    int notifyCacheFill(BaseCache* senderCache, const PacketPtr &pkt,
+    int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
             const DataTypeInfo& info);
 
     // 对一个预取进行过滤，返回发送的Cache Level或者不预取
-    int filterPrefetch(BaseCache* senderCache, const PacketPtr &pkt,
+    int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
             const PrefetchInfo& info);
     
     // 注册统计变量
