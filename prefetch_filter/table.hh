@@ -87,11 +87,21 @@ public:
     // 初始化函数
     int init(const uint32_t size, const uint8_t assoc);
 
-    // 读取某一个地址对应的数据
-    T& read(const uint64_t& addr);
+    // 初始化函数
+    int init(const uint32_t size, const uint8_t assoc, const T& initVal);
 
-    // 写入一个地址对应的数据
-    int write(const uint64_t& addr, const T& value);
+    // 判断某一个地址是否有数据，0表示不存在，1表示存在，-1表示出现错误
+    int touch(const uint64_t& addr);
+
+    // 读取某一个地址对应的数据，0表示不存在，1表示成功，-1表示出现错误
+    int read(const uint64_t& addr, T**);
+
+    // 写入一个地址对应的数据，0表示不存在，1表示成功，-1表示出现错误
+    int write(const uint64_t& addr, const T& value,
+            uint64_t* replacedAddr = nullptr);
+    
+    // 无效化一个地址对应的表项0，表示不存在，1表示成功，-1表示出现错误
+    int invalidate(const uint64_t& addr);
 };
 
 class IdealPrefetchUsefulTable {

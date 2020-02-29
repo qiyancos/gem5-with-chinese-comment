@@ -73,10 +73,59 @@ private:
     uint8_t bits_;
 };
 
+class PrefetchUsefulTable {
+public:
+    // 对命中Pref的情况进行处理，不区分Pref还是替换数据地址
+    int updateHit(const uint64_t& addr);
+    
+    // 当新的Pref出现的时候，进行替换信息的更新
+    int addPref(const uint64_t& prefAddr, const uint64_t evictedAddr);
+    
+    // 当前Cache中的预取被替换了
+    int evictPref(const uint64_t& addr);
+
+public:
+    // Counter Cache的大小
+    uint32_t counterCacheSize_;
+
+    // Counter Cache的组相联毒
+    uint8_t counterCacheAssoc_;
+
+    // Victim Cache的大小
+    uint32_t victimCacheSize_;
+
+    // Victim Cache的组相联度
+    uint8_t victimCacheAssoc_;
+
+private:
+    // 进行表格的初始化
+    int init(const uint32_t CCsize, const uint8_t CCAssoc,
+            const uint32_t VCSize, const uint8_t VCAssoc);
+
+    // Counter Cache的存储表项
+    struct CounterEntry {
+        // 计数器大小
+        int8_t counter_;
+        // 对应的预取地址
+        uint64_t prefAddr;
+        // 对应的被替换的地址
+        uint64_t evictedAddr;
+    };
+
+    // 预取到Counter Cache的压缩地址映射
+    std::map<uint64_t, uint16_t> prefCounterIndexMap_;
+
+    // 被替换数据到Counter Cache压缩地址的映射
+    CacheTable<uint16_t> VictimCache_;
+
+    // Counter Cache
+    CacheTable<CounterEntry> counterCache_;
+};
+
 // 过滤器基类，仅仅添加了统计功能，不进行实际过滤
 class PerceptronPrefetchFilter : public BasePrefetchFilter {
 
-typedef CacheTable<std::vector<uint16_t>> FeatureIndexTable;
+typedef CacheTable<std::vector<SaturatedCounter>> FeatureIndexTable;
 typedef CacheTable<int8_t> FeatureWeightTable;
 
 public:
@@ -92,13 +141,13 @@ public:
     
     // 通知发生了Miss事件
     int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
-            const DataTypeInfo& info);
+            const DataTypeInfo& info, const uint64_t& combinedAddr);
     
     // 通知发生了Fill事件
     int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
-            const DataTypeInfo& info);
+            const DataTypeInfo& info, const uint64_t& evictedAddr);
 
-    // 对一个预取进行过滤，返回发送的Cache Level或者不预取
+    // 对一个预取进行过滤，返回发送的Cache Level(0-3)或者不预取(4)
     int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
             const PrefetchInfo& info);
     
@@ -106,8 +155,21 @@ public:
     void regStats() override;
 
 private:
+    // 针对不同类型预取的训练方法对应的enum类型
+    enum TrainType {GoodPref, BadPref, UselessPref};
+
+private:
     // 用于初始化数据的函数
     int init();
+
+    // 对一个给定的预取进行奖励或者惩罚，处理成功返回1，失败返回0，错误返回-1
+    int train(const uint64_t& prefAddr, const uint8_t cacheLevel,
+            const uint8_t cacheLevel, const uint8_t cpuId,
+            const TrainType type);
+
+    // 依据信息对Prefetch Table和Reject Table进行更新
+    int updateTable(const uint64_t& prefAddr, const uint8_t cpuId,
+            const uint8_t cacheLevel, const std::vector<uint16_t>& indexes);
 
 public:
     // 一直都未被过滤的预取请求个数，区分核心，编号区分缓存
@@ -119,13 +181,16 @@ public:
     // 在Prefetch Table和Reject Table之间存在切换的预取
     Stats::Vector* prefThreshing_[3];
     
-    // 最终被处理成预取至L1的请求个数
-    Stats::Vector* prefToL1_;
+    // 因为表格不足，没有进行训练的预取个数
+    Stats::Vector* prefNotTrained_;
 
-    // 最终被处理成预取至L2的请求个数，0对应没有降级的预取，1对应降1级的预取
-    Stats::Vector* prefToL2_[2];
+    // 最终被处理成预取至L1的请求个数，编号对应源预取缓存等级
+    Stats::Vector* prefToL1_[3];
 
-    // 最终被处理成预取至L3的请求个数，编号对应降级的数值
+    // 最终被处理成预取至L2的请求个数，编号对应源预取缓存等级
+    Stats::Vector* prefToL2_[3];
+
+    // 最终被处理成预取至L3的请求个数，编号对应源预取缓存等级
     Stats::Vector* prefToL3_[3];
 
     // 不同Feature不同权重的数值出现次数，用于计算Pearson相关因子
@@ -137,7 +202,10 @@ private:
 
     // 是否在不同CPU之间共享表格
     const bool sharedTable_;
-
+    
+    // 是否允许对预取请求进行等级提升
+    const bool allowUpgrade_;
+    
     // 将预取设置为到L1的可信度阈值
     const uint16_t l1PrefThreshold_;
 
@@ -153,17 +221,31 @@ private:
     // 不同层级缓存相关反馈对应的训练幅度
     const uint8_t trainStep_[3];
 
-    // 没有被过滤的预取索引表格
-    std::vector<FeatureIndexTable> prefetchTable_;
+    // 对于无用预取的训练Step，为0则表示不处理
+    const uint8_t uselessPrefStep_;
     
-    // 被过滤的预取索引表格
-    std::vector<FeatureIndexTable> rejectTablePtr_;
-    
-    // 存放Feature权重的表格
-    std::vector<std::vector<FeatureWeightTable>> featureTable_;
-
     // 存放Feature的向量
     std::vector<Feature> featureList_;
+
+private:
+    // 没有被过滤的预取索引表格，区分CPU
+    std::vector<FeatureIndexTable> prefetchTable_;
+    
+    // 被过滤的预取索引表格，区分CPU
+    std::vector<FeatureIndexTable> rejectTablePtr_;
+
+    // 存放所有在Prefetch Table和Reject Table中预取在两个表格中出现次数
+    // pair中第一个表示PT次数，第二个表示RT次数
+    std::map<uint64_t, std::pair<uint8_t, uint8_t>> prefAppearTime_;
+
+    // 存放Feature权重的表格，区分CPU
+    std::vector<std::vector<FeatureWeightTable>> featureTable_;
+
+    // 预取有害性统计相关的表格
+    std::vector<std::vector<PreftchUsefulTable>> prefUsefulTable_;
+    
+    // 存放当前缓存中预取对应的发射缓存等级，区分CPU
+    std::vector<std::map<uint64_t, uint8_t>> prefSrcCacheMap_;
 };
 
 } // namespace prefetch_filter

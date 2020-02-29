@@ -101,9 +101,9 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
     return 0;
 }
 
-// 出现Miss情况下
 int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
-        const PacketPtr& pkt, const DataTypeInfo& info) {
+        const PacketPtr& pkt, const DataTypeInfo& info,
+        const uint64_t& combinedAddr) {
     // 这里的info记录的source是新的Miss属性
     // 其中的target表示mshr中已存在的内容属性
     // prefetch->demand表示prefetch获得了一个新的mshr表项
@@ -125,7 +125,8 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
 }
 
 int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
-        const PacketPtr &pkt, const DataTypeInfo& info, uint64_t evictedAddr) {
+        const PacketPtr &pkt, const DataTypeInfo& info,
+        const uint64_t& evictedAddr) {
     if (!cache->cacheLevel_) {
         return 0;
     }

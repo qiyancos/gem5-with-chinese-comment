@@ -66,11 +66,11 @@ public:
     
     // 通知发生了Miss事件
     int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
-            const DataTypeInfo& info);
+            const DataTypeInfo& info, const uint64_t& combinedAddr);
     
     // 通知发生了Fill事件
     int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
-            const DataTypeInfo& info, uint64_t evictedAddr);
+            const DataTypeInfo& info, const uint64_t& evictedAddr);
 
     // 对一个预取进行过滤，返回发送的Cache Level或者不预取
     int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
@@ -137,10 +137,16 @@ private:
     // 统计周期内的不同类型的预取个数
     uint32_t prefTypeCount_[3][2][5] = {0};
 
+    // 是否开启统计操作，如果不做统计，则所有统计函数将会无效
+    const bool enableStats_ = 0;
+    
+    // 是否开启过滤器，如果不开启，则所有预取都不会改变
+    const bool enableFilter_ = 0;
+
+protected:
     // 用于记录预取有害信息的结构，每一级缓存都会有一个
     std::vector<IdealPrefetchUsefulTable> usefulTable_;
-
-private:
+    
     // 当前Filter负责监视的所有Cache指针
     std::vector<std::vector<BaseCache*>> caches_;
     
@@ -152,12 +158,6 @@ private:
 
     // 当前系统下CPU的个数
     uint8_t numCpus_ = 0;
-
-    // 是否开启统计操作，如果不做统计，则所有统计函数将会无效
-    const bool enableStats_ = 0;
-    
-    // 是否开启过滤器，如果不开启，则所有预取都不会改变
-    const bool enableFilter_ = 0;
 };
 
 } // namespace prefetch_filter

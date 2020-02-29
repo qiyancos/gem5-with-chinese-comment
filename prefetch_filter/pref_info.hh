@@ -121,7 +121,7 @@ public:
     // 存放统计数据的结构体
     // 没有记录Cycle是因为实际上每一个有用或者有害带来的
     // 时钟周期损失/节省均为LLC的一次Miss Latency
-    struct Stats {
+    struct Info {
         // 单核心预取产生的有效命中次数
         uint64_t singleCoreUsefulCount_;
         
@@ -139,10 +139,13 @@ public:
     };
     
     // 不同核心的Stats情况
-    std::vector<Stats> stats_; 
+    std::vector<Info> stats_; 
     
     // 当前预取对应的替换数据地址
     uint64_t replacedAddress_;
+
+    // 发射当前预取的Cache等级
+    uint8_t srcCache_;
 
 private:
     // 所有相关的CPUID位图

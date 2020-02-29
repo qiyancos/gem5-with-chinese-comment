@@ -45,7 +45,9 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     
     # 结构设置
     share_table = Param.Bool(True, "If share table across differenct cores")
-    
+    allow_upgrade = Param.Bool(True, "If a pref from low-level cache can be"
+            " sent to a higher level cache")
+
     prefetch_table_size = Param.UInt32(1024, "Size of the prefetch table")
     prefetch_table_assoc = Param.UInt8(4, "Associativity of the prefetch "
             "table")
@@ -86,11 +88,14 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
             ], "List of added features used for PPF")
     
     # 训练设置
-    fine_grained_training = Param.Bool(True, "Use differenct training speed "
-            "for differentcache level")
+    useless_prefetch_training_step = Param.UInt8(1, "Punish useless prefetch "
+            "if this number is set nozero")
+    l1_training_step = Param.UInt8(3, "Step for training of l1 feedback")
+    l2_training_step = Param.UInt8(2, "Step for training of l1 feedback")
+    l3_training_step = Param.UInt8(1, "Step for training of l1 feedback")
     
-    default_training_step = Param.Uint8(1, "Step for all feedback")
-
-    l1_training_step = Param.Uint8(3, "Step for training of l1 feedback")
-    l2_training_step = Param.Uint8(2, "Step for training of l1 feedback")
-    l3_training_step = Param.Uint8(1, "Step for training of l1 feedback")
+    # 有害性统计结构的设置
+    counter_cache_size = Param.UInt32(?, "Size of the counter cache")
+    counter_cache_assoc = Param.UInt8(?, "Associativity of the counter cache")
+    victim_cache_size = Param.UInt32(?, "Size of the victim cache")
+    victim_cache_assoc = Param.UInt32(?, "Associativity of the victim cache")
