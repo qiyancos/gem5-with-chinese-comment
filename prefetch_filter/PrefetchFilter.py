@@ -44,7 +44,15 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     cxx_header = "mem/cache/prefetch_filter/ppf.hh"
     
     # 结构设置
-    share_table = Param.Bool(True, "If share table across differenct cores")
+    cpu_shared_table = Param.Bool(True, "Whether to share table across "
+            "differenct cores")
+    cache_shared_table = Param.Bool(True, "Whether to share table across "
+            "differenct caches")
+    all_shared_table = Param.Bool(True, "Whether to share table across all "
+            "caches")
+    # 在共享表格方面，LLC一定共享，其他层级选择性共享
+    # 该设计暂时不支持SW架构
+
     allow_upgrade = Param.Bool(True, "If a pref from low-level cache can be"
             " sent to a higher level cache")
 

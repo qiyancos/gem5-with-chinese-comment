@@ -108,7 +108,7 @@ class PrefetchUsefulInfo {
 public:
     enum
     // 依据CPU的个数进行大小配置
-    int resize(const uint8_t numCpus);
+    PrefetchUsefulInfo(const uint8_t numCpus);
     
     // 更新一个预取有效命中，同时对命中统计数据进行更新
     int updateUse(const uint64_t& coreBitMap,
@@ -138,7 +138,7 @@ public:
         bool newPref_;
     };
     
-    // 不同核心的Stats情况
+    // 不同核心的情况
     std::vector<Info> stats_; 
     
     // 当前预取对应的替换数据地址

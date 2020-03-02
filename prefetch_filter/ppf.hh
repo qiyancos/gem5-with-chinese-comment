@@ -162,13 +162,18 @@ private:
     // 用于初始化数据的函数
     int init();
 
+    // 依据给定的信息确定处理的目标表格
+    Tables& getTable(BaseCache* cache);
+
     // 对一个给定的预取进行奖励或者惩罚，处理成功返回1，失败返回0，错误返回-1
-    int train(const uint64_t& prefAddr, const uint8_t cacheLevel,
+    int train(Tables& workTable, const uint64_t& prefAddr,
+            const uint8_t cacheLevel, const uint8_t srcCacheLevel,
             const uint8_t cacheLevel, const uint8_t cpuId,
             const TrainType type);
 
     // 依据信息对Prefetch Table和Reject Table进行更新
-    int updateTable(const uint64_t& prefAddr, const uint8_t cpuId,
+    int updateTable(Tables& workTable, const uint64_t& prefAddr,
+            const uint8_t targetCacheLevel, const uint8_t cpuId,
             const uint8_t cacheLevel, const std::vector<uint16_t>& indexes);
 
 public:
@@ -198,10 +203,16 @@ public:
 
 private:
     // 初始化成功与否的标志
-    bool initFailFlag;
+    bool initFailFlag = false;
 
     // 是否在不同CPU之间共享表格
-    const bool sharedTable_;
+    const bool cpuSharedTable_;
+    
+    // 是否在非LLC的Cache之间共享表格
+    const bool cacheSharedTable_;
+    
+    // 是否在所有Cache之间共享表格
+    const bool allSharedTable_;
     
     // 是否允许对预取请求进行等级提升
     const bool allowUpgrade_;
@@ -228,24 +239,33 @@ private:
     std::vector<Feature> featureList_;
 
 private:
-    // 没有被过滤的预取索引表格，区分CPU
-    std::vector<FeatureIndexTable> prefetchTable_;
+    // 一套基本表格的数据结构
+    struct Tables {
+        // 没有被过滤的预取索引表格，区分CPU
+        FeatureIndexTable prefetchTable_;
     
-    // 被过滤的预取索引表格，区分CPU
-    std::vector<FeatureIndexTable> rejectTablePtr_;
+        // 被过滤的预取索引表格，区分CPU
+        FeatureIndexTable rejectTablePtr_;
 
-    // 存放所有在Prefetch Table和Reject Table中预取在两个表格中出现次数
-    // pair中第一个表示PT次数，第二个表示RT次数
-    std::map<uint64_t, std::pair<uint8_t, uint8_t>> prefAppearTime_;
+        // 存放所有在Prefetch Table和Reject Table中预取在两个表格中出现次数
+        // pair中第一个表示PT次数，第二个表示RT次数
+        std::map<uint64_t, std::pair<uint8_t, uint8_t>> prefAppearTime_;
 
-    // 存放Feature权重的表格，区分CPU
-    std::vector<std::vector<FeatureWeightTable>> featureTable_;
+        // 存放Feature权重的表格，区分CPU
+        std::vector<FeatureWeightTable> featureTable_;
 
-    // 预取有害性统计相关的表格
-    std::vector<std::vector<PreftchUsefulTable>> prefUsefulTable_;
+        // 预取有害性统计相关的表格
+        PreftchUsefulTable prefUsefulTable_;
     
-    // 存放当前缓存中预取对应的发射缓存等级，区分CPU
-    std::vector<std::map<uint64_t, uint8_t>> prefSrcCacheMap_;
+        // 存放当前缓存中预取对应的发射缓存等级，区分CPU
+        std::map<uint64_t, uint8_t> prefSrcCacheMap_;
+    };
+    
+    // 针对非LLC的结构使用的表格
+    std::vector<std::vector<Tables>> noneLLCTables_;
+    
+    // 针对LLC的结构使用的表格
+    Tables LLCTable_;
 };
 
 } // namespace prefetch_filter

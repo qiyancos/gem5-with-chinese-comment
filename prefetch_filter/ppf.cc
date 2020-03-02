@@ -62,13 +62,16 @@ int Feature::init(const std::string& feature) {
     CHECK_ARGS(isNumber(wordList.back()) &&
             isNumber(wordList[wordList.size() - 2]),
             "Not enough arguments for a feature");
+    name_ = "";
     for (int i = 0; i < wordList.size() - 2; i++) {
         auto infoPair = IndexMap.find(wordList[i]);
         CHECK_ARGS(infoPair != IndexMap.end(),
                 "Unknow feature name \"%s\" in \"%s\"", wordList[i].c_str(),
                 feature.c_str());
-        infoIndexList_.push_back(infoPair.second);
+        infoIndexList_.push_back(infoPair->second);
+        name_ = name_ + wordList[i] + "_";
     }
+    name_ = name_.substr(0, name_.size() - 1);
     startBits_ = atoi(wordList[wordList.size() - 2].c_str());
     bits_ = atoi(wordList.back().c_str());
     return 0;
@@ -93,7 +96,9 @@ uint16_t Feature::getSize() {
 PerceptronPrefetchFilter::PerceptronPrefetchFilter(
         const PerceptronPrefetchFilterParams *p) :
         BasePrefetchFilter(p),
-        sharedTable_(p->share_table),
+        cpuSharedTable_(p->cpu_shared_table),
+        cacheSharedTable_(p->cache_shared_table),
+        allSharedTable_(p->all_shared_table),
         allowUpgrade_(p->allow_upgrade),
         weightBits_(p->feature_weight_bits),
         l1PrefThreshold_(p->l1_threshold),
@@ -101,46 +106,46 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
         l3PrefThreshold_(p->l1_threshold),
         uselssPrefStep_(p->useless_prefetch_training_step) {
     // 初始化训练幅度
-    trainStep_[0] = p->l1_training _step;
-    trainStep_[1] = p->l2_training _step;
-    trainStep_[2] = p->l3_training _step;
+    trainStep_[0] = p->l1_training_step;
+    trainStep_[1] = p->l2_training_step;
+    trainStep_[2] = p->l3_training_step;
 
     // 初始化Feature
     for (const std::string& featureStr : original_features) {
         featureList_.push_back(Feature());
-        if (featureList_.back().init(featureStr) < 0) {
-            initFailFlag = true;
-        }
+        initFailFlag = featureList_.back().init(featureStr) < 0;
     }
+    CHECK_WARN(initFailFlag, "Failed to initiate original feature \"%s\"",
+            featureStr.c_str());
     
     for (const std::string& featureStr : added_features) {
         featureList_.push_back(Feature());
-        if (featureList_.back().init(featureStr) < 0) {
-            initFailFlag = true;
-        }
+        initFailFlag = featureList_.back().init(featureStr) < 0;
     }
+    CHECK_WARN(initFailFlag, "Failed to initiate added feature \"%s\"",
+            featureStr.c_str());
 
     // 简单初始化信息表格
-    prefetchTable_.push_back(FeatureIndexTable());
-    prefetchTable_.back().init(p->prefetch_table_size,
-            p->prefetch_table_assoc);
+    initFailFlag = LLCTable_.prefetchTable_.init(p->prefetch_table_size,
+            p->prefetch_table_assoc) < 0;
+    CHECK_WARN(initFailFlag, "Failed to initiate prefetch table for LLC");
     
-    rejectTable_.push_back(FeatureIndexTable());
-    rejectTable_.back().init(p->reject_table_size, p->reject_table_assoc);
+    initFailFlag = LLCTable_.rejectTable_.init(p->reject_table_size,
+            p->reject_table_assoc) < 0;
+    CHECK_WARN(initFailFlag, "Failed to initiate reject table for LLC");
     
-    featureTable_.push_back(std::vector<FeatureWeightTable> (
-            featureList_.size()));
     for (int j = 0; j < featureList_.size(); j++) {
-        featureTable_[0][j].init(featureList_[j].getSize(), 1,
-                SaturatedCounter(weightBits_));
+        initFailFlag = LLCTable_.featureTable_[j].init(
+                featureList_[j].getSize(), 1,
+                SaturatedCounter(weightBits_)) < 0;
+        CHECK_WARN(initFailFlag, "Failed to initiate feature %s \"%s\" %s",
+                "table for", featureList_[j].name_.c_str(), "in LLC");
     }
     
-    prefUsefulTable_.push_back(std::vector<PrefetchUsefulTable>(3));
-    for (int j = 0; j < 3; j++) {
-        prefUsefulTable_[0][j].init(p->counter_cache_size,
-                p->counter_cache_assoc, p->victim_cache_size,
-                p->victim_cache_assoc);
-    }
+    initFailFlag = LLCTable_.prefUsefulTable_.init(p->counter_cache_size,
+            p->counter_cache_assoc, p->victim_cache_size,
+            p->victim_cache_assoc) < 0;
+    CHECK_WARN(initFailFlag, "Failed to initiate useful table for LLC");
 }
 
 int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
@@ -152,12 +157,13 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
     }
     
     const uint8_t cpuId = pkt->srcCpuId_;
-    auto infoPair = prefSrcCacheMap_.find(pkt->addr);
+    TablesTable& workTable = getTable(cache);
+    auto infoPair = workTable.prefSrcCacheMap_.find(pkt->addr);
     const uint8_t cacheLevel = cache->cacheLevel_;
     if (info.source == Dmd && info.target == Pref) {
         // 一个Demand Request命中了预取数据，因此训练奖励
-        if (infoPair != prefSrcCacheMap_.end()) {
-            CHECK_RET(train(pkt->addr, cacheLevel, infoPair.second, cpuId,
+        if (infoPair != workTable.prefSrcCacheMap_.end()) {
+            CHECK_RET(train(pkt->addr, cacheLevel, infoPair->second, cpuId,
                     GoodPref), "Failed to update training data when dmd %s",
                     "hit pref");
         } else {
@@ -165,7 +171,7 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
         }
     } else if (info.source == Pref && info.target == Dmd) {
         // 一个预取命中了一个Demand数据，那么这个预取是一个无用的预取
-        CHECK_RET(train(pkt->addr, cacheLevel, infoPair.second, cpuId,
+        CHECK_RET(train(pkt->addr, cacheLevel, infoPair->second, cpuId,
                 UselessPref), "Failed to update training data when pref %s"
                 "hit dmd");
     }
@@ -176,6 +182,7 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
 int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
         const PacketPtr& pkt, const DataTypeInfo& info,
         const uint64_t& combinedAddr) {
+    BasePrefetchFilter::notifyCacheMiss(cache, pkt, info, combinedAddr);
     // 对于指令Cache的预取不进行过滤和训练处理
     if (!cache->cacheLevel_) {
         return 0;
@@ -183,15 +190,16 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
     
     uint8_t cpuId = sharedTable_ ? 1 : pkt->srcCpuId_;
     uint8_t cacheLevel = cache->cacheLevel_;
+    TablesTable& workTable = getTable(cache);
     if (info.source == Dmd) {
         // 对于一个Miss的Demand Request需要确定其有害性
-        CHECK_RET(preUsefulTable_[cpuId_][cacheLevel - 1].updateHit(pkt->addr),
+        CHECK_RET(workTable.preUsefulTable_.updateHit(pkt->addr),
                 "Failed to update hit for a demand request");
         if (info.target == Pref) {
-            auto infoPair = prefSrcCacheMap_.find(combinedAddr);
-            if (infoPair != prefSrcCacheMap_.end()) {
+            auto infoPair = workTable.prefSrcCacheMap_.find(combinedAddr);
+            if (infoPair != workTable.prefSrcCacheMap_.end()) {
                 // 说明一个预取被Demand Request覆盖了，预取是无用的
-                CHECK_RET(train(pkt->addr, cacheLevel, infoPair.second, cpuId,
+                CHECK_RET(train(pkt->addr, cacheLevel, infoPair->second, cpuId,
                         UselessPref), "Failed to update training when dmd %s",
                         "miss added to prefetch miss");
             }
@@ -216,24 +224,25 @@ int PerceptronPrefetchFilter::notifyCacheFill(BaseCache* cache,
     
     uint8_t cpuId_ = sharedTable_ ? 1 : pkt->srcCpuId_;
     uint8_t cacheLevel = cache->cacheLevel_ - 1;
+    TablesTable& workTable = getTable(cache);
     if (info.target == Pref) {
         // 说明一个预取数据被预取替换了，需要删除相应的记录
-        CHECK_RET(preUsefulTable_[cpuId_][cacheLevel].evictPref(evictedAddr),
+        CHECK_RET(workTable.preUsefulTable_.evictPref(evictedAddr),
                 "Failed to remove old pref info when replaced");
-        prefSrcCacheMap_.erase(evictedAddr);
+        workTable.prefSrcCacheMap_.erase(evictedAddr);
         if (info.source == Pref) {
             // 如果产生替换的也是预取，需要新增一个记录
-            CHECK_RET(prefUsefulTable_[cpuId_][cacheLevel].addPref(pkt->addr,
+            CHECK_RET(workTable.prefUsefulTable_.addPref(pkt->addr,
                     evictedAddr), "Failed to add new pref info when %s",
                     "pref replaced pref");
-            prefSrcCacheMap_[pkt->addr] = pkt->srcCacheLevel_;
+            workTable.prefSrcCacheMap_[pkt->addr] = pkt->srcCacheLevel_;
         }
     } else if (info.source == Pref) {
         // 说明一个Demand Request数据被预取替换了需要新增一个记录
-        CHECK_RET(preUsefulTable_[cpuId_][cacheLevel].addPref(pkt->addr,
+        CHECK_RET(workTable.preUsefulTable_.addPref(pkt->addr,
                 evictedAddr), "Failed to add new pref info when %s",
                 "pref replaced dmd");
-        prefSrcCacheMap_[pkt->addr] = pkt->srcCacheLevel_;
+        workTable.prefSrcCacheMap_[pkt->addr] = pkt->srcCacheLevel_;
     }
     
     return 0;
@@ -244,6 +253,7 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
     const int featureCount = featureList_.size();
     const uint8_t cpuId = sharedTable_ ? 1 : pkt->srcCpuId_;
     const uint8_t cacheLevel = cache->cacheLevel_;
+    TablesTable& workTable = getTable(cache);
 
     // 计算权重加和
     uint16_t weightSum = 0;
@@ -251,7 +261,7 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
     for (int i = 0; i < featureCount; i++) {
         uint16_t featureIndex = featureList_[i].getIndex(info);
         indexes.push_back(featureIndex);
-        weightSum += featureTable_[cpuId][cacheLevel].read(featureIndex);
+        weightSum += workTable.featureTable_.read(featureIndex);
     }
 
     // 依据权重加和进行预取更改和过滤
@@ -277,58 +287,50 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
     }
     
     // 依据最后的结果更新Prefetch Table和Reject Table
-    CHECK_RET(updateTable(pkt->addr, cpuId, srcCacheLevel, indexes),
+    CHECK_RET(updateTable(workTable, pkt->addr, cpuId, srcCacheLevel, indexes),
             "Failed to update prefetch table & reject table");
     return targetCacheLevel;
 }
 
 int PerceptronPrefetchFilter::init() {
-    if (!sharedTable_) {
-        // 依据CPU个数初始化
-        prefetchTable_.resize(numCpus_);
-        rejectTable_.resize(numCpus_);
-        featureTable.resize(numCpus_, std::vector<FeatureWeightTable> (
-                featureList_.size()));
-        prefUsefulTable_.resize(numCpus_, std::vector<PrefetchUsefulTable>(3));
-        
-        // 获取表格大小和组相联度信息
-        int prefSize = prefetchTable_[0].size_;
-        int prefAssoc = prefetchTable_[0].assoc_;
-        int rejectSize = rejectTable_[0].size_;
-        int rejectAssoc = rejectTable_[0].assoc_;
-        int CCSize = prefUsefulTable_[0][0].counterCacheSize_;
-        int CCAssoc = prefUsefulTable_[0][0].counterCacheAssoc_;
-        int VCSize = prefUsefulTable_[0][0].victimCacheSize_;
-        int VCAssoc = prefUsefulTable_[0][0].victimCacheAssoc_;
-        
-        // 初始化表格元素
-        for (int i = 1; i < numCpus_; i++) {
-            prefetchTable_[i].init(prefSize, prefAssoc,
-                    std::vector<uint16_t>(featureList_.size()));
-            rejectTable_[i].init(rejectSize, rejectAssoc,
-                    std::vector<uint16_t>(featureList_.size()));
-            for (int j = 0; j < featureList_.size(); j++) {
-                featureTable_[i][j].init(featureList_[j].getSize(), 1,
-                        SaturatedCounter(weightBits_));
-            }
-            for (int j = 0; j < 3; j++) {
-                prefUsefulTable_[i][j].init(CCsize, CCAssoc, VCSize, VCAssoc);
-            }
+    CHECK_ARGS(!initFailFlag, "Failed when trying to initiate PPF");
+    if (!allSharedTable_) {
+        if (maxCacheLevel_ == 1) {
+            return 0;
         }
+        
+        // 依据共享情况初始化表格大小
+        int cpuSize = cpuSharedTable_ ? 1 : numCpus_;
+        int cacheSize = cacheSharedTable_ ? 1 : maxCacheLevel_ - 1;
+        noneLLCTables_.resize(cpuSize, std::vector<Tables>(cacheSize,
+                LLCTable_));
     }
+    return 0;
 }
 
-int PerceptronPrefetchFilter::train(const uint64_t& prefAddr,
-        const uint8_t cacheLevel, const uint8_t srcCacheLevel,
-        const uint8_t cpuId, const TrainType type) {
+Tables& PerceptronPrefetchFilter::getTable(BaseCache* cache) {
+    if (cache->cacheLevel_ == maxCacheLevel_) {
+        return LLCTable_;
+    } else {
+        uint8_t cpuIdx = cpuSharedTable_ ? 0 : *(cache->cpuIds_.begin());
+        uint8_t cacheIdx = cacheSharedTable_ ? 0 : cache->cacheLevel_ - 1;
+        return noneLLCTable_[cpuIdx][cacheIdx];
+    }
+    return LLCTable_;
+}
+
+int PerceptronPrefetchFilter::train(Tables& workTable,
+        const uint64_t& prefAddr, const uint8_t cacheLevel,
+        const uint8_t srcCacheLevel, const uint8_t cpuId,
+        const TrainType type) {
     // 查询Prefetch Table
     std::vector<uint16_t>* indexPtr = nullptr;
-    CHECK_RET(prefetchTable_[cpuId].read(prefAddr, &indexPtr),
+    CHECK_RET(workTable.prefetchTable_.read(prefAddr, &indexPtr),
             "Failed to find prefetch in prefetch table");
     
     // 查询Reject Table
     std::vector<uint16_t>* indexPtrTemp = nullptr;
-    CHECK_RET(rejctTable_[cpuId].read(prefAddr, &indexPtrTemp),
+    CHECK_RET(workTable.rejctTable_.read(prefAddr, &indexPtrTemp),
             "Failed to find prefetch in prefetch table");
    
     CHECK_ARGS(indexPtr ^ indexPtrTemp, "One prefetch should not exist %s",
@@ -345,13 +347,14 @@ int PerceptronPrefetchFilter::train(const uint64_t& prefAddr,
     // 进行权重更新
     SaturatedCounter* weightPtr;
     for (int i = 0; i < featureList_.size(); i++) {
-        featureTable_[cpuId][i].read(*indexPtr[i], &weightPtr);
+        workTable.featureTable_[i].read(*indexPtr[i], &weightPtr);
         *weightPtr += step;
     }
     return 0;
 }
 
-int PerceptronPrefetchFilter::updateTable(const uint64_t& prefAddr,
+int PerceptronPrefetchFilter::updateTable(Tables& workTable,
+        const uint8_t targetCacheLevel, const uint64_t& prefAddr,
         const uint8_t cpuId, const uint8_t cacheLevel,
         const std::vector<uint16_t>& indexes) {
     int result;
@@ -359,23 +362,25 @@ int PerceptronPrefetchFilter::updateTable(const uint64_t& prefAddr,
     if (targetCacheLevel < 4) {
         // 如果进行了预取，则预取会被记录到Prefetch Table
         // 并从Reject Table删除
-        CHECK_RET(result = pefetchTable_[cpuId].write(prefAddr, indexes,
+        CHECK_RET(result = workTable.pefetchTable_.write(prefAddr, indexes,
                 &evictedAddr), "Failed to add new prefetch into %s",
                 "prefetch table");
         // 如果对应的预取写入时没有命中，则生成新的表项，需要记录
         if (!result) {
-            if (prefAppearTime_.find(prefAddr) == prefAppearTime_.end()) {
-                prefAppearTime_[prefAddr] = std::pair<uint8_t, uint8_t>(1, 0);
+            if (workTable.prefAppearTime_.find(prefAddr) ==
+                    prefAppearTime_.end()) {
+                workTable.prefAppearTime_[prefAddr] =
+                        std::pair<uint8_t, uint8_t>(1, 0);
             } else {
-                prefAppearTime_[prefAddr].first++;
+                workTable.prefAppearTime_[prefAddr]->first++;
             }
         }
         // 如果替换的预取在另一个表格也不存在，删除记录表项
-        if (evictedAddr && rejectTable_[cpuId].touch(evictedAddr) == 0) {
-            auto evictedPref = prefAppearTime_.find(evictedAddr);
-            if (evictedPref != prefAppearTime_.end()) {
-                uint8_t PTTime = evictedPref.second.first;
-                uint8_t RTTime = evictedPref.second.second;
+        if (evictedAddr && workTable.rejectTable_.touch(evictedAddr) == 0) {
+            auto evictedPref = workTable.prefAppearTime_.find(evictedAddr);
+            if (evictedPref != workTable.prefAppearTime_.end()) {
+                uint8_t PTTime = evictedPref->second.first;
+                uint8_t RTTime = evictedPref->second.second;
                 if (PTTime == 0) {
                     *prefRejected_[srcCacheLevel]++;
                 } else if (RTTime == 0) {
@@ -384,29 +389,31 @@ int PerceptronPrefetchFilter::updateTable(const uint64_t& prefAddr,
                     *prefThreshing_[srcCacheLevel]++;
                 }
             }
-            prefAppearTime_.erase(evictedAddr);
+            workTable.prefAppearTime_.erase(evictedAddr);
         }
-        CHECK_RET(rejectTable_[cpuId].invalidate(pkt->addr),
+        CHECK_RET(workTable.rejectTable_.invalidate(pkt->addr),
                 "Failed to remove old prefetch from reject table");
     } else {
         // 如果预取被过滤，则预取会被记录到Reject Table
         // 并从Prefetch Table删除
-        CHECK_RET(rejectTable_[cpuId].write(pkt->addr, indexes, &evictedAddr),
+        CHECK_RET(workTable.rejectTable_.write(pkt->addr, indexes, &evictedAddr),
                 "Failed to add new prefetch into reject table");
         // 如果对应的预取写入时没有命中，则生成新的表项，需要记录
         if (!result) {
-            if (prefAppearTime_.find(prefAddr) == prefAppearTime_.end()) {
-                prefAppearTime_[prefAddr] = std::pair<uint8_t, uint8_t>(0, 1);
+            if (workTable.prefAppearTime_.find(prefAddr) ==
+                    prefAppearTime_.end()) {
+                workTable.prefAppearTime_[prefAddr] =
+                        std::pair<uint8_t, uint8_t>(0, 1);
             } else {
-                prefAppearTime_[prefAddr].second++;
+                workTable.prefAppearTime_[prefAddr].second++;
             }
         }
         // 如果替换的预取在另一个表格也不存在，删除记录表项
-        if (evictedAddr && rejectTable_[cpuId].touch(evictedAddr) == 0) {
-            auto evictedPref = prefAppearTime_.find(evictedAddr);
+        if (evictedAddr && workTable.rejectTable_.touch(evictedAddr) == 0) {
+            auto evictedPref = workTable.prefAppearTime_.find(evictedAddr);
             if (evictedPref != prefAppearTime_.end()) {
-                uint8_t PTTime = evictedPref.second.first;
-                uint8_t RTTime = evictedPref.second.second;
+                uint8_t PTTime = evictedPref->second.first;
+                uint8_t RTTime = evictedPref->second.second;
                 if (PTTime == 0) {
                     *prefRejected_[srcCacheLevel]++;
                 } else if (RTTime == 0) {
@@ -415,9 +422,9 @@ int PerceptronPrefetchFilter::updateTable(const uint64_t& prefAddr,
                     *prefThreshing_[srcCacheLevel]++;
                 }
             }
-            prefAppearTime_.erase(evictedAddr);
+            workTable.prefAppearTime_.erase(evictedAddr);
         }
-        CHECK_RET(prefetchTable_[cpuId].invalidate(pkt->addr),
+        CHECK_RET(workTable.prefetchTable_.invalidate(pkt->addr),
                 "Failed to remove old prefetch from prefetch table");
     }
     return 0;
@@ -428,7 +435,7 @@ void PerceptronPrefetchFilter::regStats() {
     BasePrefetcherFilter::regStats();
    
     // 初始化表格
-    init();
+    CHECK_RET_EXIT(init(), "Failed to initiate PPF.");
 
     for (i = 0; i < 3; i++) {
         if (usePref_[i + 1]) {

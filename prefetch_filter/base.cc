@@ -49,6 +49,7 @@ int BasePrefetchFilter::addCache(BaseCache* newCache) {
     if (level >= caches_.size()) {
         caches_.resize(level + 1);
     }
+    usefulTable_[newCache] = IdealPrefetchUsefulTable();
     caches_[level].push_back(newCache);
     return 0;
 }
@@ -73,16 +74,16 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
     uint8_t cacheIndex = cache->cacheLevel_ - 1;
     
     std::vector<Stats::Vector*> cacheStats =
-            {l1PrefHitCount_[cache->cacheLevel_]};
+            {l1PrefHitCount_[cache->cacheLevel_ - 1]};
     if (cache->cacheLevel_ == 3) {
-        cacheStats.push_back(l2PrefHitCount_[3]);
+        cacheStats.push_back(l2PrefHitCount_[1]);
     }
     
     // 依据源数据和目标数据类型进行统计数据更新
     if (info.source == Dmd) {
         if (info.target == Pref) {
             // Demand Request命中了预取数据
-            CHECK_RET_EXIT(usefulTable_[cacheIndex].updateHit(pkt->addr, Dmd,
+            CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt->addr, Dmd,
                     cacheStats), "Failed to update when dmd hit pref data");
         }
         (*demandReqHitTotal_)[srcCpu]++;
@@ -90,7 +91,7 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
         demandHit_[cache->cacheLevel_]++;
     } else if (info.target == Pref) {
         // 预取命中了预取数据
-        CHECK_RET_EXIT(usefulTable_[cacheIndex].updateHit(pkt->addr, Pref,
+        CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt->addr, Pref,
                 cacheStats), "Failed to update when useful %s",
                 "pref hit pref data");
     }
@@ -135,14 +136,14 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
         // 则会将对应预取从当前Cache记录表中剔除
-        CHECK_RET_EXIT(usefulTable_[cacheIndex].updateEvict(evictedAddr,
+        CHECK_RET_EXIT(usefulTable_[cache].updateEvict(evictedAddr,
                 prefTotalUsefulValue_, prefUsefulDegree_, prefUsefulType_,
                 prefTypeCount_, "Failed to remove pref from the table");
     } else if (info.source == Pref) {
         // 预取替换了一个Demand Request请求的数据
         // 就需要对相关的替换信息进行记录
         if (info.target == Dmd) {
-            CHECK_RET_EXIT(usefulTable_[cacheIndex].addPref(pkt, evictedAddr),
+            CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedAddr),
                     "Failed to add pref replacing dmd in the table");
         } else {
             int result = isPrefHit(pkt->addr);
@@ -150,14 +151,14 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
             if (result) {
                 // 如果一个预取被Demand Request覆盖，那么它将会被看作是
                 // 一个Demand Request，成为一个有害情况的备选项
-                CHECK_RET_EXIT(usefulTable_[cacheIndex].addPref(pkt,
+                CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt,
                         evictedAddr), "Failed to add pref replacing %s",
                         "used pref in the table");
             } else {
                 // 如果一个预取替换了一个没有被Demand Request命中过的无用预取
                 // 则原预取将会被剔除，并进行记录，同时新的预取替换对象会继承
                 // 之前替换对象的地址
-                CHECK_RET_EXIT(usefulTable_[cacheIndex].replaceEvict(
+                CHECK_RET_EXIT(usefulTable_[cache].replaceEvict(
                         pkt, evictedAddr, prefTotalUsefulValue_,
                         prefUsefulDegree_, prefUsefulType_, prefTypeCount_,
                         "Failed to replace old pref with new pref");
@@ -180,9 +181,11 @@ int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
 void BasePrefetchFilter::init() {   
     maxCacheLevel_ = caches_.size() - 1;
     numCpus_ = caches_[0].size();
-    usefulTable.resize(maxCacheLevel_);
     for (int i = 0; i <= maxCacheLevel_; i++) {
         usePref_[level] = caches_[i][0]->prefetcher != NULL;
+    }
+    for (auto mapPair : usefulTable_) {
+        mapPair.second.init(numCpus_);
     }
 }
 
@@ -191,8 +194,8 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
         timingStatsPeriodCount_++;
 
         // 更新时间维度的统计数据
-        for (int i = 0; i < 3; i++) {
-            CHECK_RET_EXIT(usefulTable_[i].updateTimingStats(prefTypeCount_),
+        for (auto mapPair : usefulTable_) {
+            CHECK_RET_EXIT(mapPair.second.updateTimingStats(prefTypeCount_),
                     "Failed to update timing stats variable");
         }
         

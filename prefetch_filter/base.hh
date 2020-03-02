@@ -145,7 +145,7 @@ private:
 
 protected:
     // 用于记录预取有害信息的结构，每一级缓存都会有一个
-    std::vector<IdealPrefetchUsefulTable> usefulTable_;
+    std::map<BaseCache*, IdealPrefetchUsefulTable> usefulTable_;
     
     // 当前Filter负责监视的所有Cache指针
     std::vector<std::vector<BaseCache*>> caches_;

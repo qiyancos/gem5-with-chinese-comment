@@ -48,6 +48,35 @@ int addNewPrefUsefulType(const std::string& name,
     return index;
 }
 
+int PrefetchInfo::setInfo(const uint8_t index, const uint32_t value) {
+    if (info_.size() != IndexMap.size()) {
+        info_.resize(IndexMap.size(), 0);
+    }
+    CHECK_ARGS(index < info_.size(), "Prefetch information index %u %s %d",
+            index, "out of bound", info_.size());
+    info_[index] = value;
+    return 0;
+}
+
+uint32_t PrefetchInfo::getInfo(const uint8_t index) {
+    CHECK_RET(info_.size == Indexmap.size(), "Can not get value from %s",
+            "uninitiated prefetch info");
+    CHECK_ARGS(index < info_.size(), "Prefetch information index %u %s %d",
+            index, "out of bound", info_.size());
+    return info_[index];
+}
+
+PrefetchUsefulInfo::PrefetchUsefulInfo(const uint8_t numCpus) {
+    stats_.resize(numCpus);
+}
+
+int PrefetchUsefulInfo::updateUse(const uint64_t& coreBitMap,
+        std::vector<Stats::Vector*> cacheStats) {
+}
+
+int PrefetchUsefulInfo::updateHarm(const uint64_t& coreBitMap) {
+}
+
 // Original
 DEF_INFO(PC1, 12) // 触发预取的指令PC, 12 bits
 DEF_INFO(PC2_1, 12) // 触发预取指令之前触发指令的PC(右移1bit), 12 bits

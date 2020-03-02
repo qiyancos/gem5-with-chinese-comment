@@ -46,7 +46,7 @@ namespace prefetch_filter {
 
 // 基于Cache结构设计的表格，使用理想的LRU替换算法
 template<typename T>
-class CacheTable : public ClockedObject {
+class CacheTable {
 private:
     // 表格的表项结构
     struct TableEntry {
@@ -106,7 +106,15 @@ public:
 
 class IdealPrefetchUsefulTable {
 public:
+    // 析构函数
+    ~IdealPrefetchUsefulTable();
+
+    // 初始化表格
+    int init(const uint8_t numCpus);
+
     // 在数据被命中的时候进行处理，同时会更新计数
+    // cacheStats第一个是L1的发出预取对应的统计数据，
+    // 第二个是L2发出预取对应的统计数据
     int updateHit(const uint64_t& addr, const DataType type, 
             std::vector<Stats::Vector*>& cacheStats);
     
@@ -133,11 +141,14 @@ public:
     int isPrefHit(const uint64_t& addr);
 
 private:
+    // 当前系统中CPU的个数
+    uint8_t numCpus_;
+
     // 依据地址到有用信息的映射，用于对Cache中的预取数据
-    std::map<uint64_t, PrefetchUsefulInfo> prefMap_;
+    std::map<uint64_t, PrefetchUsefulInfo*> prefMap_;
     
     // 依据地址到有用信息的映射，用于对Cache中被预取替换的数据
-    std::map<uint64_t, PrefetchUsefulInfo> evictMap_;
+    std::map<uint64_t, PrefetchUsefulInfo*> evictMap_;
 };
 
 } // namespace prefetch_filter

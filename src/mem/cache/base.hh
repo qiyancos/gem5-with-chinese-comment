@@ -98,11 +98,11 @@ class BaseCache : public MemObject
      */
     public:
         // 和当前级别Cache连接的所有CPUID
-        const std::set<int> cpuIds;
+        const std::set<int> cpuIds_;
 
         // 存放了每一个缓存等级和的
-        const static std::vector<std::string> levelName;
-        const uint8_t cacheLevel;
+        const static std::vector<std::string> levelName_;
+        const uint8_t cacheLevel_;
         
     protected:
     /**
