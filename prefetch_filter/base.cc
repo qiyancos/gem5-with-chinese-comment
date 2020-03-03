@@ -38,11 +38,19 @@ struct BasePrefetchFilterParams;
 
 namespace prefetch_filter {
 
+uint64_t BasePrefetchFilter::cacheLineAddrMask_;
+uint8_t BasePrefetchFilter::cacheLineOffsetBits_;
+
 BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
         statsPeriod_(p->stats_period),
         nextPeroidTick_(p->stats_period),
         enableStats_(p->enable_stats),
-        enableFilter_(p->enable_filter) {}
+        enableFilter_(p->enable_filter),
+        cacheLineAddrMask_(~(p->block_size - 1)) {
+    int blockSize = p->block_size;
+    cacheLineOffsetBits_ = 0;
+    while(blockSize >> ++cacheLineOffsetBits) {}
+}
 
 int BasePrefetchFilter::addCache(BaseCache* newCache) {
     int level = newCache->cacheLevel;

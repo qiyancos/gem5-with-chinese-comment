@@ -145,7 +145,10 @@ public:
     uint64_t replacedAddress_;
 
     // 发射当前预取的Cache等级
-    uint8_t srcCache_;
+    BaseCache* srcCache_;
+    
+    // 发射当前预取的Cache等级
+    uint8_t srcCpuId_;
 
 private:
     // 所有相关的CPUID位图

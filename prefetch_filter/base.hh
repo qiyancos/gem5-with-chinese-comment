@@ -143,6 +143,13 @@ private:
     // 是否开启过滤器，如果不开启，则所有预取都不会改变
     const bool enableFilter_ = 0;
 
+public:
+    // 提取缓存行地址对应的Mask
+    static uint64_t cacheLineAddrMask_;
+
+    // 提取缓存行地址对应的Mask
+    static uint8_t cacheLineOffsetBits_;
+
 protected:
     // 用于记录预取有害信息的结构，每一级缓存都会有一个
     std::map<BaseCache*, IdealPrefetchUsefulTable> usefulTable_;

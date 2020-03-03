@@ -38,6 +38,8 @@ class BasePrefetchFilter(SimObject):
     enable_stats = Param.Bool(True, "Whether to enable Stats Engine")
 
     stats_period = Param.Uint64(?, "Period of statistics in time dimension")
+    
+    block_size = Param.Int(Parent.cache_line_size, "block size in bytes")
 
 class PerceptronPrefetchFilter(BasePrefetchFilter):
     type = 'PrefetchFilter'
@@ -62,6 +64,10 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     
     reject_table_size = Param.UInt32(1024, "Size of the reject table")
     reject_table_assoc = Param.UInt8(4, "Associativity of the reject "
+            "table")
+    
+    old_pref_table_size = Param.UInt32(1024, "Size of the old prefetch table")
+    old_pref_table_assoc = Param.UInt8(4, "Associativity of the old prefetch "
             "table")
     
     # 过滤设置
@@ -105,5 +111,8 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     # 有害性统计结构的设置
     counter_cache_size = Param.UInt32(?, "Size of the counter cache")
     counter_cache_assoc = Param.UInt8(?, "Associativity of the counter cache")
+    counter_cache_tag_bits = Param.Int8(?, "Number of tag bits of the "
+            "counter cache (-1 means deafult setting)")
+    counter_bits = Param.UInt8(?, "Number of bits for a counter")
     victim_cache_size = Param.UInt32(?, "Size of the victim cache")
-    victim_cache_assoc = Param.UInt32(?, "Associativity of the victim cache")
+    victim_cache_assoc = Param.UInt8(?, "Associativity of the victim cache")

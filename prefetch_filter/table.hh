@@ -47,61 +47,89 @@ namespace prefetch_filter {
 // 基于Cache结构设计的表格，使用理想的LRU替换算法
 template<typename T>
 class CacheTable {
-private:
-    // 表格的表项结构
-    struct TableEntry {
-        // Tag数值
-        uint64_t tag_;
-        // 用于LRU替换算法的数值, 0表示Invalid
-        uint8_t priority_;
-        // 存放的数值
-        T value_;
-    };
-
-    class Set {
-    private:
-        // 数据实体
-        std::vector<TableEntry> data_;
-        // 当前优先替换的数据
-        uint32_t replaceIndex_;
-    public:
-        // 构造函数
-        Set(const uint8_t assoc);
-        // 读取数据
-        T& read(const uint64_t& tag);
-        // 写入数据
-        int write(const uint64_t& tag, const T& value);
-    }
-    
-    // 表格的数据实体
-    std::vector<Set> table_;
-
-public:
-    // 表格的大小
-    const uint32_t size_;
-    
-    // 表格的组相联度
-    const uint8_t assoc_;
-
 public:
     // 初始化函数
-    int init(const uint32_t size, const uint8_t assoc);
+    int init(const uint32_t size, const uint8_t assoc,
+            const int8_t tagBits = -1);
 
     // 初始化函数
-    int init(const uint32_t size, const uint8_t assoc, const T& initVal);
+    int init(const uint32_t size, const uint8_t assoc, const T& data,
+            const int8_t tagBits = -1);
 
     // 判断某一个地址是否有数据，0表示不存在，1表示存在，-1表示出现错误
     int touch(const uint64_t& addr);
 
     // 读取某一个地址对应的数据，0表示不存在，1表示成功，-1表示出现错误
-    int read(const uint64_t& addr, T**);
+    int read(const uint64_t& addr, T** data);
 
-    // 写入一个地址对应的数据，0表示不存在，1表示成功，-1表示出现错误
-    int write(const uint64_t& addr, const T& value,
-            uint64_t* replacedAddr = nullptr);
+    // 写入一个地址对应的数据，0表示命中并写入，1表示未命中且未替换，
+    // 2表示未命中但是发生了替换，-1表示出现错误
+    int write(const uint64_t& addr, const T& data,
+            uint64_t* replacedAddr = nullptr, T* replacedValue = nullptr);
     
     // 无效化一个地址对应的表项0，表示不存在，1表示成功，-1表示出现错误
     int invalidate(const uint64_t& addr);
+
+public:
+    // 表格的大小
+    uint32_t size_;
+    
+    // Set的数目
+    uint32_t sets_;
+
+    // 表格的组相联度
+    uint8_t assoc_;
+
+private:
+    // 表格的表项结构
+    struct TableEntry {
+        // Tag数值
+        uint64_t tag_;
+        // valid bit
+        bool valid_;
+        // 存放的数值
+        T data_;
+    };
+
+    class Set {
+    private:
+        // 数据实体，给予list双向链表维护LRU
+        std::list<TableEntry> data_;
+        
+        // 当前优先替换的数据
+        uint32_t replaceIndex_;
+   
+        // 组相联度/当前Set的大小
+        uint8_t assoc_;
+
+    public:
+        // 初始化函数
+        int init(const uint8_t assoc);
+        
+        // 初始化函数
+        int init(const uint8_t assoc, const T& data);
+        
+        // 查询数据是否存在，不更新LRU状态，0表示不存在，1表示存在
+        int touch(const uint64_t& tag);
+        
+        // 读取数据，0表示不存在，1表示成功读取
+        int read(const uint64_t& tag, T**);
+        
+        // 写入一个Tag对应的数据，0表示命中并写入，1表示未命中且未替换，
+        // 2表示未命中但是发生了替换，-1表示出现错误
+        int write(const uint64_t& tag, const T& data,
+                uint64_t* oldTag = nullptr, T* replacedValue = nullptr);
+    }
+    
+    // 表格的数据实体
+    std::vector<Set> data_;
+    
+    // 依据Tag的大小，通过压缩地址空间节省开销，但是会出现部分错误识别
+    // 该变量会屏蔽地址中的高位，压缩Tag空间
+    uint64_t tagMask_;
+
+    // Set对应的Mask
+    uint64_t setMask_;
 };
 
 class IdealPrefetchUsefulTable {
@@ -139,6 +167,9 @@ public:
 
     // 判断一个预取是否被Demand Request覆盖了
     int isPrefHit(const uint64_t& addr);
+    
+    // 查找当前有用信息表中某一个Prefetch的信息
+    int findPrefInfo(const uint64_t& addr, PrefetchUsefulInfo** infoPtr);
 
 private:
     // 当前系统中CPU的个数

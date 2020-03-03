@@ -75,16 +75,31 @@ private:
 
 class PrefetchUsefulTable {
 public:
+    // 进行表格的初始化
+    int init(const uint8_t counterBits, const uint32_t CCsize,
+            const uint8_t CCAssoc, const uint32_t VCSize,
+            const uint8_t VCAssoc, BaseCache* cache = nullptr,
+            int8_t CCTagBits = -1);
+
     // 对命中Pref的情况进行处理，不区分Pref还是替换数据地址
     int updateHit(const uint64_t& addr);
+    
+    // 对Miss的情况进行处理，不区分Pref还是替换数据地址
+    int updateMiss(const uint64_t& addr);
     
     // 当新的Pref出现的时候，进行替换信息的更新
     int addPref(const uint64_t& prefAddr, const uint64_t evictedAddr);
     
     // 当前Cache中的预取被替换了
-    int evictPref(const uint64_t& addr);
+    int evictPref(const uint64_t& addr, int8_t* counterPtr);
 
 public:
+    // Counter的大小
+    uint8_t counterBits_;
+
+    // Counter Cache的Tag大小
+    int8_t counterCacheTagBits_;
+    
     // Counter Cache的大小
     uint32_t counterCacheSize_;
 
@@ -98,35 +113,44 @@ public:
     uint8_t victimCacheAssoc_;
 
 private:
-    // 进行表格的初始化
-    int init(const uint32_t CCsize, const uint8_t CCAssoc,
-            const uint32_t VCSize, const uint8_t VCAssoc);
-
     // Counter Cache的存储表项
-    struct CounterEntry {
+    class CounterEntry {
+    public:
+        // 默认初始化函数
+        CounterEntry() {}
+        // 初始化函数
+        CounterEntry(const uint8_t counterBits, const uint64_t& prefAddr,
+                const uint64_t& evictedAddr_);
+
+    public:
         // 计数器大小
-        int8_t counter_;
+        SaturatedCounter counter_;
         // 对应的预取地址
-        uint64_t prefAddr;
+        uint64_t prefAddr_;
         // 对应的被替换的地址
-        uint64_t evictedAddr;
+        uint64_t evictedAddr_;
     };
 
-    // 预取到Counter Cache的压缩地址映射
-    std::map<uint64_t, uint16_t> prefCounterIndexMap_;
+    // 当前处于Cache中的预取地址，此处不做压缩映射，实际硬件设计
+    // Cache中存在压缩地址的相关记录结构
+    std::set<uint64_t> prefInCache_;
 
     // 被替换数据到Counter Cache压缩地址的映射
-    CacheTable<uint16_t> VictimCache_;
+    CacheTable<uint64_t> victimCache_;
 
     // Counter Cache
     CacheTable<CounterEntry> counterCache_;
+
+    // 是否开启了统计
+    bool valid_ = false;
 };
 
-// 过滤器基类，仅仅添加了统计功能，不进行实际过滤
+// 基于感知器的预取过滤器
 class PerceptronPrefetchFilter : public BasePrefetchFilter {
 
 typedef CacheTable<std::vector<SaturatedCounter>> FeatureIndexTable;
 typedef CacheTable<int8_t> FeatureWeightTable;
+typedef CacheTable<BaseCache*> OldPrefTable;
 
 public:
     // 构造函数 
@@ -167,14 +191,12 @@ private:
 
     // 对一个给定的预取进行奖励或者惩罚，处理成功返回1，失败返回0，错误返回-1
     int train(Tables& workTable, const uint64_t& prefAddr,
-            const uint8_t cacheLevel, const uint8_t srcCacheLevel,
-            const uint8_t cacheLevel, const uint8_t cpuId,
-            const TrainType type);
+            const uint8_t cacheLevel, const TrainType type);
 
     // 依据信息对Prefetch Table和Reject Table进行更新
     int updateTable(Tables& workTable, const uint64_t& prefAddr,
             const uint8_t targetCacheLevel, const uint8_t cpuId,
-            const uint8_t cacheLevel, const std::vector<uint16_t>& indexes);
+            const uint8_t srcCacheLevel, const std::vector<uint16_t>& indexes);
 
 public:
     // 一直都未被过滤的预取请求个数，区分核心，编号区分缓存
@@ -187,7 +209,7 @@ public:
     Stats::Vector* prefThreshing_[3];
     
     // 因为表格不足，没有进行训练的预取个数
-    Stats::Vector* prefNotTrained_;
+    Stats::Vector* prefNotTrained_[3];
 
     // 最终被处理成预取至L1的请求个数，编号对应源预取缓存等级
     Stats::Vector* prefToL1_[3];
@@ -254,12 +276,12 @@ private:
         // 存放Feature权重的表格，区分CPU
         std::vector<FeatureWeightTable> featureTable_;
 
-        // 预取有害性统计相关的表格
-        PreftchUsefulTable prefUsefulTable_;
-    
-        // 存放当前缓存中预取对应的发射缓存等级，区分CPU
-        std::map<uint64_t, uint8_t> prefSrcCacheMap_;
+        // 记录最近被剔除的预取
+        OldPrefTable oldPrefTable_;
     };
+    
+    // 预取有害性统计相关的表格
+    std::map<BaseCache*, PreftchUsefulTable> prefUsefulTable_;
     
     // 针对非LLC的结构使用的表格
     std::vector<std::vector<Tables>> noneLLCTables_;

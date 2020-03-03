@@ -35,12 +35,18 @@
 
 namespace prefetch_filter {
 
-// 饱和计数器（最多支持32bit）
+// 饱和计数器（最多支持31bit）
 class SaturatedCounter {
 public:
     // 赋值
     template<class T>
-    uint32_t& operator= (const T& b) {
+    int& operator= (const T& b) {
+        // 说明一下可能的类型情况
+        // 输入是uint64_t，比较会转换为uint64_t比较，不会出错
+        // 输入是int64_t，比较会转换为int64_t比较，不会出错
+        // 输入是uint32_t，比较会转换为uint32_t比较，不会出错
+        // 输入是int32_t，比较会转换为int32_t比较，不会出错
+        // 输入是长度更小的类型，比较会转换为int32_t比较，不会出错
         if (b >= maxValue_) {
             value_ = maxValue_;
         } else if (b <= minValue_) {
@@ -53,72 +59,73 @@ public:
 
     // 加法
     template<class T>
-    uint32_t& operator+ (const T& b) {
-        uint64_t temp = value_;
-        if (temp + b > maxValue_) {
+    int& operator+ (const T& b) {
+        // 扩展数值范围避免计算错误
+        int64_t temp = value_;
+        temp += b;
+        if (temp > maxValue_) {
             return maxValue_;
+        } else if (temp < minValue_) {
+            return minValue_;
         } else {
-            return value_ + b;
+            return temp;
         }
     }
 
     // 减法
     template<class T>
-    uint32_t& operator- (const T& b) {
-        if (value_ >= b) {
-            return value_ - b;
-        } else {
-            return minValue_;
-        }
+    int& operator- (const T& b) {
+        return *this + (-b);
     }
 
     // 格式自动转换
     template<class T>
     const T operator() {
         // return static_cast<T>(value_);
+        // 使用默认提供的转换函数处理
         return value_;
     }
 
     // 自增
     template<class T>
-    uint32_t& operator+= (const T& b) {
+    int& operator+= (const T& b) {
         value_ = *this + b;
         return value_;
     }
     
     // 后递增
     template<class T>
-    const uint32_t operator++ (const T& b) {
-        uint32_t value = value_;
+    const int operator++ (const T& b) {
+        int value = value_;
         value_ = *this + 1;
         return value;
     }
     
     // 前递增
     template<class T>
-    uint32_t& operator++ () {
+    int& operator++ () {
         value_ = *this + 1;
         return value_;
     }
     
     // 自减
     template<class T>
-    uint32_t& operator-= (const T& b) {
+    int& operator-= (const T& b) {
         value_ = *this - b;
         return value_;
     }
     
     // 后递减
     template<class T>
-    const uint32_t operator-- (const T& b) {
-        uint32_t value = value_;
+    const int operator-- (const T& b) {
+        int value = value_;
         value_ = *this - 1;
         return value;
     }
     
     // 前递减
     template<class T>
-    uint32_t& operator-- () {
+    int& operator-- () {
         value_ = *this - 1;
         return value_;
     }
@@ -173,13 +180,13 @@ private:
     int init(const uint8_t bits);
     
     // 最小值
-    const uint32_t minValue_ = 0;
+    const int minValue_ = 0;
 
     // 饱和计数器的最大数值
-    uint32_t maxValue_;
+    int maxValue_;
     
     // 当前饱和计数器的数值
-    uint32_t value_;
+    int value_;
 };
 
 } // namespace prefetch_filter
