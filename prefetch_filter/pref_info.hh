@@ -45,7 +45,7 @@
 namespace prefetch_filter {
 
 // 数据类型
-enum DataType {Dmd, Pref};
+enum DataType {NullType, Dmd, Pref};
 
 // Miss以及Fill时候的信息
 struct DataTypeInfo {
@@ -89,8 +89,12 @@ public:
 
 // 预取分类的结构体
 struct PrefUsefulType {
+    // 预取类型对应的Index
+    const int index_;
+
     // 预取分类的名称
-    const std::string name;
+    const std::string name_;
+
     // 进行判断的函数
     std::funtion<bool(const uint64_t&, const uint64_t&, const uint64_t&,
             const uint64_t&)> isType;
@@ -104,18 +108,39 @@ int addNewPrefUsefulType(const std::string& name,
         std::funtion<bool(const uint64_t&, const uint64_t&, const uint64_t&,
         const uint64_t&)> judgeFunc);
 
+#define POS_DEGREE_DIVIDE 4
+#define NEG_DEGREE_DIVIDE -4
+
 class PrefetchUsefulInfo {
 public:
     enum
     // 依据CPU的个数进行大小配置
-    PrefetchUsefulInfo(const uint8_t numCpus);
+    PrefetchUsefulInfo(BaseCache* srcCache, const uint64_t& index);
     
     // 更新一个预取有效命中，同时对命中统计数据进行更新
-    int updateUse(const uint64_t& coreBitMap,
+    int updateUse(const std::set<uint8_t>& cpuIds,
             std::vector<Stats::Vector*>& cacheStats);
 
     // 更新一个预取有害命中
     int updateHarm(const uint64_t& coreBitMap);
+
+    // 添加当前预取在某一个Cache中的替换地址
+    int addReplacedAddr(BaseCache* cache, const uint64_t& replacedAddr);
+
+    // 获取当前预取在某一个Cache中的替换地址
+    int getReplacedAddr(BaseCache* cache, uint64_t* replacedAddr);
+
+    // 判断当前的预取是不是一个足够有用的预取
+    int isUseful();
+   
+    // 判断当前的预取是那一类预取
+    int getTypeIndex();
+
+private:
+    // 获取两组cpuid对应的但和有效性和多核有效性信息
+    int getUpdateValue(const std::set<uint8_t>& srcCpuIds,
+            const std::set<uint8_t>& targetCpuIds,
+            int* singleCoreUpdate, int* crossCoreUpdate);
 
 public:
     // 存放统计数据的结构体
@@ -123,39 +148,31 @@ public:
     // 时钟周期损失/节省均为LLC的一次Miss Latency
     struct Info {
         // 单核心预取产生的有效命中次数
-        uint64_t singleCoreUsefulCount_;
+        int singleCoreUsefulCount_ = 0;
         
         // 单核心预取有害统计的次数
-        uint64_t singleCoreHarmCount_;
+        int singleCoreHarmCount_ = 0;
         
         // 多核心预取产生的有效命中次数
-        uint64_t crossCoreUsefulCount_;
+        int crossCoreUsefulCount_ = 0;
         
         // 多核心预取有害统计的次数
-        uint64_t crossCoreHarmCount_;
+        int crossCoreHarmCount_ = 0;
         
-        // 当前预取是否是一个新的预取，用于时间维度统计
-        bool newPref_;
-    };
+        // 该预取是否曾经被Demand命中过
+        const bool demandHit_ = false;
+    } info_;
     
-    // 不同核心的情况
-    std::vector<Info> stats_; 
-    
-    // 当前预取对应的替换数据地址
-    uint64_t replacedAddress_;
+    // 发射当前预取的Cache等级
+    const BaseCache* srcCache_;
 
-    // 发射当前预取的Cache等级
-    BaseCache* srcCache_;
-    
-    // 发射当前预取的Cache等级
-    uint8_t srcCpuId_;
+    // 该信息对应的哈希索引
+    const uint64_t index_;
 
 private:
-    // 所有相关的CPUID位图
-    uint64_t relatedCpuBitMap_;
-    
-    // 所有相关的CPU和对应的预取相关Cache层级
-    std::map<uint8_t, std::vector<unint8_t>> relatedCpusInfo_;
+    // 当前预取对应的替换数据地址，考虑到预取的贯穿效应，
+    // 需要记录多个被替换的地址信息
+    std::map<BaseCache*, uint64_t> replacedAddress_;
 };
 
 } // namespace prefetch_filter

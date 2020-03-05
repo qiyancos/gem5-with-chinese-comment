@@ -32,80 +32,6 @@
 
 namespace prefetch_filter {
 
-// 显示实例化
-template class CacheTable<std::vector<SaturatedCounter>>;
-template class CacheTable<int8_t>;
-template class CacheTable<BaseCache*>;
-
-template<typename T>
-int CacheTable::Set::init(const uint8_t assoc) {
-    assoc_ = assoc;
-    data_.resize(assoc, TableEntry {0, false});
-    replaceIndex_ = 0;
-    return 0;
-}
-
-template<typename T>
-int CacheTable::Set::init(const uint8_t assoc, const T& data) {
-    assoc_ = assoc;
-    data_.resize(assoc, TableEntry {0, false, data});
-    replaceIndex_ = 0;
-    return 0;
-}
-
-template<typename T>
-int CacheTable::Set::touch(const uint64_t& tag) {
-    for (auto entry = data_.begin(); entry != data_.end(); entry++) {
-        if (entry->tag_ == tag) {
-            return 1;
-        }
-    }
-    return 0;
-}
-        
-template<typename T>
-int CacheTable::Set::read(const uint64_t& tag, T** data) {
-    for (auto entry = data_.begin(); entry != data_.end(); entry++) {
-        if (entry->tag_ == tag) {
-            *data = &(entry->data_);
-            TableEntry temp = *entry;
-            data_.erase(entry);
-            data_.push_front(temp);
-            return 1;
-        }
-    }
-    *data = nullptr;
-    return 0;
-}
-        
-template<typename T>
-int CacheTable::Set::write(const uint64_t& tag, const T& data,
-        uint64_t* oldTag, T* replacedValue) {
-    for (auto entry = data_.begin(); entry != data_.end(); entry++) {
-        if (entry->tag_ == tag) {
-            // 如果写入找到了表项，则写入并返回
-            entry->data_ = data;
-            TableEntry temp = *entry;
-            data_.erase(entry);
-            data_.push_front(temp);
-            return 0;
-        }
-    }
-
-    // 没有命中则会进行替换
-    TableEntry& replacedEntry = data_.back();
-    if (oldTag) {
-        *oldTag = replacedEntry.tag_;
-    }
-    if (replacedValue) {
-        *replacedValue = replacedEntry.data_;
-    }
-    bool valid = replacedEntry.valid_;
-    data.push_front(TableEntry {tag, true, data});
-    data.pop_back();
-    return 1 + valid;
-}
-    
 template<typename T>
 int CacheTable::init(const uint32_t size, const uint8_t assoc, 
         const int8_t tagBits) {
@@ -131,10 +57,7 @@ int CacheTable::init(const uint32_t size, const uint8_t assoc,
 
     // 初始化表格
     data_.clear();
-    data_.resize(sets_);
-    for (Set& set : data_) {
-        CHECK_RET(set.init(assoc), "Failed to initiate set");
-    }
+    data_.resize(sets_, Set(assoc, CacheEntry {0, 0, false}));
     return 0;
 }
 
@@ -163,10 +86,7 @@ int CacheTable::init(const uint32_t size, const uint8_t assoc,
 
     // 初始化表格
     data_.clear();
-    data_.resize(sets_);
-    for (Set& set : data_) {
-        CHECK_RET(set.init(assoc, data), "Failed to initiate set");
-    }
+    data_.resize(sets_, Set(assoc, CacheEntry {0, 0, false, data}));
     return 0;
 }
 
@@ -175,54 +95,308 @@ int CacheTable::touch(const uint64_t& addr) {
     uint32_t setIndex = (addr & setMask_ >>
             BasePrefetchFilter::cacheLineOffsetBits_) % sets_;
     uint64_t tag = addr & tagMask_;
-    return data_[setIndex].touch(tag);
+    Set& set = data_[setIndex];
+    for (auto entry = set.begin(); entry != set.end(); entry++) {
+        if (entry->tag_ == tag) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 template<typename T>
-int CacheTable::read(const uint64_t& addr, T**) {
+int CacheTable::read(const uint64_t& addr, T** data) {
+    uint32_t setIndex = (addr & setMask_ >>
+            BasePrefetchFilter::cacheLineOffsetBits_) % sets_;
+    uint64_t tag = addr & tagMask_;
+    Set& set = data_[setIndex];
+    for (auto entry = set.begin(); entry != set.end(); entry++) {
+        if (entry->tag_ == tag) {
+            *data = &(entry->data_);
+            CacheEntry temp = *entry;
+            set.erase(entry);
+            set.push_front(temp);
+            return 1;
+        }
+    }
+    *data = nullptr;
+    return 0;
 }
 
 template<typename T>
 int CacheTable::write(const uint64_t& addr, const T& data,
-        uint64_t* replacedAddr = nullptr) {
+        uint64_t* replacedAddr = nullptr, T* replacedData) {
+    uint32_t setIndex = (addr & setMask_ >>
+            BasePrefetchFilter::cacheLineOffsetBits_) % sets_;
+    uint64_t tag = addr & tagMask_;
+    Set& set = data_[setIndex];
+    for (auto entry = set.begin(); entry != set.end(); entry++) {
+        if (entry->tag_ == tag) {
+            // 如果写入找到了表项，则写入并返回
+            entry->data_ = data;
+            CacheEntry temp = *entry;
+            set.erase(entry);
+            set.push_front(temp);
+            return 0;
+        }
+    }
+
+    // 没有命中则会进行替换
+    CacheEntry& replacedEntry = set.back();
+    if (replacedAddr) {
+        *replacedAddr = replacedEntry.addr_;
+    }
+    if (replacedData) {
+        *replacedData = replacedEntry.data_;
+    }
+    bool valid = replacedEntry.valid_;
+    set.push_front(CacheEntry {tag, addr, true, data});
+    set.pop_back();
+    return 1 + valid;
 }
     
 template<typename T>
 int CacheTable::invalidate(const uint64_t& addr) {
+    uint32_t setIndex = (addr & setMask_ >>
+            BasePrefetchFilter::cacheLineOffsetBits_) % sets_;
+    uint64_t tag = addr & tagMask_;
+    Set& set = data_[setIndex];
+    for (auto entry = set.begin(); entry != set.end(); entry++) {
+        if (entry->tag_ == tag) {
+            entry->valid = false;
+            CacheEntry temp = *entry;
+            set.erase(entry);
+            set.push_back(temp);
+            return 1;
+        }
+    }
+    return 0;
 }
 
-int IdealPrefetchUsefulTable::~IdealPrefetchUsefulTable() {
+// 显示实例化
+template class CacheTable<std::vector<SaturatedCounter>>;
+template class CacheTable<int8_t>;
+template class CacheTable<BaseCache*>;
+template class CacheTable<PrefetchUsefulTable::CounterEntry>;
+
+IdealPrefetchUsefulTable::IdealPrefetchUsefulTable(BaseCache* cache) :
+        cache_(cache) {}
+
+int IdealPrefetchUsefulTable::genIndex(const PacketPtr& prefPkt,
+        std::vector<uint64_t>* indexes) {
+    indexes->clear();
+    for (BaseCache* cache : pkt->caches_) {
+        uint64_t index = index = pkt->addr ^
+                (uint64_t(cache->cacheLevel_) << 54);
+        for (uint8_t cpuId : cache->cpuIds_) {
+            indexes.push_back(index ^ (uint64_t(cpuId) << 56);
+        }
+    }
+    return 0;
 }
 
-int IdealPrefetchUsefulTable::init(const uint8_t numCpus) {
-}
-
-int IdealPrefetchUsefulTable::updateHit(const uint64_t& addr,
-        const DataType type, std::vector<Stats::Vector*>& cacheStats);
-    
-int IdealPrefetchUsefulTable::replaceEvict(const PacketPtr& newPrefPkt,
-        const uint64_t& oldPrefAddr,
-        const Stats::Vector* totalUsefulValue[][],
-        Stats::Vector* usefulDegree[][][],
-        std::vector<Stats::Vector*>* usefulType[],
-        uint32_t timingStatus[][][]) {
-}
-
-int IdealPrefetchUsefulTable::updateEvict(const uint64_t& addr,
-        Stats::Vector* totalUsefulValue[][],
-        Stats::Vector* usefulDegree[][][],
-        std::vector<Stats::Vector*>* usefulType[],
-        uint32_t timingStatus[][][]) {
-}
-    
-int IdealPrefetchUsefulTable::updatePrefTiming(uint32_t timingStatus[][][]) {
+int IdealPrefetchUsefulTable::newPref(const PacketPtr& prefPkt) {
+    CHECK_ARGS(pkt->caches_.size() == 1,
+            "New pref added to useful table must be combined");
+    std::vector<uint64_t> index;
+    CHECK_RET(genIndex(prefPkt, &index),
+            "Failed to generate index for prefetch");
+    CHECK_ARGS(infoList_.find(index[0]) == infoList_.end(),
+            "Newly added prefetch already exists in list");
+    infoList_[index[0]] = PrefetchUsefulInfo(prefPkt->caches_, index[0]);
+    return 0;
 }
 
 int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
-        const uint64_t& evictAddr) {
+        const uint64_t& replacedAddr) {
+    std::vector<uint64_t> indexes;
+    CHECK_RET(genIndex(prefPkt, &index),
+            "Failed to generate index for prefetch");
+    std::vector<PrefetchUsefulInfo*> newInfoList;
+    for (const uint64_t& index : indexes) {
+        CHECK_ARGS(infoList_.find(index) == infoList_.end(),
+                "Prefetch record can not be found when adding new prefetch");
+        infoList_[index].addReplacedAddr(cache_, replacedAddr);
+        newInfoList.push_back(infoList_[index]); 
+    }
+    CHECK_ARGS(prefMap_.find(prefPkt->addr) == prefMap_.end(),
+            "Trying to add a prefetch already exists in the prefetch map")
+    prefMap_[prefPkt->addr] = newInfoList;
+    CHECK_ARGS(evictMap_.find(replacedAddr) == evictMap_.end(),
+            "Trying to add a prefetch already exists in the prefetch map")
+    evictMap_[prefPkt->addr] = newInfoList;
+    return 0;
 }
 
 int IdealPrefetchUsefulTable::isPrefHit(const uint64_t& addr) {
+    auto infoList = prefMap_.find(addr);
+    CHECK_RET(infoList != prefMap_.end(),
+            "Prefetch not exists in prefetch map");
+    return infoList->front()->info_.demandHit_;
+}
+
+int IdealPrefetchUsefulTable::findSrcCaches(const uint64_t& addr,
+        std::vector<BaseCache*>* caches) {
+    auto iter = prefMap_.find(addr);
+    const std::vector<PrefetchUsefulInfo*>* infoList;
+    if (infoList != prefMap_.end()) {
+        auto iterTemp = evictMap_.find(addr);
+        CHECK_ARGS(iterTemp != evictMap_.end(),
+                "Prefetch exists neither in prefetch map or evict map");
+        infoList = &(iterTemp->second);
+    } else {
+        infoList = &(iter->second);
+    }
+    caches->clear();
+    for (auto& info : *infoList) {
+        caches->push_back(info->srcCache_);
+    }
+    return 0;
+}
+
+int IdealPrefetchUsefulTable::updateHit(const PacketPtr& srcPkt,
+        const uint64_t& hitAddr, const DataType type,
+        std::vector<Stats::Vector*>& cacheStats) {
+    std::set<uint8_t> cpuIds;
+    CHECK_ARGS(prefMap_.find(hitAddr) != prefMap_.end(),
+            "Failed to find hit prefetch address in the prefetch map");
+    // 计算所有使用到数据的相关CPU
+    if (type == Pref) {
+        std::vector<uint64_t> indexes;
+        CHECK_RET(genIndex(srcPkt, &indexes),
+                "Fialed to generate index for source prefetch");
+        for (const uint64_t& index : indexes) {
+            auto info = infoList_.find(index);
+            if (info != infoList_.end() && info->isUseful()) {
+                cpuIds.insert(info->srcCache_->cpuIds.begin(),
+                        info->srcCache_->cpuIds.end());
+            }
+        }
+    } else {
+        // 如果源操作是一个Demand，直接将相关CPU合并即可
+        for (BaseCache* cache : srcPkt->caches_) {
+            cpuIds.insert(cache->cpuIds_.begin(), cache->cpuIds_.end());
+        }
+    }
+
+    // 对每一个预取数据相关的预取进行更新
+    for (auto& info : prefMap_[hitAddr]) {
+        CHECK_RET(info->updateUse(cpuIds, cacheStats),
+                "Failed to update use in prefetch useful info");
+        info->info_.demandHit_ = type == Dmd;
+    }
+    return 0;
+}
+
+int IdealPrefetchUsefulTable::updateMiss(const PacketPtr& srcPkt) {
+    const uint64_t& missAddr = srcPkt->addr;
+    std::set<uint8_t> cpuIds;
+    CHECK_ARGS(evictMap_.find(missAddr) != prefMap_.end(),
+            "Failed to find miss demand address in the evict map");
+    // 计算所有使用到数据的相关CPU
+    for (BaseCache* cache : srcPkt->caches_) {
+        cpuIds.insert(cache->cpuIds_.begin(), cache->cpuIds_.end());
+    }
+
+    // 对每一个预取数据相关的预取进行更新
+    for (auto& info : evictMap_[missAddr]) {
+        CHECK_RET(info->updateHarm(cpuIds),
+                "Failed to update demand miss in prefetch useful info");
+    }
+    return 0;
+}
+
+int IdealPrefetchUsefulTable::updateEvict(const uint64_t& addr) {
+    auto oldInfoList = prefMap_.find(oldPrefAddr);
+    CHECK_ARGS(oldInfoList != prefMap_.end(),
+            "Failed to find info list for old prefetch request");
+    uint64_t replacedAddr;
+    CHECK_RET(oldInfoList->first().getReplacedAddr(cache_, &replacedAddr),
+            "Failed to find replaced addr for prefetch in cache");
+    CHECK_RET(evictMap_.find(replacedAddr) != evictMap_.end(),
+            "Failed to find replaced record in evicted map");
+    for (auto& info : oldInfoList->second) {
+        evictedPref_.push_back(*info);
+        infoList_.erase(info->index_);
+    }
+    prefMap_.erase(addr);
+    evictMap_.erase(replacedAddr);
+    return 0;
+}
+    
+int IdealPrefetchUsefulTable::replaceEvict(const PacketPtr& newPrefPkt,
+        const uint64_t& oldPrefAddr)
+    auto oldInfoList = prefMap_.find(oldPrefAddr);
+    CHECK_ARGS(oldInfoList != prefMap_.end(),
+            "Failed to find info list for old prefetch request");
+    uint64_t replacedAddr;
+    CHECK_RET(oldInfoList->first().getReplacedAddr(cache_, &replacedAddr),
+            "Failed to find replaced addr for prefetch in cache");
+    // 首先删除旧的记录
+    CHECK_RET(updateEvict(oldPrefAddr),
+            "Failed to evict old prefetch when runing replace-evict");
+    // 然后更新新的记录，并继承被替换的地址信息
+    CHECK_RET(addPref(newPrefPkt, replacedAddr),
+            "Failed to evict old prefetch when runing replace-evict");
+}
+
+int IdealPrefetchUsefulTable::updatePrefTiming(
+        Stats::Vector* totalUsefulValue[][],
+        Stats::Vector* usefulDegree[][][],
+        std::vector<Stats::Vector*>* usefulType[],
+        uint32_t timingDegree[][][]) {
+    for (auto& info : evictedPref_) {
+        // 更新Total Useful Value
+        const std::set<uint8_t>& cpuIds = info.srcCache_->cpuIds_;
+        const uint8_t cacheLevel = info.srcCache_->cacheLevel_ - 1;
+        int singleCoreCount = info.info_.singleCoreUsefulCount_ -
+                    info.info_.singleCoreHarmCount_;
+        int crossCoreCount = info.info_.crossCoreUsefulCount_ -
+                    info.info_.crossCoreHarmCount_;
+        
+        // 计算单核心Useful Degree
+        int singleCoreDegree;
+        if (singleCoreCount < NEG_DEGREE_DIVIDE) {
+            singleCoreDegree = 0;
+        } else if (singleCoreCount < 0) {
+            singleCoreDegree = 1;
+        } else if (singleCoreCount == 0) {
+            singleCoreDegree = 2;
+        } else if (singleCoreCount <= POS_DEGREE_DIVIDE) {
+            singleCoreDegree = 3;
+        } else {
+            singleCoreDegree = 4;
+        }
+        
+        // 更新多核Useful Degree
+        if (crossCoreCount < NEG_DEGREE_DIVIDE) {
+            crossCoreDegree = 0;
+        } else if (crossCoreCount < 0) {
+            crossCoreDegree = 1;
+        } else if (crossCoreCount == 0) {
+            crossCoreDegree = 2;
+        } else if (crossCoreCount <= POS_DEGREE_DIVIDE) {
+            crossCoreDegree = 3;
+        } else {
+            crossCoreDegree = 4;
+        }
+
+        // 获取当前预取类型的索引
+        int typeIndex = info.getTypeIndex();
+
+        // 判断对应的类型
+        for (auto cpuId : cpuIds) {
+            (*totalUsefulValue[cacheLevel][0])[cpuId] += singleCoreCount;
+            (*totalUsefulValue[cacheLevel][1])[cpuId] += crossCoreCount;
+            (*usefulDegree[cacheLevel][0][singleCoreDegree])[cpuId]++;
+            (*usefulDegree[cacheLevel][1][crossCoreDegree])[cpuId]++;
+            timingDegree[cacheLevel][0][singleCoreDegree]++;
+            timingDegree[cacheLevel][1][crossCoreDegree]++;
+            (*usefulType[cacheLevel][typeIndex])[cpuId]++;
+        }
+    }
+    evictedPref_.clear();
+    return 0;
 }
 
 } // namespace prefetch_filter

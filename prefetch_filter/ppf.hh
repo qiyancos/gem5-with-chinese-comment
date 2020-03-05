@@ -112,7 +112,7 @@ public:
     // Victim Cache的组相联度
     uint8_t victimCacheAssoc_;
 
-private:
+public:
     // Counter Cache的存储表项
     class CounterEntry {
     public:
@@ -131,6 +131,7 @@ private:
         uint64_t evictedAddr_;
     };
 
+private:
     // 当前处于Cache中的预取地址，此处不做压缩映射，实际硬件设计
     // Cache中存在压缩地址的相关记录结构
     std::set<uint64_t> prefInCache_;
@@ -161,15 +162,15 @@ public:
 
     // 通知发生了Hit事件
     int notifyCacheHit(BaseCache* cache, const PacketPtr& pkt,
-            const DataTypeInfo& info);
+            const uint64_t& hitAddr, const DataTypeInfo& info);
     
     // 通知发生了Miss事件
     int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
-            const DataTypeInfo& info, const uint64_t& combinedAddr);
+            const uint64_t& combinedAddr, const DataTypeInfo& info);
     
     // 通知发生了Fill事件
     int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
-            const DataTypeInfo& info, const uint64_t& evictedAddr);
+            const uint64_t& evictedAddr, const DataTypeInfo& info);
 
     // 对一个预取进行过滤，返回发送的Cache Level(0-3)或者不预取(4)
     int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
@@ -198,6 +199,10 @@ private:
             const uint8_t targetCacheLevel, const uint8_t cpuId,
             const uint8_t srcCacheLevel, const std::vector<uint16_t>& indexes);
 
+    // 更新权重的出现次数信息
+    int updateFreqStats(Tables& workTable,
+            const std::vector<uint16_t>& indexes);
+
 public:
     // 一直都未被过滤的预取请求个数，区分核心，编号区分缓存
     Stats::Vector* prefAccepted_[3];
@@ -221,6 +226,7 @@ public:
     Stats::Vector* prefToL3_[3];
 
     // 不同Feature不同权重的数值出现次数，用于计算Pearson相关因子
+    // 第一维度对应Workable， 第二维度表示Feature编号，第三维度表示Weight大小
     std::vector<std::vector<Stats::Vector*>> featureWeightFrequency_;
 
 private:
@@ -278,16 +284,19 @@ private:
 
         // 记录最近被剔除的预取
         OldPrefTable oldPrefTable_;
+        
+        // 表格相关结构的名称
+        std::string name_;
+        
+        // 对应着相应统计数据的索引
+        int statsIndex_;
     };
     
     // 预取有害性统计相关的表格
     std::map<BaseCache*, PreftchUsefulTable> prefUsefulTable_;
     
     // 针对非LLC的结构使用的表格
-    std::vector<std::vector<Tables>> noneLLCTables_;
-    
-    // 针对LLC的结构使用的表格
-    Tables LLCTable_;
+    std::vector<std::vector<Tables>> workTables_;
 };
 
 } // namespace prefetch_filter

@@ -65,9 +65,9 @@ public:
     // 写入一个地址对应的数据，0表示命中并写入，1表示未命中且未替换，
     // 2表示未命中但是发生了替换，-1表示出现错误
     int write(const uint64_t& addr, const T& data,
-            uint64_t* replacedAddr = nullptr, T* replacedValue = nullptr);
+            uint64_t* replacedAddr = nullptr, T* replacedData = nullptr);
     
-    // 无效化一个地址对应的表项0，表示不存在，1表示成功，-1表示出现错误
+    // 无效化一个地址对应的表项，0表示不存在，1表示成功，-1表示出现错误
     int invalidate(const uint64_t& addr);
 
 public:
@@ -82,45 +82,22 @@ public:
 
 private:
     // 表格的表项结构
-    struct TableEntry {
+    struct CacheEntry {
         // Tag数值
         uint64_t tag_;
+
+        // 完整的地址
+        uint64_t addr_;
+        
         // valid bit
         bool valid_;
+        
         // 存放的数值
         T data_;
     };
 
-    class Set {
-    private:
-        // 数据实体，给予list双向链表维护LRU
-        std::list<TableEntry> data_;
-        
-        // 当前优先替换的数据
-        uint32_t replaceIndex_;
-   
-        // 组相联度/当前Set的大小
-        uint8_t assoc_;
+    typedef std::list<CacheEntry> Set;
 
-    public:
-        // 初始化函数
-        int init(const uint8_t assoc);
-        
-        // 初始化函数
-        int init(const uint8_t assoc, const T& data);
-        
-        // 查询数据是否存在，不更新LRU状态，0表示不存在，1表示存在
-        int touch(const uint64_t& tag);
-        
-        // 读取数据，0表示不存在，1表示成功读取
-        int read(const uint64_t& tag, T**);
-        
-        // 写入一个Tag对应的数据，0表示命中并写入，1表示未命中且未替换，
-        // 2表示未命中但是发生了替换，-1表示出现错误
-        int write(const uint64_t& tag, const T& data,
-                uint64_t* oldTag = nullptr, T* replacedValue = nullptr);
-    }
-    
     // 表格的数据实体
     std::vector<Set> data_;
     
@@ -134,52 +111,61 @@ private:
 
 class IdealPrefetchUsefulTable {
 public:
-    // 析构函数
-    ~IdealPrefetchUsefulTable();
+    // 初始化函数
+    IdealPrefetchUsefulTable(BaseCache* cache);
 
-    // 初始化表格
-    int init(const uint8_t numCpus);
+    // 为一个新的预取生成信息项
+    int newPref(const PacketPtr& prefPkt);
 
-    // 在数据被命中的时候进行处理，同时会更新计数
-    // cacheStats第一个是L1的发出预取对应的统计数据，
-    // 第二个是L2发出预取对应的统计数据
-    int updateHit(const uint64_t& addr, const DataType type, 
-            std::vector<Stats::Vector*>& cacheStats);
-    
-    // 当一个预取替换之前的无用预取时进行更新，同时更新统计计数
-    int replaceEvict(const PacketPtr& newPrefPkt, const uint64_t& oldPrefAddr,
-            const Stats::Vector* totalUsefulValue[][],
-            Stats::Vector* usefulDegree[][][],
-            std::vector<Stats::Vector*>* usefulType[],
-            uint32_t timingStatus[][][]);
-
-    // 在预取被Demand Request替换掉的时候进行处理，同时更新统计计数
-    int updateEvict(const uint64_t& addr, Stats::Vector* totalUsefulValue[][],
-            Stats::Vector* usefulDegree[][][],
-            std::vector<Stats::Vector*>* usefulType[],
-            uint32_t timingStatus[][][]);
-    
-    // 对时间维度的信息进行更新，并重置相关信息项
-    int updatePrefTiming(uint32_t timingStatus[][][]);
-
-    // 当新的预取插入时添加表项
-    int addPref(const PacketPtr& prefPkt, const uint64_t& evictAddr);
+    // 当新的预取插入时添加表项，一次会更新多个对应的预取信息
+    int addPref(const PacketPtr& prefPkt, const uint64_t& replacedAddr);
 
     // 判断一个预取是否被Demand Request覆盖了
     int isPrefHit(const uint64_t& addr);
     
-    // 查找当前有用信息表中某一个Prefetch的信息
-    int findPrefInfo(const uint64_t& addr, PrefetchUsefulInfo** infoPtr);
+    // 查找当前有用信息表中和某一个地址相关的信息，可以使Victim也可以是Pref
+    int findSrcCaches(const uint64_t& addr, std::vector<BaseCache*>* caches);
+
+    // 在数据被命中的时候进行处理，同时会更新计数
+    // cacheStats第一个是L1的发出预取对应的统计数据，
+    // 第二个是L2发出预取对应的统计数据
+    int updateHit(const PacketPtr& srcPkt, const uint64_t& hitAddr,
+            const DataType type, std::vector<Stats::Vector*>& cacheStats);
+   
+    // 当一个Demand发生Miss进行有害性信息更新
+    int updateMiss(const PacketPtr& srcPkt);
+    
+    // 在预取被Demand Request替换掉的时候进行处理，同时更新统计计数
+    int updateEvict(const uint64_t& addr);
+    
+    // 当一个预取替换之前的无用预取时进行更新，同时更新统计计数
+    int replaceEvict(const PacketPtr& prefPkt, const uint64_t& oldPrefAddr,
+
+    // 对时间维度的信息进行更新，并重置相关信息项
+    int updatePrefTiming(const Stats::Vector* totalUsefulValue[][],
+            Stats::Vector* usefulDegree[][][],
+            std::vector<Stats::Vector*>* usefulType[],
+            uint32_t timingStatus[][][]);
 
 private:
-    // 当前系统中CPU的个数
-    uint8_t numCpus_;
+    // 用于生成一个预取对应的Prefetch Info的Index
+    int genIndex(const PacketPtr& prefPkt, std::vector<uint64_t>* indexes);
+
+private:
+    // 当前表格对应的Cache指针
+    BaseCache* cache_;
 
     // 依据地址到有用信息的映射，用于对Cache中的预取数据
-    std::map<uint64_t, PrefetchUsefulInfo*> prefMap_;
+    std::map<uint64_t, std::vector<PrefetchUsefulInfo*>> prefMap_;
     
     // 依据地址到有用信息的映射，用于对Cache中被预取替换的数据
-    std::map<uint64_t, PrefetchUsefulInfo*> evictMap_;
+    std::map<uint64_t, std::vector<PrefetchUsefulInfo*>> evictMap_;
+
+    // 存放全局有用信息的结构
+    static std::map<uint64_t, PrefetchUsefulInfo> infoList_;
+    
+    // 存放时间维度统计周期内新被替换的预取
+    std::vector<PrefetchUsefulInfo> evictedPref_;
 };
 
 } // namespace prefetch_filter

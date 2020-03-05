@@ -62,15 +62,15 @@ public:
 
     // 通知发生了Hit事件
     int notifyCacheHit(BaseCache* cache, const PacketPtr& pkt,
-            const DataTypeInfo& info);
+            const uint64_t& hitAddr, const DataTypeInfo& info);
     
     // 通知发生了Miss事件
     int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
-            const DataTypeInfo& info, const uint64_t& combinedAddr);
+            const uint64_t& combinedAddr, const DataTypeInfo& info);
     
     // 通知发生了Fill事件
     int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
-            const DataTypeInfo& info, const uint64_t& evictedAddr);
+            const uint64_t& evictedAddr, const DataTypeInfo& info);
 
     // 对一个预取进行过滤，返回发送的Cache Level或者不预取
     int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
@@ -105,14 +105,16 @@ public:
     // L2预取器预取命中不同层级的个数，区分不同核心和命中层级（分析重点）
     Stats::Vector* l2PrefHitCount_[2];
 
-    // L1预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
+    // 预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
     Stats::Vector* shadowedPrefCount_[3];
     
-    // L1预取器发出预取的有益分数和，第一维度对应缓存等级，第二维度对应单多核
+    // 预取器发出预取的有益分数和，第一维度对应缓存等级，第二维度对应单多核
+    // 第二维度0表示单核心，1表示多核心
     Stats::Vector* prefTotalUsefulValue_[3][2];
     
-    // L1预取器发出预取的不同有益/有害程度的预取个数
+    // 预取器发出预取的不同有益/有害程度的预取个数
     // 第一维度对应缓存等级，第二维度对应单多核，第三维度对应有益/有害水平
+    // 其中2对应有害/有益水平为0，编号小则有害，大则有益，按需递增
     Stats::Vector* prefUsefulDegree_[3][2][5];
    
     // 不同分类的预取个数
@@ -135,7 +137,7 @@ private:
     uint32_t demandMiss_[4] = {0};
 
     // 统计周期内的不同类型的预取个数
-    uint32_t prefTypeCount_[3][2][5] = {0};
+    uint32_t prefDegreeCount_[3][2][5] = {0};
 
     // 是否开启统计操作，如果不做统计，则所有统计函数将会无效
     const bool enableStats_ = 0;

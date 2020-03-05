@@ -28,59 +28,20 @@
  * Authors: Rock Lee
  */
 
-#ifndef __MEM_CACHE_PREFETCH_FILTER_PROGRAM_HELPER_HH__
-#define __MEM_CACHE_PREFETCH_FILTER_PROGRAM_HELPER_HH__
-
 #include <cstdint>
 
 namespace prefetch_filter {
 
-#define CHECK_RET_EXIT(expr, info, ...) { \
-    int errCode = expr; \
-    if (errCode < 0) { \
-        fprintf(stderr, (std::string("[ERROR] ") + __FILE__ + "[%d]: " + \
-                info + " In [%s]." + " Error code = %d\n").c_str(), \
-                __LINE__, ##__VA_ARGS__, __func__, errCode); \
-        exit(errCode); \
-    } \
+SaturatedCounter::SaturatedCounter(const uint8_t bits) {
+    bits = bits > 31 ? 31 : bits;
+    maxValue_ = (1 << bits) - 1;
 }
 
-#define CHECK_ARGS_EXIT(expr, info, ...) { \
-    if (!(expr)) { \
-        fprintf(stderr, (std::string("[ERROR] ") + __FILE__ + "[%d]: " + \
-                info + " In [%s].\n").c_str(), __LINE__, \
-                ##__VA_ARGS__, __func__); \
-        exit(-1); \
-    } \
+int SaturatedCounter::init(const uint8_t bits) {
+    CHECK_RET(bits < 32, "Saturated counter supports up to 31 bits");
+    maxValue_ = (1 << bits) - 1;
+    return 0;
 }
-
-#define CHECK_RET(expr, info, ...) { \
-    int retCode = expr; \
-    if (retCode < 0) { \
-        fprintf(stderr, (std::string("[ERROR] ") + __FILE__ + "[%d]: " + \
-                info + " In [%s]." + " Return %d\n").c_str(), \
-                __LINE__, ##__VA_ARGS__, __func__, retCode); \
-        return retCode; \
-    } \
-}
-
-#define CHECK_WARN(expr, info, ...) { \
-    if (!(expr)) { \
-        fprintf(stderr, (std::string("[WARN] ") + __FILE__ + "[%d]: " + \
-            info + " In [%s].\n").c_str(), __LINE__, \
-            ##__VA_ARGS__, __func__); \
-    } \
-}
-
-#define CHECK_ARGS(expr, info, ...) { \
-    if (!(expr)) { \
-        fprintf(stderr, (std::string("[ERROR] ") + __FILE__ + "[%d]: " + \
-                info + " In [%s].\n").c_str(), __LINE__, \
-                ##__VA_ARGS__, __func__); \
-        return -1; \
-    } \
-}
+    
 
 } // namespace prefetch_filter
-
-#endif // __MEM_CACHE_PREFETCH_FILTER_PROGRAM_HELPER_HH__

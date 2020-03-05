@@ -43,8 +43,8 @@ std::vector<PrefUsefulType> PrefUsefulTypeList;
 int addNewPrefUsefulType(const std::string& name,
         std::function<bool(const uint64_t&, const uint64_t&, const uint64_t&,
         const uint64_t&)> judgeFunc) {
-    const uint8_t index = static_cast<uint8_t>(PrefUsefulTypeList.size());
-    PrefUsefulTypeList.push_back(PrefUsefulType(name, judgeFunc));
+    const int index = static_cast<uint8_t>(PrefUsefulTypeList.size());
+    PrefUsefulTypeList.push_back(PrefUsefulType(index, name, judgeFunc));
     return index;
 }
 
@@ -64,17 +64,6 @@ uint32_t PrefetchInfo::getInfo(const uint8_t index) {
     CHECK_ARGS(index < info_.size(), "Prefetch information index %u %s %d",
             index, "out of bound", info_.size());
     return info_[index];
-}
-
-PrefetchUsefulInfo::PrefetchUsefulInfo(const uint8_t numCpus) {
-    stats_.resize(numCpus);
-}
-
-int PrefetchUsefulInfo::updateUse(const uint64_t& coreBitMap,
-        std::vector<Stats::Vector*> cacheStats) {
-}
-
-int PrefetchUsefulInfo::updateHarm(const uint64_t& coreBitMap) {
 }
 
 // Original
@@ -166,5 +155,93 @@ int CrossCoreHarmful = addNewPrefUsefulType("cross_core_harmful",
                 (singleCoreHarm - singleCoreUseful) <=
                 (crossCoreHarm - crossCoreUseful);
         });
+
+PrefetchUsefulInfo::PrefetchUsefulInfo(BaseCache* srcCache,
+        const uint64_t& index) :
+        srcCache_(srcCache), index_(index) {}
+
+int PrefetchUsefulInfo::updateUse(const std::set<uint8_t>& cpuIds,
+        std::vector<Stats::Vector*>& cacheStats) {
+    uint8_t cacheLevel = srcCache->cacheLevel_ - 1;
+    if (cacheLevel < 2) {
+        for (uint8_t& cpuId : srcCache_->cpuIds_) {
+            (*cacheStats[cacheLevel])[cpuId]++;
+        }
+    }
+    int singleCoreValue;
+    int crossCoreValue;
+    CHECK_RET(getUpdateValue(cpuIds, srcCache->cpuIds, &singleCoreValue,
+            &crossCoreValue), "Failed to get update value");
+    info_.singleCoreUsefulCount_ += singleCoreValue;
+    info_.crossCoreUsefulCount_ += crossCoreValue;
+    return 0;
+}
+
+int PrefetchUsefulInfo::updateHarm(const std::set<uint8_t>& cpuIds) {
+    int singleCoreValue;
+    int crossCoreValue;
+    CHECK_RET(getUpdateValue(cpuIds, srcCache->cpuIds, &singleCoreValue,
+            &crossCoreValue), "Failed to get update value");
+    info_.singleCoreHarmCount_ += singleCoreValue;
+    info_.crossCoreHarmCount_ += crossCoreValue;
+    return 0;
+}
+
+int PrefetchUsefulInfo::addReplacedAddr(BaseCache* cache,
+        const uint64_t& replacedAddr) {
+    CHECK_ARGS(replacedAddress_.find(cache) == replacedAddress_.end(),
+            "Replaced address already exists before add one");
+    replacedAddress_[cache] = replacedAddr;
+    return 0;
+}
+
+int PrefetchUsefulInfo::getReplacedAddr(BaseCache* cache,
+        uint64_t* replacedAddr) {
+    CHECK_ARGS(replacedAddress_.find(cache) != replacedAddress_.end(),
+            "Replaced address not exists");
+    *replacedAddr = replacedAddress_[cache];
+    return 0;
+}
+
+int PrefetchUsefulInfo::isUseful() {
+    // 只有有用程度达到一定标准才是有用预取
+    if (info_.singleCoreUsefulCount_ - info_.singleCoreHarmCount_ >
+            POS_DEGREE_DIVIDE && info_.crossCoreUsefulCount >=
+            info_.crossCoreHarmCount) {
+        return 1;
+    } else if (info_.crossCoreUsefulCount_ - info_.crossCoreHarmCount_ >
+            POS_DEGREE_DIVIDE && info_.singleCoreUsefulCount >=
+            info_.singleCoreHarmCount) {
+        return 1;
+    }
+    return 0;
+}
+
+int PrefetchUsefulInfo::getTypeIndex() {
+    int typeIndex;
+    for (PrefUsefulType& type : PrefUsefulTypeList) {
+        if (type.isType(info_.singleCoreUsefulCount_,
+                info_.singleCoreHarmCount_, info_.corssCoreUsefulCount_,
+                info_.crossCoreHarmCount_)) {
+            return type.index_;
+        }
+    }
+    return -1;
+}
+
+int PrefetchUsefulInfo::getUpdateValue(const std::set<uint8_t>& srcCpuIds,
+        const std::set<uint8_t>& targetCpuIds, int* singleCoreUpdate,
+        int* crossCoreUpdate) {
+    *singleCoreUpdate = 0;
+    *crossCoreUpdate = 0;
+    for (uint8_t srcCpuId : srcCpuIds) {
+        if (targetCpuIds.find(srcCpuId) != targetCpuIds.end()) {
+            *singleCoreUpdate++;
+        } else {
+            *crossCoreUpdate++;
+        }
+    }
+    return 0;
+}
 
 } // namespace prefetch_filter

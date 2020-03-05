@@ -49,59 +49,57 @@ BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
         cacheLineAddrMask_(~(p->block_size - 1)) {
     int blockSize = p->block_size;
     cacheLineOffsetBits_ = 0;
-    while(blockSize >> ++cacheLineOffsetBits) {}
+    while(blockSize >> ++cacheLineOffsetBits_) {}
 }
 
 int BasePrefetchFilter::addCache(BaseCache* newCache) {
-    int level = newCache->cacheLevel;
+    int level = newCache->cacheLevel_;
     if (level >= caches_.size()) {
         caches_.resize(level + 1);
     }
-    usefulTable_[newCache] = IdealPrefetchUsefulTable();
+    usefulTable_[newCache] = IdealPrefetchUsefulTable(newCache);
     caches_[level].push_back(newCache);
     return 0;
 }
 
 int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
-        const PacketPtr& pkt, const DataTypeInfo& info) {
-    // 暂时不处理ICache的相关内容
-    if (!cache->cacheLevel) {
-        if (info.source = Dmd) {
-            (*demandReqHitTotal_)[srcCpu]++;
-            (*demandHitCount_[cacheIndex])[srcCpu]++;
+        const PacketPtr& pkt, const uint64_t& hitAddr,
+        const DataTypeInfo& info) {
+    if (info.source = Dmd) {
+        for (BaseCache* cache : pkt->caches_) {
             demandHit_[cache->cacheLevel_]++;
+            for (const uint8_t cpuId : cache->cpuIds_) {
+                (*demandHitCount_[cache->cacheLevel_])[cpuId]++;
+                (*demandReqHitTotal_)[cpuId]++;
+            }
         }
+    }
+    
+    // 暂时不处理ICache的相关内容
+    if (!cache->cacheLevel_) {
         return 0;
     }
 
-    uint8_t srcCpu = pkt->srcCpuId_;
-    uint8_t srcCacheLevel = pkt->srcCacheLevel_;
-    CHECK_ARGS_EXIT(srcCpu < numCpus_, "Source cpu id exceeds number of cpus");
-    CHECK_ARGS_EXIT(srcCacheLevel <= maxCacheLevel_,
-            "Source cache level exceeds max cache level");
-    uint8_t cacheIndex = cache->cacheLevel_ - 1;
-    
     std::vector<Stats::Vector*> cacheStats =
             {l1PrefHitCount_[cache->cacheLevel_ - 1]};
     if (cache->cacheLevel_ == 3) {
         cacheStats.push_back(l2PrefHitCount_[1]);
+    } else if (cache->cacheLevel == 2) {
+        cacheStats.push_back(l2PrefHitCount_[0]);
     }
     
     // 依据源数据和目标数据类型进行统计数据更新
     if (info.source == Dmd) {
         if (info.target == Pref) {
             // Demand Request命中了预取数据
-            CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt->addr, Dmd,
+            CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitAddr, Dmd,
                     cacheStats), "Failed to update when dmd hit pref data");
         }
-        (*demandReqHitTotal_)[srcCpu]++;
-        (*demandHitCount_[cacheIndex])[srcCpu]++;
-        demandHit_[cache->cacheLevel_]++;
     } else if (info.target == Pref) {
         // 预取命中了预取数据
-        CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt->addr, Pref,
-                cacheStats), "Failed to update when useful %s",
-                "pref hit pref data");
+        CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitAddr, Pref,
+                cacheStats), "Failed to update when useful pref hit %s",
+                "pref data");
     }
 
     // 时间维度的检查与更新
@@ -111,20 +109,34 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
 }
 
 int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
-        const PacketPtr& pkt, const DataTypeInfo& info,
-        const uint64_t& combinedAddr) {
+        const PacketPtr& pkt, const uint64_t& combinedAddr,
+        const DataTypeInfo& info) {
     // 这里的info记录的source是新的Miss属性
     // 其中的target表示mshr中已存在的内容属性
-    // prefetch->demand表示prefetch获得了一个新的mshr表项
+    // prefetch->nulltype表示prefetch获得了一个新的mshr表项
     // 而非和一个demand类型的mshr合并，但是我们并不关心
-    CHECK_ARGS_EXIT(info.target != Pref || info.source != Pref,
-            "Prefetch will not cimbined with prefetch in mshr.");
+    CHECK_ARGS_EXIT(info.source != Pref || info.target != Dmd,
+            "Prefetch will not combined with demand in mshr.");
     if (info.source == Dmd) {
-        demandMiss_[cache->cacheLevel_]++;
-        (*demandReqMissCount_[cache->cacheLevel_])++;
-        if (info.target == Pref && cache->cacheLevel_) {
-            (*shadowedPrefCount_[cache->cacheLevel_ - 1])++
+        for (BaseCache* cache : pkt->caches_) {
+            demandMiss_[cache->cacheLevel_]++;
+            for (const uint8_t cpuId : cache->cpuIds_) {
+                (*demandReqMissCount_[cache->cacheLevel_])[cpuId]++;
+                if (info.target == Pref && cache->cacheLevel_) {
+                    (*shadowedPrefCount_[cache->cacheLevel_ - 1])[cpuId]++;
+                }
+            }
         }
+        if (info.target != Dmd) {
+            // 预取命中了预取数据
+            CHECK_RET_EXIT(usefulTable_[cache].updateMiss(pkt),
+                    "Failed to update when demand request miss");
+        }
+    } else if (info.target == NullType && pkt->caches_.size() == 1 &&
+            pkt->caches_.front() == cache) {
+        // 一个新生成的没有合并的预取，需要添加对应信息进行追踪
+        CHECK_RET_EXIT(usefulTable_[cache].newPref(pkt),
+                "Failed to add new prefetch info to useful table");
     }
     
     // 时间维度的检查与更新
@@ -134,19 +146,17 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
 }
 
 int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
-        const PacketPtr &pkt, const DataTypeInfo& info,
-        const uint64_t& evictedAddr) {
+        const PacketPtr &pkt, const uint64_t& evictedAddr,
+        const DataTypeInfo& info) {
     if (!cache->cacheLevel_) {
         return 0;
     }
     
-    uint8_t cacheIndex = cache->cacheLevel_ - 1;
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
         // 则会将对应预取从当前Cache记录表中剔除
-        CHECK_RET_EXIT(usefulTable_[cache].updateEvict(evictedAddr,
-                prefTotalUsefulValue_, prefUsefulDegree_, prefUsefulType_,
-                prefTypeCount_, "Failed to remove pref from the table");
+        CHECK_RET_EXIT(usefulTable_[cache].updateEvict(evictedAddr),
+                "Failed to remove pref from the table");
     } else if (info.source == Pref) {
         // 预取替换了一个Demand Request请求的数据
         // 就需要对相关的替换信息进行记录
@@ -154,8 +164,9 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
             CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedAddr),
                     "Failed to add pref replacing dmd in the table");
         } else {
-            int result = isPrefHit(pkt->addr);
-            CHECK_RET_EXIT(result, "Pref not exist in the table");
+            int result;
+            CHECK_RET_EXIT(result = usefulTable_[cache].isPrefHit(pkt->addr),
+                    "Pref not exist in the table");
             if (result) {
                 // 如果一个预取被Demand Request覆盖，那么它将会被看作是
                 // 一个Demand Request，成为一个有害情况的备选项
@@ -166,9 +177,8 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                 // 如果一个预取替换了一个没有被Demand Request命中过的无用预取
                 // 则原预取将会被剔除，并进行记录，同时新的预取替换对象会继承
                 // 之前替换对象的地址
-                CHECK_RET_EXIT(usefulTable_[cache].replaceEvict(
-                        pkt, evictedAddr, prefTotalUsefulValue_,
-                        prefUsefulDegree_, prefUsefulType_, prefTypeCount_,
+                CHECK_RET_EXIT(usefulTable_[cache].replaceEvict(pkt,
+                        evictedAddr),
                         "Failed to replace old pref with new pref");
             }
         }
@@ -192,9 +202,6 @@ void BasePrefetchFilter::init() {
     for (int i = 0; i <= maxCacheLevel_; i++) {
         usePref_[level] = caches_[i][0]->prefetcher != NULL;
     }
-    for (auto mapPair : usefulTable_) {
-        mapPair.second.init(numCpus_);
-    }
 }
 
 int BasePrefetchFilter::checkUpdateTimingStats() {
@@ -203,8 +210,9 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
 
         // 更新时间维度的统计数据
         for (auto mapPair : usefulTable_) {
-            CHECK_RET_EXIT(mapPair.second.updateTimingStats(prefTypeCount_),
-                    "Failed to update timing stats variable");
+            CHECK_RET_EXIT(mapPair->second.updatePrefTiming(
+                    prefTotalUsefulValue_, prefUsefulDegree_, prefUsefulType_,
+                    prefDegreeCount_), "Failed to update stats timingly");
         }
         
         // 打印时间维度的信息
@@ -221,17 +229,17 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
         for (int i = 0; i < 3; i++) {
             outputInfo << "\t\t" << BaseCache::levelName[i + 1] << "(";
             for (int j = 0; j < 2; j++) {
-                std::string usefulTypeStr = j ? "single_core" : "cross_core";
+                std::string usefulTypeStr = j ? "cross_core" : "single_core";
                 outputInfo << usefulTypeStr << "): ";
                 for (int k = 0; k < 5; k++) {
-                    outputInfo << prefTypeCount_[i][j][k] << ", ";
+                    outputInfo << prefDegreeCount_[i][j][k] << ", ";
                 }
             }
             outputInfo << std::endl;
         }
         DPRINTF(PrefetchFilter, "%s", outputInfo.str());
 
-        // 方案1：该方案在全局固定的分割内进行采样，采样范围是对齐的
+        // 方案1：该方案在全局固定的分割间隔内进行采样，采样范围是对齐的
         /*
         while (nextPeriodTick_ - curTick() < statsPeriod_) {
             nextPeriodTick_ += statsPeriod_;
@@ -243,11 +251,10 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
         // 重置时间维度的统计数据
         memset(demandHit_, 0, sizeof(demandHit_);
         memset(demandMiss_, 0, sizeof(demandMiss_);
-        memset(prefTypeCount_, 0, sizeof(prefTypeCount_);
-    } else {
-        // 重置空统计变量防止溢出
-        emptyStatsVar = 0;
+        memset(prefDegreeCount_, 0, sizeof(prefDegreeCount_);
     }
+    // 重置空统计变量防止溢出
+    emptyStatsVar = 0;
     return 0;
 }
 
@@ -375,7 +382,7 @@ void BasePrefetchFilter::regStats() {
         if (usePref_[i + 1] && enableStats_) {
             std::string usefulTypeStr;
             for (j = 0; j < 2; j++) {
-                usefulTypeStr = j ? "single_core" : "cross_core";
+                usefulTypeStr = j ? "cross_core" : "single_core";
                 prefTotalUsefulValue_[i][j] = new Stats::Vector();
                 prefTotalUsefulValue_[i][j]
                         ->name(name() + "." + BaseCache::levelName_[i + 1] +
@@ -400,7 +407,7 @@ void BasePrefetchFilter::regStats() {
         if (usePref_[i + 1] && enableStats_) {
             std::string usefulTypeStr;
             for (j = 0; j < 2; j++) {
-                usefulTypeStr = j ? "single_core" : "cross_core";
+                usefulTypeStr = j ? "cross_core" : "single_core";
                 for (k = 0; k < 5; k++) {
                     std::string degreeStr = std::to_string(k);
                     prefUsefulDegree_[i][j][k] = new Stats::Vector();
@@ -442,7 +449,7 @@ void BasePrefetchFilter::regStats() {
                 for (j = 0; j < numCpus_; j++) {
                     prefUsefulType_[i].back()->subname(j, std::string("cpu") +
                             std::to_string(j));
-              }
+                }
             } else {
                 prefUsefulType_[i].push_back(&emptyStatsVar_);
             }

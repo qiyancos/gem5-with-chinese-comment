@@ -171,9 +171,6 @@ public:
 
 private:
     // 构造函数
-    SaturatedCounter();
-    
-    // 构造函数
     SaturatedCounter(const uint8_t bits);
 
     // 初始化函数
