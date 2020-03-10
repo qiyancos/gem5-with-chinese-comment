@@ -351,6 +351,7 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
         return;
     }
 
+    // 过滤缓存行内的Offset
     Addr blk_addr = pkt->getBlockAddr(blkSize);
 
     MSHR *mshr = mshrQueue.findMatch(blk_addr, pkt->isSecure());
@@ -811,6 +812,9 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             break;
 
           case MSHR::Target::FromPrefetcher:
+            if (cacheLevel_ == 2) {
+                printf("Resp HPF\n");
+            }
             assert(tgt_pkt->cmd == MemCmd::HardPFReq);
             if (blk)
                 blk->status |= BlkHWPrefetched;

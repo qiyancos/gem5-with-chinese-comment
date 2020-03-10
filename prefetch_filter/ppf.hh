@@ -147,7 +147,7 @@ private:
 };
 
 // 基于感知器的预取过滤器
-class PerceptronPrefetchFilter : public BasePrefetchFilter {
+class PerceptronPrefetchFilter final : public BasePrefetchFilter {
 
 typedef CacheTable<std::vector<SaturatedCounter>> FeatureIndexTable;
 typedef CacheTable<int8_t> FeatureWeightTable;
@@ -159,22 +159,25 @@ public:
     
     // 析构函数
     ~PerceptronPrefetchFilter() {}
+    
+    // 更新实例为全局实例
+    int updateInstance(BasePrefetchFilter** ptr) override;
 
     // 通知发生了Hit事件
     int notifyCacheHit(BaseCache* cache, const PacketPtr& pkt,
-            const uint64_t& hitAddr, const DataTypeInfo& info);
+            const uint64_t& hitAddr, const DataTypeInfo& info) override;
     
     // 通知发生了Miss事件
     int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
-            const uint64_t& combinedAddr, const DataTypeInfo& info);
+            const uint64_t& combinedAddr, const DataTypeInfo& info) override;
     
     // 通知发生了Fill事件
     int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
-            const uint64_t& evictedAddr, const DataTypeInfo& info);
+            const uint64_t& evictedAddr, const DataTypeInfo& info) override;
 
     // 对一个预取进行过滤，返回发送的Cache Level(0-3)或者不预取(4)
     int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
-            const PrefetchInfo& info);
+            const PrefetchInfo& info) override;
     
     // 注册统计变量
     void regStats() override;

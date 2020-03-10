@@ -38,8 +38,10 @@ struct BasePrefetchFilterParams;
 
 namespace prefetch_filter {
 
-uint64_t BasePrefetchFilter::cacheLineAddrMask_;
-uint8_t BasePrefetchFilter::cacheLineOffsetBits_;
+BasePrefetchFilter* BasePrefetchFilter::onlyInstance_ = nullptr;
+int64_t BasePrefetchFIlter::typeHash_ = -1;
+uint64_t BasePrefetchFilter::cacheLineAddrMask_ = 0;
+uint8_t BasePrefetchFilter::cacheLineOffsetBits_ = 0;
 
 BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
         statsPeriod_(p->stats_period),
@@ -50,6 +52,18 @@ BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
     int blockSize = p->block_size;
     cacheLineOffsetBits_ = 0;
     while(blockSize >> ++cacheLineOffsetBits_) {}
+}
+
+int BasePrefetchFilter::updateInstance(BasePrefetchFilter** ptr) {
+    if (!onlyInstance_) {
+        onlyInstance_ = this;
+    } else {
+        CHECK_RET_EXIT(this != onlyInstance_,
+                "Update instance pointer more than once");
+        *ptr = onlyInstance_;
+        delete this;
+    }
+    return 0;
 }
 
 int BasePrefetchFilter::addCache(BaseCache* newCache) {
@@ -196,6 +210,22 @@ int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
     return cache->cacheLevel_;
 }
 
+int BasePrefetchFilter::genHash(const std::string& name) {   
+    register int64_t hash = 0;
+    int index = 0;
+    while(index < name.length()) {
+        hash = hash * 131 + name[index++];
+    }
+    hash = abs(hash);
+    if (typeHash_ = -1) {
+        typeHash_ = hash;
+    } else {
+        CHECK_RET(typeHash_ == hash,
+                "Trying to initiate different types of prefetch filter");
+    }
+    return 0;
+}
+
 void BasePrefetchFilter::init() {   
     maxCacheLevel_ = caches_.size() - 1;
     numCpus_ = caches_[0].size();
@@ -259,6 +289,8 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
 }
 
 void BasePrefetchFilter::regStats() {
+    ClockedObject::regStats();
+
     int i, j, k;
     
     // 进行初始化操作

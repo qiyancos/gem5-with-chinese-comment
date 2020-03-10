@@ -190,6 +190,9 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
       system(params->system),
       lastRunningCycle(curCycle())
 {
+    /// 获取Commit阶段的指针
+    commitPtr_ = &commit;
+
     if (!params->switched_out) {
         _status = Running;
     } else {

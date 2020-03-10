@@ -99,6 +99,10 @@ template <class Impl>
 class FullO3CPU : public BaseO3CPU
 {
   public:
+    /// 只想Commit阶段的指针
+    typename CPUPolicy::Commit* commitPtr_;
+
+  public:
     // Typedefs from the Impl here.
     typedef typename Impl::CPUPol CPUPolicy;
     typedef typename Impl::DynInstPtr DynInstPtr;

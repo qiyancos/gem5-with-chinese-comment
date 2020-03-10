@@ -84,6 +84,10 @@ template<class Impl>
 class DefaultCommit
 {
   public:
+    /// 最近的三次分支指令的PC
+    std::list<uint64_t> recentBranchPC_;
+
+  public:
     // Typedefs from the Impl.
     typedef typename Impl::O3CPU O3CPU;
     typedef typename Impl::DynInstPtr DynInstPtr;

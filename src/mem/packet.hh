@@ -246,6 +246,8 @@ class MemCmd
     bool operator!=(MemCmd c2) const { return (cmd != c2.cmd); }
 };
 
+class BaseCache;
+
 /**
  * A Packet is used to encapsulate a transfer between two objects in
  * the memory system (e.g., the L1 and L2 cache).  (In contrast, a
@@ -256,6 +258,18 @@ class MemCmd
 class Packet : public Printable
 {
   public:
+    /// 用于记录相关的Cache
+    std::vector<BaseCache*> caches_;
+    
+    /// 记录目标的Cache等级，若是非Prefetch，該数值应该是255
+    uint8_t targetCacheLevel_;
+
+    /// 当前Packet的类型，预取/Demand Request
+    prefetch_filter::DataType packetType_;
+
+    // 发射该请求时对应的最近三次分支指令PC
+    std::list<uint64_t> recentBranchPC_;
+
     typedef uint32_t FlagsType;
     typedef ::Flags<FlagsType> Flags;
 

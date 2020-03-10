@@ -1076,6 +1076,9 @@ LSQ<Impl>::SplitDataRequest::handleIprWrite(ThreadContext *thread,
     unsigned offset = 0;
     for (auto r: _requests) {
         PacketPtr pkt = new Packet(r, MemCmd::WriteReq);
+        /// 添加最近的分支指令地址
+        pkt->recentBranchPC_ = cpu->commitPtr->recentBranchPC_;
+        
         pkt->dataStatic(mainPkt->getPtr<uint8_t>() + offset);
         TheISA::handleIprWrite(thread, pkt);
         offset += r->getSize();
@@ -1101,6 +1104,9 @@ LSQ<Impl>::SplitDataRequest::handleIprRead(ThreadContext *thread,
 
     for (auto r: _requests) {
         PacketPtr pkt = new Packet(r, MemCmd::ReadReq);
+        /// 添加最近的分支指令地址
+        pkt->recentBranchPC_ = cpu->commitPtr->recentBranchPC_;
+        
         pkt->dataStatic(mainPkt->getPtr<uint8_t>() + offset);
         Cycles d = TheISA::handleIprRead(thread, pkt);
         if (d > delay)

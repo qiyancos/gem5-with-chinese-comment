@@ -97,6 +97,9 @@ DefaultCommit<Impl>::DefaultCommit(O3CPU *_cpu, DerivO3CPUParams *params)
       canHandleInterrupts(true),
       avoidQuiesceLiveLock(false)
 {
+    /// 初始化最近3次分支记录变量
+    recentBrnachPC_.resize(3, 0);
+
     if (commitWidth > Impl::MaxWidth)
         fatal("commitWidth (%d) is larger than compiled limit (%d),\n"
              "\tincrease MaxWidth in src/cpu/o3/impl.hh\n",
@@ -1395,8 +1398,12 @@ DefaultCommit<Impl>::updateComInstStats(const DynInstPtr &inst)
     //
     //  Control Instructions
     //
-    if (inst->isControl())
+    if (inst->isControl()) {
         statComBranches[tid]++;
+        /// 追踪最近三次的分支PC
+        recentBranchPC_.pop_back();
+        recentBranchPC_.push_front(inst->pcState());
+    }
 
     //
     //  Memory references

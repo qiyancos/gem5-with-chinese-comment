@@ -81,8 +81,11 @@ BaseCache::CacheSlavePort::CacheSlavePort(const std::string &_name,
 
 BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
     : MemObject(p),
+      /// 初始化
       cpuIds_(p->cpu_ids.begin(), p->cpu_ids.end()),
       cacheLevel_(p->cache_level),
+      prefetchFilter_(p->prefetch_filter),
+      
       cpuSidePort (p->name + ".cpu_side", this, "CpuSidePort"),
       memSidePort(p->name + ".mem_side", this, "MemSidePort"),
       prefetcher(p->prefetcher),
@@ -113,6 +116,9 @@ BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
       addrRanges(p->addr_ranges.begin(), p->addr_ranges.end()),
       system(p->system)
 {
+    /// 更新全局实例化指针
+    prefetchFilter_->updateInstance(&prefetchFilter);
+    
     // the MSHR queue has no reserve entries as we check the MSHR
     // queue on every single allocation, whereas the write queue has
     // as many reserve entries as we have MSHRs, since every MSHR may
@@ -498,6 +504,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         DPRINTF(Cache, "Block for addr %#llx being updated in Cache\n",
                 pkt->getAddr());
 
+        // 判断是不是在Fill的时候才进行allocate分配Block
         const bool allocate = (writeAllocator && mshr->wasWholeLineWrite) ?
             writeAllocator->allocate() : mshr->allocOnFill();
         blk = handleFill(pkt, blk, writebacks, allocate);
@@ -1330,6 +1337,7 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
     // Find replacement victim
     std::vector<CacheBlk*> evict_blks;
     CacheBlk *victim = tags->findVictim(addr, is_secure, evict_blks);
+    // evict_blks只会存放victim
 
     // It is valid to return nullptr if there is no victim
     if (!victim)

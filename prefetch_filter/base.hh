@@ -57,27 +57,34 @@ public:
     // 析构函数
     virtual ~BasePrefetchFilter() {}
 
+    // 获取最新的实例
+    virtual int updateInstance(BasePrefetchFilter** ptr);
+
     // 添加一个Cache到Filter中来
     int addCache(BaseCache* newCache);
 
     // 通知发生了Hit事件
-    int notifyCacheHit(BaseCache* cache, const PacketPtr& pkt,
+    virtual int notifyCacheHit(BaseCache* cache, const PacketPtr& pkt,
             const uint64_t& hitAddr, const DataTypeInfo& info);
     
     // 通知发生了Miss事件
-    int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
+    virtual int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
             const uint64_t& combinedAddr, const DataTypeInfo& info);
     
     // 通知发生了Fill事件
-    int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
+    virtual int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
             const uint64_t& evictedAddr, const DataTypeInfo& info);
 
     // 对一个预取进行过滤，返回发送的Cache Level或者不预取
-    int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
+    virtual int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
             const PrefetchInfo& info);
    
     // 注册统计变量
     void regStats() override;
+
+protected:
+    // 用于生成当前类型实例的hash数值
+    int genHash(const std::string& name);
 
 private:
     // 进行基本结构的初始化
@@ -144,6 +151,12 @@ private:
     
     // 是否开启过滤器，如果不开启，则所有预取都不会改变
     const bool enableFilter_ = 0;
+    
+    // 全局唯一的实例指针
+    static BasePrefetchFilter* onlyInstance_;
+    
+    // 用于区分不同类型过滤器的哈希数值
+    static int64_t typeHash_;
 
 public:
     // 提取缓存行地址对应的Mask

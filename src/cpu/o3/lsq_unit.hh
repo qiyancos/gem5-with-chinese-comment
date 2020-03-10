@@ -663,6 +663,8 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
 
         ThreadContext *thread = cpu->tcBase(lsqID);
         PacketPtr main_pkt = new Packet(req->mainRequest(), MemCmd::ReadReq);
+        /// 添加最近的分支指令地址
+        main_pkt->recentBranchPC_ = cpu->commitPtr->recentBranchPC_;
 
         Cycles delay = req->handleIprRead(thread, main_pkt);
 
@@ -733,6 +735,9 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
 
                 PacketPtr data_pkt = new Packet(req->mainRequest(),
                         MemCmd::ReadReq);
+                /// 添加最近的分支指令地址
+                data_pkt->recentBranchPC_ = cpu->commitPtr->recentBranchPC_;
+                
                 data_pkt->dataStatic(load_inst->memData);
 
                 if (req->isAnyOutstandingRequest()) {

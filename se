@@ -83,7 +83,7 @@ setGem5(){
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
-        numCpus="16" # []
+        numCpus="1" # []
         # number of cpu you want to run with
 
     enableMem="Yes"
@@ -129,7 +129,7 @@ setGem5(){
         numL2Caches=""
         L2size="256kB"
         L2assoc="8"
-        L2prefetcher=""
+        L2prefetcher="StridePrefetcher"
 
     enableL3Cache="Yes"
         numL3Caches=""
