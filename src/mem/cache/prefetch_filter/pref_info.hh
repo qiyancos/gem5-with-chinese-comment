@@ -32,15 +32,13 @@
 #define __MEM_CACHE_PREFETCH_FILTER_PREF_INFO_HH__
 
 #include <cstdint>
+#include <string>
+#include <vector>
+#include <list>
+#include <map>
 
-#include "arch/isa_traits.hh"
-#include "base/statistics.hh"
-#include "base/types.hh"
-#include "mem/packet.hh"
-#include "mem/request.hh"
-#include "sim/byteswap.hh"
-#include "sim/clocked_object.hh"
-#include "sim/probe/probe.hh"
+#include "base/statistics.hh""
+class BaseCache;
 
 namespace prefetch_filter {
 
@@ -79,12 +77,15 @@ private:
     // 信息项主体
     std::vector<uint32_t> info_;
 
+    // 判定某一个信息是否有效，最多支持32各信息
+    uint64_t valid_ = 0;
+
 public:
     // 写入一个新的信息
     int setInfo(const uint8_t index, const uint32_t value);
     
-    // 写入一个新的信息
-    uint32_t getInfo(const uint8_t index);
+    // 读取一个新的信息，读取成功返回1，失败则返回0，错误则返回-1
+    int getInfo(const uint8_t index, uint32_t* value);
 };
 
 // 预取分类的结构体

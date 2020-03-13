@@ -32,15 +32,16 @@
 #define __MEM_CACHE_PREFETCH_FILTER_TABLE_HH__
 
 #include <cstdint>
+#include <string>
+#include <map>
+#include <set>
+#include <list>
 
-#include "arch/isa_traits.hh"
 #include "base/statistics.hh"
-#include "base/types.hh"
-#include "mem/packet.hh"
-#include "mem/request.hh"
-#include "sim/byteswap.hh"
-#include "sim/clocked_object.hh"
-#include "sim/probe/probe.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
+
+class BaseCache;
+class Packet;
 
 namespace prefetch_filter {
 
@@ -110,9 +111,14 @@ private:
 };
 
 class IdealPrefetchUsefulTable {
+typedef Packet *PacketPtr;
+
 public:
     // 初始化函数
     IdealPrefetchUsefulTable(BaseCache* cache);
+    
+    // 初始化函数
+    IdealPrefetchUsefulTable(BaseCache* cache, const bool valid);
 
     // 为一个新的预取生成信息项
     int newPref(const PacketPtr& prefPkt);
@@ -152,6 +158,9 @@ private:
     int genIndex(const PacketPtr& prefPkt, std::vector<uint64_t>* indexes);
 
 private:
+    // 表示当前是否实际有效
+    const bool valid_;
+
     // 当前表格对应的Cache指针
     BaseCache* cache_;
 

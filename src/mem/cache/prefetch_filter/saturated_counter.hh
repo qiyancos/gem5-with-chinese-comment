@@ -173,8 +173,14 @@ private:
     // 构造函数
     SaturatedCounter(const uint8_t bits);
 
+    // 构造函数（带初始化数值）
+    SaturatedCounter(const uint8_t bits, const int value);
+
     // 初始化函数
     int init(const uint8_t bits);
+    
+    // 初始化函数（带初始化数值）
+    int init(const uint8_t bits, const int value);
     
     // 最小值
     const int minValue_ = 0;
@@ -183,7 +189,7 @@ private:
     int maxValue_;
     
     // 当前饱和计数器的数值
-    int value_;
+    int value_ = 0;
 };
 
 } // namespace prefetch_filter

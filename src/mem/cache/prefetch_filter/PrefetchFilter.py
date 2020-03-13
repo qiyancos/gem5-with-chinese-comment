@@ -71,13 +71,15 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
             "table")
     
     # 过滤设置
-    l1_threashold = Param.UInt16(?, "Threshold for prefetch to l1")
-    l2_threashold = Param.UInt16(?, "Threshold for prefetch to l2")
-    l3_threashold = Param.UInt16(?, "Threshold for prefetch to l3")
+    # 0-L1ICache，1-L1DCache，2-L2Cache...n-LnCache
+    prefetch_threashold = VectorParam.UInt16([?, ?, ?],
+            "Thresholds for prefetch to different caches")
     
     # PPF自带的特征
     feature_weight_bits = Param.UInt8(4, "Number of bits of weight for a "
             "feature")
+    feature_weight_init = Param.UInt8(7, "Initiated value for weight")
+
     # Feature表示方式: "key1 key2 key3 x n" 表示从[key1]^[key2]^[key3]的结果中
     #          取第x位开始共n个bits(包括第x位)的数据作为Weight Table的索引
     original_features = VectorParam.String([
@@ -96,17 +98,18 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     added_features = VectorParam.String([
             "BPC1 BPC2>>1 BPC3>>2 0 12", # Hash of branch insts; 4096(2^12)
             "PrefHarm 0 ?", # Prefetch harmfulness; ?
-            "CoreID PC1 0 ?", # CoreID bitmap ^ PC; ?
-            "CoreID PageAddress 0 ?", # CoreID bitmap ^ Page address; ?
-            "CoreID PrefHarm 0 ?", # CoreID bitmap ^ Prefetch Harmfulness; ?
+            "PrefetcherID PC1 0 ?", # CoreID bitmap ^ PC; ?
+            "PrefetcherID PageAddress 0 ?", # CoreID bitmap ^ Page address; ?
+            "PrefetcherID PrefHarm 0 ?", # CoreID bitmap ^ Prefetch Harmfulness; ?
             ], "List of added features used for PPF")
     
     # 训练设置
+    default_training_step = Param.UInt8(1,
+            "Default training step for all caches");
     useless_prefetch_training_step = Param.UInt8(1, "Punish useless prefetch "
             "if this number is set nozero")
-    l1_training_step = Param.UInt8(3, "Step for training of l1 feedback")
-    l2_training_step = Param.UInt8(2, "Step for training of l1 feedback")
-    l3_training_step = Param.UInt8(1, "Step for training of l1 feedback")
+    training_step = VectorParam.UInt8([3, 2, 1],
+            "Step for training of different cache feedback")
     
     # 有害性统计结构的设置
     counter_cache_size = Param.UInt32(?, "Size of the counter cache")

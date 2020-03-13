@@ -36,6 +36,7 @@ Source('base.cc')
 Source('table.cc')
 Source('pref_info.cc')
 Source('ppf.cc')
+Source('saturated_counter.cc')
 
 # 该DebugFlag用于控制是否打印时间维度的统计信息
 DebugFlag('PrefetchFilter')

@@ -28,10 +28,11 @@
  * Authors: Rock Lee
  */
 
-
-#include <cstdint>
-
+#include "mem/packet.hh"
+#include "mem/cache/base.hh"
+#include "mem/cache/cache.hh"
 #include "mem/cache/prefetch_filter/base.hh"
+#include "mem/cache/prefetch_filter/program_helper.hh"
 
 class BaseCache;
 struct BasePrefetchFilterParams;
@@ -71,7 +72,6 @@ int BasePrefetchFilter::addCache(BaseCache* newCache) {
     if (level >= caches_.size()) {
         caches_.resize(level + 1);
     }
-    usefulTable_[newCache] = IdealPrefetchUsefulTable(newCache);
     caches_[level].push_back(newCache);
     return 0;
 }
@@ -79,11 +79,12 @@ int BasePrefetchFilter::addCache(BaseCache* newCache) {
 int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
         const PacketPtr& pkt, const uint64_t& hitAddr,
         const DataTypeInfo& info) {
+    hitAddr &= cacheLineAddrMask_; 
     if (info.source = Dmd) {
         for (BaseCache* cache : pkt->caches_) {
-            demandHit_[cache->cacheLevel_]++;
             for (const uint8_t cpuId : cache->cpuIds_) {
-                (*demandHitCount_[cache->cacheLevel_])[cpuId]++;
+                timingStats_[cpuId].demandHit_[cache->cacheLevel_]++;
+                (*demandReqHitCount_[cache->cacheLevel_])[cpuId]++;
                 (*demandReqHitTotal_)[cpuId]++;
             }
         }
@@ -94,12 +95,10 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
         return 0;
     }
 
-    std::vector<Stats::Vector*> cacheStats =
-            {l1PrefHitCount_[cache->cacheLevel_ - 1]};
-    if (cache->cacheLevel_ == 3) {
-        cacheStats.push_back(l2PrefHitCount_[1]);
-    } else if (cache->cacheLevel == 2) {
-        cacheStats.push_back(l2PrefHitCount_[0]);
+    std::vector<Stats::Vector*> cacheStats;
+    for (int i = 0; i < cache->cacheLevel_; i++) {
+        cacheStats.push_back(prefHitCount_[i][i ? cache->cacheLevel_ - i - 1 :
+                cache->cacheLevel_ - 2];
     }
     
     // 依据源数据和目标数据类型进行统计数据更新
@@ -125,6 +124,19 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
 int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
         const PacketPtr& pkt, const uint64_t& combinedAddr,
         const DataTypeInfo& info) {
+    if (info.source == Dmd) {
+        for (BaseCache* cache : pkt->caches_) {
+            for (const uint8_t cpuId : cache->cpuIds_) {
+                timingStats_[cpuId].demandMiss_[cache->cacheLevel_]++;
+                (*demandReqMissCount_[cache->cacheLevel_])[cpuId]++;
+            }
+        }
+    }
+    if (!cache->cacheLevel_) {
+        return 0;
+    }
+    
+    combinedAddr &= cacheLineAddrMask_;
     // 这里的info记录的source是新的Miss属性
     // 其中的target表示mshr中已存在的内容属性
     // prefetch->nulltype表示prefetch获得了一个新的mshr表项
@@ -133,11 +145,9 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
             "Prefetch will not combined with demand in mshr.");
     if (info.source == Dmd) {
         for (BaseCache* cache : pkt->caches_) {
-            demandMiss_[cache->cacheLevel_]++;
-            for (const uint8_t cpuId : cache->cpuIds_) {
-                (*demandReqMissCount_[cache->cacheLevel_])[cpuId]++;
-                if (info.target == Pref && cache->cacheLevel_) {
-                    (*shadowedPrefCount_[cache->cacheLevel_ - 1])[cpuId]++;
+            if (info.target == Pref && cache->cacheLevel_) {
+                for (const uint8_t cpuId : cache->cpuIds_) {
+                    (*shadowedPrefCount_[cache->cacheLevel_])[cpuId]++;
                 }
             }
         }
@@ -166,6 +176,7 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
         return 0;
     }
     
+    evictedAddr &= cacheLineAddrMask_;
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
         // 则会将对应预取从当前Cache记录表中剔除
@@ -179,7 +190,8 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                     "Failed to add pref replacing dmd in the table");
         } else {
             int result;
-            CHECK_RET_EXIT(result = usefulTable_[cache].isPrefHit(pkt->addr),
+            CHECK_RET_EXIT(result = usefulTable_[cache].isPrefHit(pkt->addr &
+                    cacheLineAddrMask_),
                     "Pref not exist in the table");
             if (result) {
                 // 如果一个预取被Demand Request覆盖，那么它将会被看作是
@@ -205,9 +217,21 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
 }
 
 int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
-        const PacketPtr &pkt, const PrefetchInfo& info) {
+        const uint64_t& prefAddr, const PrefetchInfo& info) {
     // 默认的过滤器没有实现，因此不会改变预取数据的存放位置
     return cache->cacheLevel_;
+}
+
+int invalidatePrefetch(BaseCache* cache, const uint64_t& prefAddr){
+    prefAddr &= cacheLineAddrMask_;
+    // 跳过ICache的更新
+    if (!cache->cacheLevel_) {
+        return 0;
+    }
+    // 删除被替换掉的预取
+    CHECK_RET_EXIT(usefulTable_[cache].updateEvict(prefAddr),
+            "Failed to remove pref from the table");
+    return 0;
 }
 
 int BasePrefetchFilter::genHash(const std::string& name) {   
@@ -230,8 +254,59 @@ void BasePrefetchFilter::init() {
     maxCacheLevel_ = caches_.size() - 1;
     numCpus_ = caches_[0].size();
     for (int i = 0; i <= maxCacheLevel_; i++) {
-        usePref_[level] = caches_[i][0]->prefetcher != NULL;
+        usePref_[i] = caches_[i][0]->prefetcher != NULL;
+        if (i > 1) {
+            havePref_[i] = usePref_[i] | havePref_[i - 1];
+        } else {
+            havePref_[i] = usePref_[i];
+        }
     }
+    
+    for (auto level : caches_) {
+        uint8_t cacheLevel = level.front()->cacheLevel_;
+        // 初始化统计变量
+        if (havePref_[cacheLevel] && cacheLevel != maxCacheLevel_) {
+            prefHitCount_.push_back(std::vector<Stats::Vector*>(
+                    cacheLevel < 2 ? maxCacheLevel_ - 1 :
+                    maxCacheLevel_ - cacheLevel));
+        } else {
+            prefHitCount_.push_back(std::vector<Stats::Vector*>());
+        }
+        
+        if (usePref_[cacheLevel]) {
+            prefTotalUsefulValue_.push_back(std::vector<Stats::Vector*>(2));
+            prefUsefulDegree_.push_back(
+                    std::vector<std::vector<Stats::Vector*>>(2,
+                    std::vector<Stats::Vector*>(5)));
+            prefUsefulType_.push_back(std::vector<Stats::Vector*>(
+                    PrefUsefulTypeList.size()));
+        } else {
+            prefTotalUsefulValue_.push_back(std::vector<Stats::Vector*>());
+            prefUsefulDegree_.push_back(
+                    std::vector<std::vector<Stats:;Vector*>>())
+            prefUsefulType_.push_back(std::vector<Stats::Vector*>());
+        }
+
+        // 初始化有用/有害信息表格
+        for (auto cache : level) {
+            usefulTable_[newCache] = IdealPrefetchUsefulTable(newCache,
+                    havePref_[cacheLevel]);
+        }
+    }
+    
+    // 初始化统计相关的变量
+    uint8_t cacheCount = caches_.size();
+    demandReqHitCount_.resize(cacheCount);
+    demandReqMissCount_.resize(cacheCount);
+    shadowedPrefCount_.resize(cacheCount);
+    
+    // 初始化时间维度的统计变量
+    TimingStats sample;
+    sample.demandHit_.resize(cacheCount);
+    sample.demandMiss_.resize(cacheCount);
+    sample.prefDegreeCount_.resize(cacheCount,
+            std::vector<std::vector<uint32_t>>(2, std::vector<uint32_t>(5)));
+    timingStats_.resize(numCpus_, sample);
 }
 
 int BasePrefetchFilter::checkUpdateTimingStats() {
@@ -246,29 +321,38 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
         }
         
         // 打印时间维度的信息
-        std::stringstream outputInfo;
-        outputInfo << "Stats Period Id: " << timingStatsPeriodCount_ <<
-                std::endl;
-        outputInfo << "\tDemand Hit Count: " << demandHit_[0] << ", " <<
-                demandHit_[1] << ", " << demandHit_[2] << ", " <<
-                demandHit_[3] << ".\n";
-        outputInfo << "\tDemand Hit Count: " << demandMiss_[0] << ", " <<
-                demandMiss_[1] << ", " << demandMiss_[2] << ", " <<
-                demandMiss_[3] << ".\n";
-        outputInfo << "\tPref Type Count: \n";
-        for (int i = 0; i < 3; i++) {
-            outputInfo << "\t\t" << BaseCache::levelName[i + 1] << "(";
-            for (int j = 0; j < 2; j++) {
-                std::string usefulTypeStr = j ? "cross_core" : "single_core";
-                outputInfo << usefulTypeStr << "): ";
-                for (int k = 0; k < 5; k++) {
-                    outputInfo << prefDegreeCount_[i][j][k] << ", ";
-                }
+        DPRINTF(PrefetchFilter, "Stats Period Id: %d\n",
+                timingStatsPeriodCount_);
+        int cacheCount = caches_.size();
+        for (int i = 0; i < numCpus_; i++) {
+            DPRINTF(PrefetchFilter, "    CPU Id: %d\n", i);
+            std::stringstream outputInfo;
+            outputInfo << "\tDemand Hit Count: ";
+            for (int j = 0; j < cacheCount; j++) {
+                outputInfo << timingStats_[i].demandHit_[k] << ", ";
             }
             outputInfo << std::endl;
+            outputInfo << "\tDemand Miss Count: ";
+            for (int j = 0; j < cacheCount; j++) {
+                outputInfo << timingStats_[i].demandMiss_[k] << ", ";
+            }
+            outputInfo << "\tPref Type Count: \n";
+            for (int j = 0; j < cacheCount; j++) {
+                for (int k = 0; k < 2; k++) {
+                    outputInfo << "\t\t" << BaseCache::levelName_[j] << "-";
+                    std::string usefulTypeStr = k ? "cross_core" :
+                            "single_core";
+                    outputInfo << usefulTypeStr << ": ";
+                    for (int n = 0; n < 5; n++) {
+                        outputInfo <<
+                                timingStats_[i].prefDegreeCount_[j][k][n] <<
+                                ", ";
+                    }
+                    outputInfo << std::endl;
+                }
+            }
+            DPRINTF(PrefetchFilter, "%s", outputInfo.str());
         }
-        DPRINTF(PrefetchFilter, "%s", outputInfo.str());
-
         // 方案1：该方案在全局固定的分割间隔内进行采样，采样范围是对齐的
         /*
         while (nextPeriodTick_ - curTick() < statsPeriod_) {
@@ -279,12 +363,12 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
         nextPeriodTick_ = curTick() + statsPeriod_;
         
         // 重置时间维度的统计数据
-        memset(demandHit_, 0, sizeof(demandHit_);
-        memset(demandMiss_, 0, sizeof(demandMiss_);
-        memset(prefDegreeCount_, 0, sizeof(prefDegreeCount_);
+        for (auto& stats = timingStats_) {
+            stats.reset();
+        }
     }
     // 重置空统计变量防止溢出
-    emptyStatsVar = 0;
+    emptyStatsVar_ = 0;
     return 0;
 }
 
@@ -292,9 +376,10 @@ void BasePrefetchFilter::regStats() {
     ClockedObject::regStats();
 
     int i, j, k;
+    int cacheCount = caches_.size();
     
     // 进行初始化操作
-    init();
+    CHECK_RET_EXIT(init(), "Failed to initiate base prefetch filter");
 
     emptyStatsVar_
             .name(name() + ".empty_stats")
@@ -314,177 +399,149 @@ void BasePrefetchFilter::regStats() {
             demandReqHitTotal_[i]->subname(j, std::string("cpu") +
                     std::to_string(j));
         }
-    }
-
-    for (i = 0; i < 4; i++) {
-        if (i <= maxCacheLevel_ && enableStats_) {
+        
+        for (i = 0; i < cacheCount; i++) {
+            std::string srcCacheName = BaseCache::levelName_[i];
             demandReqHitCount_[i] = new Stats::Vector();
             demandReqHitCount_[i]
-                    ->name(name() + ".demand_requests_hit_" +
-                            BaseCache::levelName_[i])
+                    ->name(name() + ".demand_requests_hit_" + srcCacheName)
                     .desc(std::string("Number of demand requests hit in ") +
-                            BaseCache::levelName_[i])
+                            srcCacheName)
                     .flag(total);
-            for (j = 0; j < numCpus_; j++) {
-                demandReqHitCount_[i]->subname(j, std::string("cpu") +
-                        std::to_string(j));
-            }
-        } else {
-            demandReqHitCount_[i] = &emptyStatsVar_;
-        }
-    }
-    
-    for (i = 0; i < 4; i++) {
-        if (i <= maxCacheLevel_ && enableStats_) {
+            
             demandReqMissCount_[i] = new Stats::Vector();
             demandReqMissCount_[i]
-                    ->name(name() + ".demand_requests_miss_" +
-                            BaseCache::levelName_[i])
+                    ->name(name() + ".demand_requests_miss_" + srcCacheName)
                     .desc(std::string("Number of demand requests miss in ") +
-                            BaseCache::levelName_[i])
+                            srcCacheName)
                     .flag(total);
-            for (j = 0; j < numCpus_; j++) {
-                demandReqMissCount_[i]->subname(j, std::string("cpu") +
-                        std::to_string(j));
+        
+            if (usePref_[i]) {
+                shadowedPrefCount_[i] = new Stats::Vector();
+                shadowedPrefCount_[i]
+                        ->name(name() + "." + srcCacheName +
+                                "_shadowed_prefetches")
+                        .desc(std::string("Number of prefetches shadowed by "
+                                "demand requests from " + srcCacheName)
+                        .flag(total);
+                
+            } else {
+                shadowedPrefCount_[i] = &emptyStatsVar_;
             }
-        } else {
-            demandReqMissCount_[i] = &emptyStatsVar_;
-        }
-    }
-    
-    if (usePref_[1] && enableStats_) {
-        for (i = 0; i < 3; i++) {
-            l1PrefHitCount_[i] = new Stats::Vector();
-            l1PrefHitCount_[i]
-                    ->name(name() + ".L1_prefetch_requests_hit_" +
-                            BaseCache::levelName_[i + 2])
-                    .desc(std::string("Number of prefetches request from L1 " +
-                            "hit in " + BaseCache::levelName_[i + 1])
-                    .flag(total);
-            for (j = 0; j < numCpus_; j++) {
-                l1PrefHitCount_[i]->subname(j, std::string("cpu") +
-                        std::to_string(j));
-            }
-        }
-    } else {
-        for (i = 0; i < 3; i++) {
-            l1PrefHitCount_[i] = &emptyStatsVar_;
-        }
-    }
 
-    if (usePref_[2] && enableStats_) {
-        for (i = 0; i < 2; i++) {
-            l2PrefHitCount_[i] = new Stats::Vector();
-            l2PrefHitCount_[i]
-                    ->name(name() + ".L2_prefetch_requests_hit_" +
-                            BaseCache::levelName_[i + 3])
-                    .desc(std::string("Number of prefetches request from") +
-                            " L2 hit in " + BaseCache::levelName_[i + 3])
-                    .flag(total);
-            for (j = 0; j < numCpus_; j++) {
-                l2PrefHitCount_[i]->subname(j, std::string("cpu") +
-                        std::to_string(j));
+            for (j = 0; j < prefHitCount_[j].size(); j++) {
+                std::string tgtCacheName = BaseCache::levelName_[i ?
+                        j + i + 1 : j + 2];
+                prefHitCount_[i][j] = new Stats::Vector();
+                prefHitCount_[i]
+                        ->name(name() + "." + srcCacheName +
+                                "_prefetch_requests_hit_" + tgtCacheName)
+                        .desc(std::string("Number of prefetches request from ")
+                                + srcCacheName + " hit in " + tgtCacheName)
+                        .flag(total);
             }
-        }
-    } else {
-        for (i = 0; i < 2; i++) {
-            l2PrefHitCount_[i] = &emptyStatsVar_;
-        }
-    }
-
-    for (i = 0; i < 3; i++) {
-        if (usePref_[i + 1] && enableStats_) {
-            shadowedPrefCount_[i] = new Stats::Vector();
-            shadowedPrefCount_[i]
-                    ->name(name() + "." + BaseCache::levelName_[i + 1] +
-                            "_shadowed_prefetches")
-                    .desc(std::string("Number of prefetches shadowed by demand "
-                            "requests from " + BaseCache::levelName_[i + 1])
-                    .flag(total);
-            for (j = 0; j < numCpus_; j++) {
-                shadowedPrefHitCount_[i]->subname(j, std::string("cpu") +
-                        std::to_string(j));
-            }
-        } else {
-            shadowedPrefCount_[i] = &emptyStatsVar_;
-        }
-    }
-
-    for (i = 0; i < 3; i++) {
-        if (usePref_[i + 1] && enableStats_) {
+            
             std::string usefulTypeStr;
-            for (j = 0; j < 2; j++) {
+            for (j = 0; j < prefTotalUsefulValue_[i].size(); j++) {
                 usefulTypeStr = j ? "cross_core" : "single_core";
                 prefTotalUsefulValue_[i][j] = new Stats::Vector();
                 prefTotalUsefulValue_[i][j]
-                        ->name(name() + "." + BaseCache::levelName_[i + 1] +
-                                "_prefetch_" + usefulTypeStr + "_useful_value")
+                        ->name(name() + "." + srcCacheName +
+                                "_prefetch_" + usefulTypeStr +
+                                "_useful_value")
                         .desc(std::string("Total") + usefulTypeStr +
                                 "useful value for of prefetches from" +
-                                BaseCache::levelName_[i + 1])
+                                srcCacheName)
                         .flag(total);
-                for (k = 0; k < numCpus_; k++) {
-                    shadowedPrefHitCount_[i][j]->subname(k, std::string("cpu") +
-                            std::to_string(k));
-               }
             }
-        } else {
-            for (j = 0; j < 2; j++) {
-                prefTotalUsefulValue_[i][j] = &emptyStatsVar_;
-            }
-        }
-    }
-
-    for (i = 0; i < 3; i++) {
-        if (usePref_[i + 1] && enableStats_) {
-            std::string usefulTypeStr;
-            for (j = 0; j < 2; j++) {
+            
+            for (j = 0; j < prefUsefulDegree_[i].size(); j++) {
                 usefulTypeStr = j ? "cross_core" : "single_core";
                 for (k = 0; k < 5; k++) {
                     std::string degreeStr = std::to_string(k);
                     prefUsefulDegree_[i][j][k] = new Stats::Vector();
                     prefUsefulDegree_[i][j][k]
-                            ->name(name() + "." +
-                                    BaseCache::levelName_[i + 1] +
+                            ->name(name() + "." + srcCacheName +
                                     "_prefetch_" + usefulTypeStr +
                                     "_useful_degree_" + degreeStr)
                             .desc(std::string("Number of prefetches with " +
                                     usefulType + " useful degree " +
-                                    degreeStr + " from " +
-                                    BaseCache::levelName_[i + 1])
-                        .flag(total);
+                                    degreeStr + " from " + srcCacheName)
+                            .flag(total);
                 for (int n = 0; n < numCpus_; n++) {
-                    prefUsefulDegreei_[i][j][k]->subname(n, std::string("cpu") +
-                            std::to_string(n));
                 }
             }
-        } else {
-            for (j = 0; j < 2; j++) {
+            
+            for (j = 0; j < prefUsefulType_[i].size(); j++) {
+                const PrefUsefulType& type = PrefUsefulTypeList[j];
+                prefUsefulType_[i][j].push_back(new Stats::Vector());
+                prefUsefulType_[i][j].back()
+                        ->name(name() + "." + srcCacheName +
+                                + "_" + type.name + "_prefetches")
+                        .desc(std::string("Number of ") + type.name +
+                                " prefetches from" + srcCacheName)
+                        .flag(total);
+            }
+
+            // 对不同CPU进行初始化
+            for (k = 0; k < numCpus_; k++) {
+                std::string cpuId = std::to_string(k);
+                demandReqHitCount_[i]->subname(k, std::string("cpu") + cpuId);
+                demandReqMissCount_[i]->subname(k, std::string("cpu") + cpuId);
+                if (usePref_[i]) {
+                    shadowedPrefHitCount_[i]->subname(k, std::string("cpu") +
+                            cpuId);
+                }
+                for (j = 0; j < prefTotalUsefulValue_[i].size(); j++) {
+                    prefTotalUsefulValue_[i][j]->subname(k,
+                            std::string("cpu") + cpuId);
+                }
+                for (j = 0; j < prefHitCount_[j].size(); j++) {
+                    prefHitCount_[i][j][k]->subname(k, std::string("cpu") +
+                            std::to_string(k));
+                }
+                for (j = 0; j < prefUsefulDegree_[i].size(); j++) {
+                    for (int n = 0; n < 5; n++) {
+                        prefUsefulDegreei_[i][j][n]->subname(k,
+                                std::string("cpu") + cpuId);
+                    }
+                }
+                for (j = 0; j < prefUsefulType_[i].size(); j++) {
+                    prefUsefulType_[i][j].back()->subname(k,
+                            std::string("cpu") + cpuId);
+                }
+            }
+        }
+    } else {
+        demandReqHitTotal_ = &emptyStatsVar_;
+        for (i = 0; i < cacheCount; i++) {
+            demandReqHitCount_[i] = &emptyStatsVar_;
+            demandReqMissCount_[i] = &emptyStatsVar_;
+            shadowedPrefCount_[i] = &emptyStatsVar_;
+            for (j = 0; j < prefHitCount_[j].size(); j++) {
+                prefHitCount_[i][j] = &emptyStatsVar_;
+            }
+            for (j = 0; j < prefTotalUsefulValue_[i].size(); j++) {
+                prefTotalUsefulValue_[i][j] = &emptyStatsVar_;
+            }
+            for (j = 0; j < prefUsefulDegree_[i].size(); j++) {
                 for (k = 0; k < 5; k++) {
                     prefUsefulDegree_[i][j][k] = &emptyStatsVar_;
                 }
             }
+            for (j = 0; j < prefUsefulType_[i].size(); j++) {
+                prefUsefulType_[i][j] = &emptyStatsVar_;
+            }
         }
     }
-    
-    for (PrefUsefulType& type : PrefUsefulTypeList) {
-        for (i = 0; i < 3; i++) {
-            if (usePref_[i + 1] && enableStats_) {
-                prefUsefulType_[i].push_back(new Stats::Vector());
-                prefUsefulType_[i].back()
-                        ->name(name() + "." + BaseCache::levelName_[i + 1] +
-                                + "_" + type.name + "_prefetches")
-                        .desc(std::string("Number of ") + type.name +
-                                " prefetches from" +
-                                BaseCache::levelName_[i + 1])
-                        .flag(total);
-                for (j = 0; j < numCpus_; j++) {
-                    prefUsefulType_[i].back()->subname(j, std::string("cpu") +
-                            std::to_string(j));
-                }
-            } else {
-                prefUsefulType_[i].push_back(&emptyStatsVar_);
-            }
+}
+
+void BasePrefetchFilter::TimingStats::reset() {
+    memset(demandHit_.data(), 0, sizeof(uint32_t) * demandHit_.size());
+    memset(demandMiss_.data(), 0, sizeof(uint32_t) * demandMiss_.size());
+    for (auto& vec1 : prefDegreeCount_) {
+        for (auto& vec2 : vec1) {
+            memset(vec2.data(). 0, sizeof(uint32_t) * vec2.size());
         }
     }
 }

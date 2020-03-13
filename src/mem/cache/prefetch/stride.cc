@@ -195,7 +195,14 @@ StridePrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
             }
 
             Addr new_addr = pf_addr + d * prefetch_stride;
-            addresses.push_back(AddrPriority(new_addr, 0));
+            /// 添加可用的Info信息
+            AddrPriority newPref(new_addr, 0);
+            newPref.info_.setInfo(prefetch_filter::Delta, prefetch_stride);
+            newPref.info_.setInfo(prefetch_filter::Confidence,
+                    entry->confidence);
+            newPref.info_.setInfo(prefetch_filter::Depth, d);
+
+            addresses.push_back(newPref);
         }
     } else {
         // Miss in table

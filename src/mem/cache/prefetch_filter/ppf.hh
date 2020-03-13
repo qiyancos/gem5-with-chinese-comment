@@ -33,16 +33,9 @@
 
 #include <cstdint>
 
-#include "arch/isa_traits.hh"
-#include "base/statistics.hh"
-#include "base/types.hh"
-#include "mem/packet.hh"
-#include "mem/request.hh"
-#include "sim/byteswap.hh"
-#include "sim/clocked_object.hh"
-#include "sim/probe/probe.hh"
+#include "mem/cache/prefetch_filter/base.hh"
+#include "mem/cache/prefetch_filter/saturated_counter.hh"
 
-class BaseCache;
 struct PerceptronPrefetchFilterParams;
 
 namespace prefetch_filter {
@@ -52,8 +45,8 @@ public:
     // 依据字符串初始化Feature
     int init(const std::string& feature);
     
-    // 获取一个预取信息的索引
-    uint16_t getIndex(const PrefetchInfo& info);
+    // 获取一个预取信息的索引，如果获取的Feature无效，index被设置为最大值
+    int getIndex(const PrefetchInfo& info, uint16_t* index);
 
     // 获取当前Feature的表格大小
     uint16_t getSize();
@@ -81,7 +74,7 @@ public:
             const uint8_t VCAssoc, BaseCache* cache = nullptr,
             int8_t CCTagBits = -1);
 
-    // 对命中Pref的情况进行处理，不区分Pref还是替换数据地址
+    // 对命中Pref的情况进行处理
     int updateHit(const uint64_t& addr);
     
     // 对Miss的情况进行处理，不区分Pref还是替换数据地址
@@ -91,7 +84,7 @@ public:
     int addPref(const uint64_t& prefAddr, const uint64_t evictedAddr);
     
     // 当前Cache中的预取被替换了
-    int evictPref(const uint64_t& addr, int8_t* counterPtr);
+    int evictPref(const uint64_t& addr, uint8_t* counterPtr);
 
 public:
     // Counter的大小
@@ -131,6 +124,9 @@ public:
         uint64_t evictedAddr_;
     };
 
+    // 是否开启了统计
+    bool valid_ = false;
+
 private:
     // 当前处于Cache中的预取地址，此处不做压缩映射，实际硬件设计
     // Cache中存在压缩地址的相关记录结构
@@ -141,9 +137,6 @@ private:
 
     // Counter Cache
     CacheTable<CounterEntry> counterCache_;
-
-    // 是否开启了统计
-    bool valid_ = false;
 };
 
 // 基于感知器的预取过滤器
@@ -179,6 +172,9 @@ public:
     int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
             const PrefetchInfo& info) override;
     
+    // 删除一个被无效化的预取
+    int invalidatePrefetch(BaseCache* cache, const uint64_t& prefAddr);
+    
     // 注册统计变量
     void regStats() override;
 
@@ -199,7 +195,7 @@ private:
 
     // 依据信息对Prefetch Table和Reject Table进行更新
     int updateTable(Tables& workTable, const uint64_t& prefAddr,
-            const uint8_t targetCacheLevel, const uint8_t cpuId,
+            const uint8_t targetCacheLevel, const std::set<uint8_t>& cpuIds,
             const uint8_t srcCacheLevel, const std::vector<uint16_t>& indexes);
 
     // 更新权重的出现次数信息
@@ -208,25 +204,20 @@ private:
 
 public:
     // 一直都未被过滤的预取请求个数，区分核心，编号区分缓存
-    Stats::Vector* prefAccepted_[3];
+    std::vector<Stats::Vector*> prefAccepted_;
     
     // 一直都被过滤的预取请求个数，区分核心，编号区分缓存
-    Stats::Vector* prefRejected_[3];
+    std::vector<Stats::Vector*> prefRejected_;
 
     // 在Prefetch Table和Reject Table之间存在切换的预取
-    Stats::Vector* prefThreshing_[3];
+    std::vector<Stats::Vector*> prefThreshing_;
     
     // 因为表格不足，没有进行训练的预取个数
-    Stats::Vector* prefNotTrained_[3];
+    std::vector<Stats::Vector*> prefNotTrained_;
 
-    // 最终被处理成预取至L1的请求个数，编号对应源预取缓存等级
-    Stats::Vector* prefToL1_[3];
-
-    // 最终被处理成预取至L2的请求个数，编号对应源预取缓存等级
-    Stats::Vector* prefToL2_[3];
-
-    // 最终被处理成预取至L3的请求个数，编号对应源预取缓存等级
-    Stats::Vector* prefToL3_[3];
+    // 最终被处理成预取至L1的请求个数，第一个维度表示源头Cache等级，
+    // 第二个维度表示目标的Cache等级
+    std::vector<std::vector<Stats::Vector*>> prefTarget_;
 
     // 不同Feature不同权重的数值出现次数，用于计算Pearson相关因子
     // 第一维度对应Workable， 第二维度表示Feature编号，第三维度表示Weight大小
@@ -248,20 +239,14 @@ private:
     // 是否允许对预取请求进行等级提升
     const bool allowUpgrade_;
     
-    // 将预取设置为到L1的可信度阈值
-    const uint16_t l1PrefThreshold_;
-
-    // 将预取设置为到L2的可信度阈值
-    const uint16_t l2PrefThreshold_;
-
-    // 将预取设置为到L3的可信度阈值
-    const uint16_t l3PrefThreshold_;
-    
     // Feature权重的bit数
     const uint8_t weightBits_;
 
+    // 将预取设置为到L1的可信度阈值
+    std::vector<uint16_t> prefThreshold_;
+
     // 不同层级缓存相关反馈对应的训练幅度
-    const uint8_t trainStep_[3];
+    std::vector<uint8_t> trainStep_;
 
     // 对于无用预取的训练Step，为0则表示不处理
     const uint8_t uselessPrefStep_;
@@ -296,7 +281,7 @@ private:
     };
     
     // 预取有害性统计相关的表格
-    std::map<BaseCache*, PreftchUsefulTable> prefUsefulTable_;
+    std::map<BaseCache*, PrefetchUsefulTable> prefUsefulTable_;
     
     // 针对非LLC的结构使用的表格
     std::vector<std::vector<Tables>> workTables_;

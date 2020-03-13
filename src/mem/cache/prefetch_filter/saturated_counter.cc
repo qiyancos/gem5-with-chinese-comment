@@ -28,7 +28,8 @@
  * Authors: Rock Lee
  */
 
-#include <cstdint>
+#include "mem/cache/prefetch_filter/saturated_counter.hh"
+#include "mem/cache/prefetch_filter/program_helper.hh"
 
 namespace prefetch_filter {
 
@@ -37,9 +38,22 @@ SaturatedCounter::SaturatedCounter(const uint8_t bits) {
     maxValue_ = (1 << bits) - 1;
 }
 
+SaturatedCounter::SaturatedCounter(const uint8_t bits, const int value) {
+    bits = bits > 31 ? 31 : bits;
+    maxValue_ = (1 << bits) - 1;
+    value_ = value;
+}
+
 int SaturatedCounter::init(const uint8_t bits) {
     CHECK_RET(bits < 32, "Saturated counter supports up to 31 bits");
     maxValue_ = (1 << bits) - 1;
+    return 0;
+}
+
+int SaturatedCounter::init(const uint8_t bits, const int value) {
+    CHECK_RET(bits < 32, "Saturated counter supports up to 31 bits");
+    maxValue_ = (1 << bits) - 1;
+    value_ = value;
     return 0;
 }
     

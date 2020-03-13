@@ -32,25 +32,43 @@
 #define __MEM_CACHE_PREFETCH_FILTER_BASE_HH__
 
 #include <cstdint>
+#include <string>
+#include <cmath>
+#include <vector>
+#include <list>
+#include <set>
+#include <map>
 
-#include "arch/isa_traits.hh"
+#include <memory.h>
+
 #include "base/statistics.hh"
 #include "base/types.hh"
-#include "mem/packet.hh"
-#include "mem/request.hh"
-#include "sim/byteswap.hh"
 #include "sim/clocked_object.hh"
-#include "sim/probe/probe.hh"
+
+#include "mem/cache/prefetch_filter/table.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
 
 #include "debug/PrefetchFilter.hh"
 
 class BaseCache;
+class Packet;
 struct BasePrefetchFilterParams;
 
 namespace prefetch_filter {
 
+uint64_t generateCoreIDMap(std::set<uint8_t> cpuIds) {
+    uint64_t result = 0;
+    for (auto id : cpuIds) {
+        CHECK_ARGS_EXIT(id < 64, "CPU ID out of mapping bound");
+        result |= uint64_t(1) << id;
+    }
+    return result;
+}
+
 // 过滤器基类，仅仅添加了统计功能，不进行实际过滤
 class BasePrefetchFilter : public ClockedObject {
+typedef Packet *PacketPtr;
+
 public:
     // 构造函数 
     BasePrefetchFilter(const BasePrefetchFilterParams *p);
@@ -76,9 +94,12 @@ public:
             const uint64_t& evictedAddr, const DataTypeInfo& info);
 
     // 对一个预取进行过滤，返回发送的Cache Level或者不预取
-    virtual int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
+    virtual int filterPrefetch(BaseCache* cache, const uint64_t& prefAddr,
             const PrefetchInfo& info);
    
+    // 对一个预取到的数据进行Invalid的时候需要执行
+    virtual int invalidatePrefetch(BaseCache* cache, const uint64_t& prefAddr);
+    
     // 注册统计变量
     void regStats() override;
 
@@ -101,31 +122,46 @@ public:
     Stats::Vector* demandReqHitTotal_;
     
     // Demand Request命中不同层级, 区分不同核心和命中层级
-    Stats::Vector* demandReqHitCount_[4];
+    std::vector<Stats::Vector*> demandReqHitCount_;
 
     // Demand Request发生Miss不同层级, 区分不同核心和命中层级
-    Stats::Vector* demandReqMissCount_[4];
+    std::vector<Stats::Vector*> demandReqMissCount_;
 
     // L1预取器预取命中不同层级的个数，区分不同核心和命中层级
-    Stats::Vector* l1PrefHitCount_[3];
-
-    // L2预取器预取命中不同层级的个数，区分不同核心和命中层级（分析重点）
-    Stats::Vector* l2PrefHitCount_[2];
+    std::vector<std::vector<Stats::Vector*>> prefHitCount_;
 
     // 预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
-    Stats::Vector* shadowedPrefCount_[3];
+    std::vector<Stats::Vector*> shadowedPrefCount_;
     
     // 预取器发出预取的有益分数和，第一维度对应缓存等级，第二维度对应单多核
     // 第二维度0表示单核心，1表示多核心
-    Stats::Vector* prefTotalUsefulValue_[3][2];
+    std::vector<std::vector<Stats::Vector*>> prefTotalUsefulValue_;
     
     // 预取器发出预取的不同有益/有害程度的预取个数
     // 第一维度对应缓存等级，第二维度对应单多核，第三维度对应有益/有害水平
-    // 其中2对应有害/有益水平为0，编号小则有害，大则有益，按需递增
-    Stats::Vector* prefUsefulDegree_[3][2][5];
+    // 其中2对应有害/有益水平为0，编号小则有害，大则有益，按序递增
+    std::vector<std::vector<std::vector<Stats::Vector*>>> prefUsefulDegree_;
    
     // 不同分类的预取个数
-    std::vector<Stats::Vector*> prefUsefulType_[3];
+    std::vector<std::vector<Stats::Vector*>> prefUsefulType_;
+
+    // 时间维度的统计计数数据结构
+    struct TimingStats {
+        // Demand请求的命中数量
+        std::vector<uint32_t> demandHit_;
+
+        // Demand请求的缺失数量
+        std::vector<uint32_t> demandMiss_;
+
+        // 统计周期内的不同类型的预取个数
+        std::vector<std::vector<std::vector<uint32_t>>> prefDegreeCount_;
+        
+        // 重置数据
+        void reset();
+    };
+
+    // 时间维度的统计计数数据
+    std::vector<TimingStats> timingStats_;
 
 private:
     // 基于时间维度的统计
@@ -136,15 +172,6 @@ private:
     
     // 时间维度统计周期的计数
     uint64_t timingStatsPeriodCount_ = 0;
-
-    // Demand请求的命中数量
-    uint32_t demandHit_[4] = {0};
-
-    // Demand请求的缺失数量
-    uint32_t demandMiss_[4] = {0};
-
-    // 统计周期内的不同类型的预取个数
-    uint32_t prefDegreeCount_[3][2][5] = {0};
 
     // 是否开启统计操作，如果不做统计，则所有统计函数将会无效
     const bool enableStats_ = 0;
@@ -162,8 +189,11 @@ public:
     // 提取缓存行地址对应的Mask
     static uint64_t cacheLineAddrMask_;
 
-    // 提取缓存行地址对应的Mask
+    // 缓存行内偏移地址对应的Bits
     static uint8_t cacheLineOffsetBits_;
+    
+    // 当前系统下的最高缓存等级
+    uint8_t maxCacheLevel_ = 0;
 
 protected:
     // 用于记录预取有害信息的结构，每一级缓存都会有一个
@@ -173,10 +203,10 @@ protected:
     std::vector<std::vector<BaseCache*>> caches_;
     
     // 当前某一级缓存是否开启了预取
-    bool usePref_[4] = {0};
+    std::vector<bool> usePref_;
 
-    // 当前系统下的最高缓存等级
-    uint8_t maxCacheLevel_ = 0;
+    // 当前级别是否会接收到预取
+    std::vector<bool> havePref_;
 
     // 当前系统下CPU的个数
     uint8_t numCpus_ = 0;

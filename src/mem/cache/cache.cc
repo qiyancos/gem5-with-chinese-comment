@@ -314,6 +314,17 @@ Cache::promoteWholeLineWrites(PacketPtr pkt)
 void
 Cache::handleTimingReqHit(PacketPtr pkt, CacheBlk *blk, Tick request_time)
 {
+    /// 进行命中相关的训练
+    if (prefetchFilter_ && blk) {
+        Addr hitAddr = regenerateBlkAddr(blk);
+        prefetch_filter::DataTypeInfo infoPair;
+        infoPair.source = pkt->cmd == MemCmd::HardPFReq ?
+                prefetch_filter::Pref : prefetch_filter::Dmd;
+        infoPair.target = blk->wasPrefetched() ? prefetch_filter::Pref :
+                prefetch_filter::Dmd;
+        prefetchFilter_->notifyCacheHit(this, pkt, hitAddr, infoPair);
+    }
+
     // should never be satisfying an uncacheable access as we
     // flush and invalidate any existing block as part of the
     // lookup
@@ -355,6 +366,17 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
     Addr blk_addr = pkt->getBlockAddr(blkSize);
 
     MSHR *mshr = mshrQueue.findMatch(blk_addr, pkt->isSecure());
+    
+    /// 进行发生Miss情况的训练操作
+    if (prefetchFilter_) {
+        Addr combinedAddr = mshr ? mshr->getTarget()->pkt->addr : 0;
+        prefetch_filter::DataTypeInfo infoPair;
+        infoPair.source = pkt->cmd == MemCmd::HardPFReq ?
+                prefetch_filter::Pref : prefetch_filter::Dmd;
+        infoPair.target =  mshr ? mshr->getTarget()->pkt->packetType_ :
+                prefetch_filter::NullType;
+        prefetchFilter_->notifyCacheMiss(this, pkt, combinedAddr, infoPair);
+    }
 
     // Software prefetch handling:
     // To keep the core from waiting on data it won't look at
@@ -383,6 +405,9 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
                                                        pkt->req->getFlags(),
                                                        pkt->req->masterId());
             pf = new Packet(req, pkt->cmd);
+            /// 初始化新增信息，软件预取我们也当作Demand Request即可
+            pkt->copyNewInfo(pkt);
+            
             pf->allocate();
             assert(pf->getAddr() == pkt->getAddr());
             assert(pf->getSize() == pkt->getSize());
@@ -405,6 +430,13 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
 void
 Cache::recvTimingReq(PacketPtr pkt)
 {
+    // 为来自CPU的Packet添加属性
+    if (cacheLevel_ < 2) {
+        pkt->caches_.insert(this);
+        pkt->packetType_ = prefetch_filter::Dmd;
+        pkt->targetCacheLevel_ = 255;
+    }
+
     DPRINTF(CacheTags, "%s tags:\n%s\n", __func__, tags->print());
 
     promoteWholeLineWrites(pkt);
@@ -438,6 +470,7 @@ Cache::recvTimingReq(PacketPtr pkt)
         // create a downstream express snoop with cleared packet
         // flags, there is no need to allocate any data as the
         // packet is merely used to co-ordinate state transitions
+        /// 该构造函数自动添加新增变量信息
         Packet *snoop_pkt = new Packet(pkt, true, false);
 
         // also reset the bus time that the original packet has
@@ -538,6 +571,9 @@ Cache::createMissPacket(PacketPtr cpu_pkt, CacheBlk *blk,
             (force_clean_rsp ? MemCmd::ReadCleanReq : MemCmd::ReadSharedReq);
     }
     PacketPtr pkt = new Packet(cpu_pkt->req, cmd, blkSize);
+    
+    /// 为新的Packet添加旧Packet的关键信息
+    pkt->copyNewInfo(cpu_pkt);
 
     // if there are upstream caches that have already marked the
     // packet as having sharers (not passing writable), pass that info
@@ -703,6 +739,14 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
         Packet *tgt_pkt = target.pkt;
         switch (target.source) {
           case MSHR::Target::FromCPU:
+            /// 对于降级预取的情况，如果检查到当前级别就是目标级别
+            /// 则会当作预取处理
+            if (tgt_pkt->packetType_ == prefetch_filter::Pref &&
+                    tgt_pkt->targetCacheLevel_ == cacheLevel_) {
+                target.source == MSHR::Target::FromPrefetcher;
+                delete tgt_pkt;
+                break;
+            }
             Tick completion_time;
             // Here we charge on completion_time the delay of the xbar if the
             // packet comes from it, charged on headerDelay.
@@ -812,9 +856,6 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             break;
 
           case MSHR::Target::FromPrefetcher:
-            if (cacheLevel_ == 2) {
-                printf("Resp HPF\n");
-            }
             assert(tgt_pkt->cmd == MemCmd::HardPFReq);
             if (blk)
                 blk->status |= BlkHWPrefetched;
@@ -887,6 +928,11 @@ Cache::cleanEvictBlk(CacheBlk *blk)
     req->taskId(blk->task_id);
 
     PacketPtr pkt = new Packet(req, MemCmd::CleanEvict);
+    /// 初始化新增信息
+    pkt->caches_.insert(this);
+    pkt->packetType_ = prefetch_filter::NullType;
+    pkt->targetCacheLevel_ = 255;
+
     pkt->allocate();
     DPRINTF(Cache, "Create CleanEvict %s\n", pkt->print());
 
@@ -915,6 +961,7 @@ Cache::doTimingSupplyResponse(PacketPtr req_pkt, const uint8_t *blk_data,
         // do not clear flags, and allocate space for data if the
         // packet needs it (the only packets that carry data are read
         // responses)
+        /// 该构造函数会自动继承新增信息，无须修改
         pkt = new Packet(req_pkt, false, req_pkt->isRead());
 
     assert(req_pkt->req->isUncacheable() || req_pkt->isInvalidate() ||

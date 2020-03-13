@@ -87,6 +87,9 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
     std::vector<AddrPriority> addresses;
     calculatePrefetch(pfi, addresses);
 
+    /// 依据是否产生了预取来判断是否将该触发预取PC更新
+    bool havePrefetch = false;
+
     // Queue up generated prefetches
     for (AddrPriority& addr_prio : addresses) {
 
@@ -100,13 +103,50 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
             DPRINTF(HWPrefetch, "Found a pf candidate addr: %#x, "
                     "inserting into prefetch queue.\n", new_pfi.getAddr());
 
-            // Create and insert the request
-            insert(pkt, new_pfi, addr_prio.second);
+            /// 插入单个预取，这里会进行过滤，但是信息只包括了地址
+            prefetch_filter::PrefetchInfo prefInfo = addr_prio.info_;
+            prefInfo.setInfo(prefetch_filter::BPC1,
+                    pkt->recentBranchPC_.front());
+            prefInfo.setInfo(prefetch_filter::BPC2,
+                    *(pkt->recentBranchPC_.begin()++));
+            prefInfo.setInfo(prefetch_filter::BPC3,
+                    pkt->recentBranchPC_.back());
+            prefInfo.setInfo(prefetch_filter::PC1, pkt->req->getPC());
+            prefInfo.setInfo(prefetch_filter::PC2, recentTriggerPC[0]);
+            prefInfo.setInfo(prefetch_filter::PC3, recentTriggerPC[1]);
+            prefInfo.setInfo(prefetch_filter::Address, pkt->addr);
+            /// CoreID只适合于一般的Cache结构，不适合于SW结构
+            prefInfo.setInfo(prefetch_filter::CoreID,
+                    *(pkt->caches_.front()->cpuIds_.front()));
+            prefInfo.setInfo(prefetch_filter::CacheIDMap,
+                    prefetch_filter::generateCoreIDMap(pkt->cpuIds_));
+            prefInfo.setInfo(prefetch_filter::PrefetcherID,
+                    cache->prefetcherId_);
+            
+            /// 依据是否开启了预取过滤选择是否进行过滤
+            if (enablePrefetchFilter_) {
+                uint8_t targetCacheLevel =
+                        cache->prefetchFilter_->filterPrefetch(
+                        this, addr_prio.first, prefInfo);
+                if (targetCacheLevel <= 
+                        cache->prefetchFilter_->maxCacheLevel_) {
+                    // Create and insert the request
+                    insert(pkt, new_pfi, addr_prio.second, targetCacheLevel);
+                    havePrefetch = true;
+                }
+            } else {
+                insert(pkt, new_pfi, addr_prio.second, targetCacheLevel);
+            }
         } else {
             // Record the number of page crossing prefetches generate
             pfSpanPage += 1;
             DPRINTF(HWPrefetch, "Ignoring page crossing prefetch.\n");
         }
+    }
+    /// 如果生成的预取，则会更新触发预取的PC
+    if (havePrefetch) {
+        recentTriggerPC[1] = recentTriggerPC[0];
+        recentTriggerPC[0] = pkt->req->getPC();
     }
 }
 
@@ -178,7 +218,7 @@ QueuedPrefetcher::regStats()
 
 void
 QueuedPrefetcher::insert(const PacketPtr &pkt, PrefetchInfo &new_pfi,
-                         int32_t priority)
+                         int32_t priority, uint8_t targetCacheLevel)
 {
     if (queueFilter) {
         iterator it = inPrefetch(new_pfi);
@@ -241,6 +281,9 @@ QueuedPrefetcher::insert(const PacketPtr &pkt, PrefetchInfo &new_pfi,
     pf_req->taskId(ContextSwitchTaskId::Prefetcher);
     PacketPtr pf_pkt = new Packet(pf_req, MemCmd::HardPFReq);
     pf_pkt->allocate();
+    /// 设置目标Cache等级
+    pf_pkt->targetCacheLevel_ = targetCacheLevel_;
+
     if (tagPrefetch && new_pfi.hasPC()) {
         // Tag prefetch packet with  accessing pc
         pf_pkt->req->setPC(new_pfi.getPC());

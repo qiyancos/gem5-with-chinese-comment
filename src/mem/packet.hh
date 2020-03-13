@@ -267,8 +267,16 @@ class Packet : public Printable
     /// 当前Packet的类型，预取/Demand Request
     prefetch_filter::DataType packetType_;
 
-    // 发射该请求时对应的最近三次分支指令PC
+    /// 发射该请求时对应的最近三次分支指令PC
     std::list<uint64_t> recentBranchPC_;
+
+    /// 用于拷贝另一个Packet的新增信息
+    void copyNewInfo(const PacketPtr pkt) {
+        caches_ = pkt->caches_;
+        targetCacheLevel_ = pkt->targetCacheLevel_;
+        packetType_ = pkt->packetType_;
+        recentBranchPC__ = pkt->recentBranchPC_;
+    }
 
     typedef uint32_t FlagsType;
     typedef ::Flags<FlagsType> Flags;
@@ -807,6 +815,10 @@ class Packet : public Printable
            _qosValue(0), headerDelay(0), snoopDelay(0),
            payloadDelay(0), senderState(NULL)
     {
+        /// 添加针对信息的初始化
+        packetType_ = prefetch_filter::Dmd;
+        targetCacheLevel_ = 255;
+        
         if (req->hasPaddr()) {
             addr = req->getPaddr();
             flags.set(VALID_ADDR);
@@ -829,6 +841,10 @@ class Packet : public Printable
            _qosValue(0), headerDelay(0),
            snoopDelay(0), payloadDelay(0), senderState(NULL)
     {
+        /// 添加针对信息的初始化
+        packetType_ = prefetch_filter::Dmd;
+        targetCacheLevel_ = 255;
+        
         if (req->hasPaddr()) {
             addr = req->getPaddr() & ~(_blkSize - 1);
             flags.set(VALID_ADDR);
@@ -856,6 +872,12 @@ class Packet : public Printable
            payloadDelay(pkt->payloadDelay),
            senderState(pkt->senderState)
     {
+        /// 添加针对信息的初始化
+        caches_ = pkt->caches_;
+        packetType_ = pkt->packetType_;
+        targetCacheLevel_ = pkt->targetCacheLevel_;
+        recentBranchPC_ = pkt->recentBranchPC_;
+
         if (!clear_flags)
             flags.set(pkt->flags & COPY_FLAGS);
 

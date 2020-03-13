@@ -323,6 +323,16 @@ void
 MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
                      bool alloc_on_fill)
 {
+    /// 依据信息将新的Target合并到第一个里面
+    PacketPtr firstPkt = targets.front().pkt;
+    /// 这里合并的请求只可能是Demand合并到Prefetch
+    firstPkt->packetType_ = prefetch_filter::Dmd;
+    /// 预取等级将会因为合并被删除
+    firstPkt->targetCacheLevel_ = 255;
+    /// 合并来源Cache
+    firstPkt->caches_.insert(pkt->caches_.begin(), pkt->caches_.end());
+    /// 合并不会修改recentBrnachPC_，以最早的Target为准
+
     // assume we'd never issue a prefetch when we've got an
     // outstanding miss
     assert(pkt->cmd != MemCmd::HardPFReq);
@@ -443,6 +453,8 @@ MSHR::handleSnoop(PacketPtr pkt, Counter _order)
         PacketPtr cp_pkt = will_respond ? new Packet(pkt, true, true) :
             new Packet(std::make_shared<Request>(*pkt->req), pkt->cmd,
                        blkSize, pkt->id);
+        /// 继承原Packet的信息
+        cp_pkt->copyNewInfo(pkt);
 
         if (will_respond) {
             // we are the ordering point, and will consequently

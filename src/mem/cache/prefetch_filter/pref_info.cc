@@ -28,6 +28,10 @@
  * Authors: Rock Lee
  */
 
+#include "mem/cache/base.hh"
+#include "mem/cache/cache.hh"
+#include "mem/cache/prefetch_filter/program_helper.hh"
+
 namespace prefetch_filter {
 
 std::map<std::string, IndexInfo> IndexMap;
@@ -49,21 +53,28 @@ int addNewPrefUsefulType(const std::string& name,
 }
 
 int PrefetchInfo::setInfo(const uint8_t index, const uint32_t value) {
+    CHECK_ARGS(index < 64,
+            "Prefetch information can only hold up to 64 info entries");
     if (info_.size() != IndexMap.size()) {
         info_.resize(IndexMap.size(), 0);
     }
     CHECK_ARGS(index < info_.size(), "Prefetch information index %u %s %d",
             index, "out of bound", info_.size());
     info_[index] = value;
+    valid_ |= uint64_t(1) << index;
     return 0;
 }
 
-uint32_t PrefetchInfo::getInfo(const uint8_t index) {
+int PrefetchInfo::getInfo(const uint8_t index, uint32_t* value) {
     CHECK_RET(info_.size == Indexmap.size(), "Can not get value from %s",
             "uninitiated prefetch info");
     CHECK_ARGS(index < info_.size(), "Prefetch information index %u %s %d",
             index, "out of bound", info_.size());
-    return info_[index];
+    if (valid_ &= uint64_t(1) << index) {
+        *value = info_[index];
+        return 1;
+    }
+    return 0;
 }
 
 // Original
@@ -82,7 +93,8 @@ DEF_INFO(BPC2_1, 12) // 触发预取时最近分支之前的分支PC(右移1bit)
 DEF_INFO(BPC2_2, 12) // 触发预取时最近分支之前的之前分支PC(右移2bit), 12 bits
 DEF_INFO(PrefHarm, 4) // 预取的有害度信息, 4 bits
 DEF_INFO(CoreIDMap, 8) // 相关核心的BitMap, 最多支持8核心, 8 bits
-DEF_INFO(CoreID, 6) // 相关核心的BitMap, 最多支持64核心, 6 bits
+DEF_INFO(CoreID, 3) // 相关核心的BitMap, 最多支持8核心, 3 bits
+DEF_INFO(PrefetcherID, 6) // 发射预取的PrefetcherID, 最多支持16核心, 6 bits
 
 
 // 多核有用的预取（他核心有用多于单核心有用）

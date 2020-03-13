@@ -45,8 +45,7 @@ from m5.SimObject import SimObject
 
 from m5.objects.MemObject import MemObject
 from m5.objects.Prefetcher import BasePrefetcher
-# TODO
-# from m5.objects.PrefetchFilter import *
+from m5.objects.PrefetchFilter import *
 from m5.objects.ReplacementPolicies import *
 from m5.objects.Tags import *
 
@@ -79,8 +78,14 @@ class BaseCache(MemObject):
     abstract = True
     cxx_header = "mem/cache/base.hh"
 
-    cpu_ids = VectorParam.Int([-2], "Ids of all the cpus which can access this cache.")
+    ### 新增的信息初始化
+    cpu_ids = VectorParam.Int([-2],
+            "Ids of all the cpus which can access this cache.")
     cache_level = Param.UInt8(255, "Level ID of this cache.")
+    prefetch_filter = Param.BasePrefetchFilter(PerceptronPrefetchFilter,
+            "Prefetch filter attached to cache")
+    enable_harm_table = Param.Bool(True,
+            "Use harmful table to record prefetch harm")
 
     size = Param.MemorySize("Capacity")
     assoc = Param.Unsigned("Associativity")
@@ -106,10 +111,6 @@ class BaseCache(MemObject):
     prefetch_on_access = Param.Bool(False,
          "Notify the hardware prefetcher on every access (not just misses)")
 
-    # TODO
-    #prefetch_filter = Param.BasePrefetchFilter(PerceptronPrefetchFilter,
-    #        "Prefetch filter attached to cache")
-    
     tags = Param.BaseTags(BaseSetAssoc(), "Tag store")
     replacement_policy = Param.BaseReplacementPolicy(TreePLRURP(),
         "Replacement policy")

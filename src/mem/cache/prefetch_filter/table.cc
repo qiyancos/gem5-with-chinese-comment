@@ -28,7 +28,14 @@
  * Authors: Rock Lee
  */
 
-#include <cstdint>
+#include "mem/packet.hh"
+#include "mem/cache/base.hh"
+#include "mem/cache/cache.hh"
+#include "mem/cache/prefetch_filter/saturated_counter.hh"
+#include "mem/cache/prefetch_filter/program_helper.hh"
+#include "mem/cache/prefetch_filter/table.hh"
+#include "mem/cache/prefetch_filter/base.hh"
+#include "mem/cache/prefetch_filter/ppf.hh"
 
 namespace prefetch_filter {
 
@@ -180,22 +187,13 @@ template class CacheTable<BaseCache*>;
 template class CacheTable<PrefetchUsefulTable::CounterEntry>;
 
 IdealPrefetchUsefulTable::IdealPrefetchUsefulTable(BaseCache* cache) :
-        cache_(cache) {}
+        cache_(cache), valid_(true) {}
 
-int IdealPrefetchUsefulTable::genIndex(const PacketPtr& prefPkt,
-        std::vector<uint64_t>* indexes) {
-    indexes->clear();
-    for (BaseCache* cache : pkt->caches_) {
-        uint64_t index = index = pkt->addr ^
-                (uint64_t(cache->cacheLevel_) << 54);
-        for (uint8_t cpuId : cache->cpuIds_) {
-            indexes.push_back(index ^ (uint64_t(cpuId) << 56);
-        }
-    }
-    return 0;
-}
+IdealPrefetchUsefulTable::IdealPrefetchUsefulTable(BaseCache* cache,
+        const bool valid) : cache_(cache), valid_(valid) {}
 
 int IdealPrefetchUsefulTable::newPref(const PacketPtr& prefPkt) {
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
     CHECK_ARGS(pkt->caches_.size() == 1,
             "New pref added to useful table must be combined");
     std::vector<uint64_t> index;
@@ -209,6 +207,7 @@ int IdealPrefetchUsefulTable::newPref(const PacketPtr& prefPkt) {
 
 int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
         const uint64_t& replacedAddr) {
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
     std::vector<uint64_t> indexes;
     CHECK_RET(genIndex(prefPkt, &index),
             "Failed to generate index for prefetch");
@@ -219,16 +218,19 @@ int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
         infoList_[index].addReplacedAddr(cache_, replacedAddr);
         newInfoList.push_back(infoList_[index]); 
     }
-    CHECK_ARGS(prefMap_.find(prefPkt->addr) == prefMap_.end(),
+    const uint64_t prefAddr = prefPkt->addr &
+            BasePrefetchFilter::cacheLineAddrMask_;
+    CHECK_ARGS(prefMap_.find(prefAddr) == prefMap_.end(),
             "Trying to add a prefetch already exists in the prefetch map")
-    prefMap_[prefPkt->addr] = newInfoList;
+    prefMap_[prefAddr] = newInfoList;
     CHECK_ARGS(evictMap_.find(replacedAddr) == evictMap_.end(),
             "Trying to add a prefetch already exists in the prefetch map")
-    evictMap_[prefPkt->addr] = newInfoList;
+    evictMap_[prefAddr] = newInfoList;
     return 0;
 }
 
 int IdealPrefetchUsefulTable::isPrefHit(const uint64_t& addr) {
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
     auto infoList = prefMap_.find(addr);
     CHECK_RET(infoList != prefMap_.end(),
             "Prefetch not exists in prefetch map");
@@ -237,6 +239,7 @@ int IdealPrefetchUsefulTable::isPrefHit(const uint64_t& addr) {
 
 int IdealPrefetchUsefulTable::findSrcCaches(const uint64_t& addr,
         std::vector<BaseCache*>* caches) {
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
     auto iter = prefMap_.find(addr);
     const std::vector<PrefetchUsefulInfo*>* infoList;
     if (infoList != prefMap_.end()) {
@@ -257,6 +260,7 @@ int IdealPrefetchUsefulTable::findSrcCaches(const uint64_t& addr,
 int IdealPrefetchUsefulTable::updateHit(const PacketPtr& srcPkt,
         const uint64_t& hitAddr, const DataType type,
         std::vector<Stats::Vector*>& cacheStats) {
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
     std::set<uint8_t> cpuIds;
     CHECK_ARGS(prefMap_.find(hitAddr) != prefMap_.end(),
             "Failed to find hit prefetch address in the prefetch map");
@@ -289,7 +293,9 @@ int IdealPrefetchUsefulTable::updateHit(const PacketPtr& srcPkt,
 }
 
 int IdealPrefetchUsefulTable::updateMiss(const PacketPtr& srcPkt) {
-    const uint64_t& missAddr = srcPkt->addr;
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
+    const uint64_t& missAddr = srcPkt->addr &
+            BasePrefetchFilter::cacheLineAddrMask_;
     std::set<uint8_t> cpuIds;
     CHECK_ARGS(evictMap_.find(missAddr) != prefMap_.end(),
             "Failed to find miss demand address in the evict map");
@@ -307,6 +313,7 @@ int IdealPrefetchUsefulTable::updateMiss(const PacketPtr& srcPkt) {
 }
 
 int IdealPrefetchUsefulTable::updateEvict(const uint64_t& addr) {
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
     auto oldInfoList = prefMap_.find(oldPrefAddr);
     CHECK_ARGS(oldInfoList != prefMap_.end(),
             "Failed to find info list for old prefetch request");
@@ -326,6 +333,7 @@ int IdealPrefetchUsefulTable::updateEvict(const uint64_t& addr) {
     
 int IdealPrefetchUsefulTable::replaceEvict(const PacketPtr& newPrefPkt,
         const uint64_t& oldPrefAddr)
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
     auto oldInfoList = prefMap_.find(oldPrefAddr);
     CHECK_ARGS(oldInfoList != prefMap_.end(),
             "Failed to find info list for old prefetch request");
@@ -345,6 +353,7 @@ int IdealPrefetchUsefulTable::updatePrefTiming(
         Stats::Vector* usefulDegree[][][],
         std::vector<Stats::Vector*>* usefulType[],
         uint32_t timingDegree[][][]) {
+    CHECK_ARGS(valid_, "Should never call function in a invalid table");
     for (auto& info : evictedPref_) {
         // 更新Total Useful Value
         const std::set<uint8_t>& cpuIds = info.srcCache_->cpuIds_;
@@ -396,6 +405,19 @@ int IdealPrefetchUsefulTable::updatePrefTiming(
         }
     }
     evictedPref_.clear();
+    return 0;
+}
+
+int IdealPrefetchUsefulTable::genIndex(const PacketPtr& prefPkt,
+        std::vector<uint64_t>* indexes) {
+    indexes->clear();
+    for (BaseCache* cache : pkt->caches_) {
+        uint64_t index = pkt->addr & BasePrefetchFilter::cacheLineAddrMask_ ^
+                (uint64_t(cache->cacheLevel_) << 54);
+        for (uint8_t cpuId : cache->cpuIds_) {
+            indexes.push_back(index ^ (uint64_t(cpuId) << 56);
+        }
+    }
     return 0;
 }
 

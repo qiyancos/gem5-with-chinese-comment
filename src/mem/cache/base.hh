@@ -94,19 +94,26 @@ struct BaseCacheParams;
 class BaseCache : public MemObject
 {
     public:
+        /// 记录了初始化Cache的个数，用于获得CacheID
+        static uint8_t initPrefetcherCount_;
+
+        /// 当前Prefetcher的唯一ID
+        uint8_t prefetcherId_;
+
         /// 和当前级别Cache连接的所有CPUID
         const std::set<int> cpuIds_;
 
-        /// 存放了每一个缓存等级和的
-        const static std::vector<std::string> levelName_;
-        
         /// 存放了当前Cache对应的等级
         const uint8_t cacheLevel_;
         
         /// Prefetch Filter 
         BasePrefetchFilter *prefetchFilter_;
         
-        /// 是否开启usefulTable
+        /// 是否开启记录预取有害性的表格
+        const bool enableHarmTable_;
+
+        /// 存放了每一个缓存等级和的
+        const static std::vector<std::string> levelName_;
         
     protected:
     /**

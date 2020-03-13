@@ -65,6 +65,11 @@ struct BasePrefetcherParams;
 
 class BasePrefetcher : public ClockedObject
 {
+  public:
+    /// 是否应该开启预取过滤操作
+    const bool enablePrefetchFilter_;
+
+  private:
     class PrefetchListener : public ProbeListenerArgBase<PacketPtr>
     {
       public:

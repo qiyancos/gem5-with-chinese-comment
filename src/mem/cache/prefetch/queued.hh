@@ -53,6 +53,17 @@ struct QueuedPrefetcherParams;
 
 class QueuedPrefetcher : public BasePrefetcher
 {
+  public:
+    /// 最近三次触发预取的PC地址
+    uint64_t recentTriggerPC_[2] {0};
+
+    /// 对AddrPriority进行修改，以获得额外的信息，修改不影响原生预取结构
+    struct AddrPriority {
+        Addr fisrt;
+        int32_t second;
+        prefetch_filter::PrefetchInfo info_;
+    };
+
   protected:
     struct DeferredPacket {
         /** Prefetch info corresponding to this packet */
@@ -125,14 +136,13 @@ class QueuedPrefetcher : public BasePrefetcher
     Stats::Scalar pfSpanPage;
 
   public:
-    using AddrPriority = std::pair<Addr, int32_t>;
-
     QueuedPrefetcher(const QueuedPrefetcherParams *p);
     virtual ~QueuedPrefetcher();
 
     void notify(const PacketPtr &pkt, const PrefetchInfo &pfi) override;
 
-    void insert(const PacketPtr &pkt, PrefetchInfo &new_pfi, int32_t priority);
+    void insert(const PacketPtr &pkt, PrefetchInfo &new_pfi, int32_t priority,
+            uint8_t targetCacheLevel_ = 255);
 
     virtual void calculatePrefetch(const PrefetchInfo &pfi,
                                    std::vector<AddrPriority> &addresses) = 0;
