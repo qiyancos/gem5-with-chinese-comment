@@ -82,6 +82,7 @@
 
 class BaseMasterPort;
 class BasePrefetcher;
+class prefetch_filter::BasePrefetchFilter;
 class BaseSlavePort;
 class MSHR;
 class MasterPort;
@@ -107,7 +108,7 @@ class BaseCache : public MemObject
         const uint8_t cacheLevel_;
         
         /// Prefetch Filter 
-        BasePrefetchFilter *prefetchFilter_;
+        prefetch_filter::BasePrefetchFilter *prefetchFilter_;
         
         /// 是否开启记录预取有害性的表格
         const bool enableHarmTable_;

@@ -56,10 +56,13 @@
 #include "debug/CacheVerbose.hh"
 #include "mem/cache/mshr.hh"
 #include "mem/cache/prefetch/base.hh"
+#include "mem/cache/prefetch_filter/base.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
 #include "mem/cache/queue_entry.hh"
 #include "params/BaseCache.hh"
 #include "params/WriteAllocator.hh"
 #include "sim/core.hh"
+
 
 class BaseMasterPort;
 class BaseSlavePort;

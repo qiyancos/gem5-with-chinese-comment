@@ -68,6 +68,8 @@
 #include "mem/cache/mshr.hh"
 #include "mem/cache/tags/base.hh"
 #include "mem/cache/write_queue_entry.hh"
+#include "mem/cache/prefetch_filter/base.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
 #include "mem/request.hh"
 #include "params/Cache.hh"
 

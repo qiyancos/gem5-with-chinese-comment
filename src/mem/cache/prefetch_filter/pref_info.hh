@@ -42,6 +42,15 @@ class BaseCache;
 
 namespace prefetch_filter {
 
+uint64_t generateCoreIDMap(std::set<uint8_t> cpuIds) {
+    uint64_t result = 0;
+    for (auto id : cpuIds) {
+        CHECK_ARGS_EXIT(id < 64, "CPU ID out of mapping bound");
+        result |= uint64_t(1) << id;
+    }
+    return result;
+}
+
 // 数据类型
 enum DataType {NullType, Dmd, Pref};
 
@@ -62,7 +71,7 @@ struct IndexInfo {
 };
 
 // 记录字符串到信息项映射的数据
-extern std::map<std::string, IndexInfo> IndexMap;
+extern std::map<std::string, IndexInfo> PrefInfoIndexMap;
 
 // 注册一个新的信息项相关的函数
 int addNewInfo(const std::string& name, const uint8_t bits);
@@ -84,8 +93,14 @@ public:
     // 写入一个新的信息
     int setInfo(const uint8_t index, const uint32_t value);
     
+    // 写入一个新的信息
+    int setInfo(const std::string& name, const uint32_t value);
+    
     // 读取一个新的信息，读取成功返回1，失败则返回0，错误则返回-1
     int getInfo(const uint8_t index, uint32_t* value);
+    
+    // 读取一个新的信息，读取成功返回1，失败则返回0，错误则返回-1
+    int getInfo(const std::string& name, uint32_t* value);
 };
 
 // 预取分类的结构体

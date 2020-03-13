@@ -56,15 +56,6 @@ struct BasePrefetchFilterParams;
 
 namespace prefetch_filter {
 
-uint64_t generateCoreIDMap(std::set<uint8_t> cpuIds) {
-    uint64_t result = 0;
-    for (auto id : cpuIds) {
-        CHECK_ARGS_EXIT(id < 64, "CPU ID out of mapping bound");
-        result |= uint64_t(1) << id;
-    }
-    return result;
-}
-
 // 过滤器基类，仅仅添加了统计功能，不进行实际过滤
 class BasePrefetchFilter : public ClockedObject {
 typedef Packet *PacketPtr;

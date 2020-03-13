@@ -34,11 +34,11 @@
 
 namespace prefetch_filter {
 
-std::map<std::string, IndexInfo> IndexMap;
+std::map<std::string, IndexInfo> PrefInfoIndexMap;
 
 int addNewInfo(const std::string& name, const uint8_t bits) {
-    const uint8_t index = static_cast<uint8_t>(IndexMap.size());
-    IndexMap[name] = IndexInfo(index, bits);
+    const uint8_t index = static_cast<uint8_t>(PrefInfoIndexMap.size());
+    PrefInfoIndexMap[name] = IndexInfo(index, bits);
     return index;
 }
 
@@ -55,13 +55,21 @@ int addNewPrefUsefulType(const std::string& name,
 int PrefetchInfo::setInfo(const uint8_t index, const uint32_t value) {
     CHECK_ARGS(index < 64,
             "Prefetch information can only hold up to 64 info entries");
-    if (info_.size() != IndexMap.size()) {
-        info_.resize(IndexMap.size(), 0);
+    if (info_.size() != PrefInfoIndexMap.size()) {
+        info_.resize(PrefInfoIndexMap.size(), 0);
     }
     CHECK_ARGS(index < info_.size(), "Prefetch information index %u %s %d",
             index, "out of bound", info_.size());
     info_[index] = value;
     valid_ |= uint64_t(1) << index;
+    return 0;
+}
+
+int PrefetchInfo::setInfo(const std::string& name, const uint32_t value) {
+    CHECK_RET(PrefInfoIndexMap.find(name) != PrefInfoIndexMap.end(),
+            "Can not find info named as \"%s\"", name);
+    CHECK_RET(setInfo(PrefInfoIndexMap[name], value),
+            "Failed to set info with index");
     return 0;
 }
 
@@ -74,6 +82,14 @@ int PrefetchInfo::getInfo(const uint8_t index, uint32_t* value) {
         *value = info_[index];
         return 1;
     }
+    return 0;
+}
+
+int PrefetchInfo::getInfo(const std::string& name, uint32_t* value) {
+    CHECK_RET(PrefInfoIndexMap.find(name) != PrefInfoIndexMap.end(),
+            "Can not find info named as \"%s\"", name);
+    CHECK_RET(getInfo(PrefInfoIndexMap[name], value),
+            "Failed to get info with index");
     return 0;
 }
 

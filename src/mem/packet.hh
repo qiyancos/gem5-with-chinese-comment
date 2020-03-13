@@ -65,6 +65,7 @@
 #include "base/types.hh"
 #include "config/the_isa.hh"
 #include "mem/request.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
 #include "sim/core.hh"
 
 class Packet;

@@ -47,6 +47,7 @@
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "mem/cache/prefetch/base.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
 #include "mem/packet.hh"
 
 struct QueuedPrefetcherParams;

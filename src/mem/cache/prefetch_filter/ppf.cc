@@ -66,8 +66,8 @@ int Feature::init(const std::string& feature) {
             "Not enough arguments for a feature");
     name_ = "";
     for (int i = 0; i < wordList.size() - 2; i++) {
-        auto infoPair = IndexMap.find(wordList[i]);
-        CHECK_WARN(infoPair != IndexMap.end(),
+        auto infoPair = PrefInfoIndexMap.find(wordList[i]);
+        CHECK_WARN(infoPair != PrefInfoIndexMap.end(),
                 "Unknow feature name \"%s\" in \"%s\"", wordList[i].c_str(),
                 feature.c_str());
         infoIndexList_.push_back(infoPair->second);

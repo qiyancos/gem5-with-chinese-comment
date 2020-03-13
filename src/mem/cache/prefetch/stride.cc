@@ -58,6 +58,7 @@
 #include "base/trace.hh"
 #include "debug/HWPrefetch.hh"
 #include "mem/cache/replacement_policies/base.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
 #include "params/StridePrefetcher.hh"
 
 StridePrefetcher::StrideEntry::StrideEntry()
@@ -197,10 +198,9 @@ StridePrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
             Addr new_addr = pf_addr + d * prefetch_stride;
             /// 添加可用的Info信息
             AddrPriority newPref(new_addr, 0);
-            newPref.info_.setInfo(prefetch_filter::Delta, prefetch_stride);
-            newPref.info_.setInfo(prefetch_filter::Confidence,
-                    entry->confidence);
-            newPref.info_.setInfo(prefetch_filter::Depth, d);
+            newPref.info_.setInfo("Delta", prefetch_stride);
+            newPref.info_.setInfo("Confidence", entry->confidence);
+            newPref.info_.setInfo("Depth", d);
 
             addresses.push_back(newPref);
         }

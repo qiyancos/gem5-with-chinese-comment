@@ -105,23 +105,19 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
 
             /// 插入单个预取，这里会进行过滤，但是信息只包括了地址
             prefetch_filter::PrefetchInfo prefInfo = addr_prio.info_;
-            prefInfo.setInfo(prefetch_filter::BPC1,
-                    pkt->recentBranchPC_.front());
-            prefInfo.setInfo(prefetch_filter::BPC2,
-                    *(pkt->recentBranchPC_.begin()++));
-            prefInfo.setInfo(prefetch_filter::BPC3,
-                    pkt->recentBranchPC_.back());
-            prefInfo.setInfo(prefetch_filter::PC1, pkt->req->getPC());
-            prefInfo.setInfo(prefetch_filter::PC2, recentTriggerPC[0]);
-            prefInfo.setInfo(prefetch_filter::PC3, recentTriggerPC[1]);
-            prefInfo.setInfo(prefetch_filter::Address, pkt->addr);
+            prefInfo.setInfo("BPC1", pkt->recentBranchPC_.front());
+            prefInfo.setInfo("BPC2", *(pkt->recentBranchPC_.begin()++));
+            prefInfo.setInfo("BPC3", pkt->recentBranchPC_.back());
+            prefInfo.setInfo("PC1", pkt->req->getPC());
+            prefInfo.setInfo("PC2", recentTriggerPC[0]);
+            prefInfo.setInfo("PC3", recentTriggerPC[1]);
+            prefInfo.setInfo("Address", pkt->addr);
             /// CoreID只适合于一般的Cache结构，不适合于SW结构
-            prefInfo.setInfo(prefetch_filter::CoreID,
+            prefInfo.setInfo("CoreID",
                     *(pkt->caches_.front()->cpuIds_.front()));
-            prefInfo.setInfo(prefetch_filter::CacheIDMap,
+            prefInfo.setInfo("CacheIDMap",
                     prefetch_filter::generateCoreIDMap(pkt->cpuIds_));
-            prefInfo.setInfo(prefetch_filter::PrefetcherID,
-                    cache->prefetcherId_);
+            prefInfo.setInfo("PrefetcherID", cache->prefetcherId_);
             
             /// 依据是否开启了预取过滤选择是否进行过滤
             if (enablePrefetchFilter_) {

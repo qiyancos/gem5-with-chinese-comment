@@ -58,6 +58,7 @@
 #include "base/types.hh"
 #include "debug/Cache.hh"
 #include "mem/cache/base.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
 #include "mem/request.hh"
 #include "sim/core.hh"
 
