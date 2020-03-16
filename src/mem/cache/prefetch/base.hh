@@ -69,6 +69,9 @@ class BasePrefetcher : public ClockedObject
     /// 是否应该开启预取过滤操作
     const bool enablePrefetchFilter_;
 
+    /// 当前结构下的Page页表偏移的位数
+    uint8_t pageOffsetBits_;
+
   private:
     class PrefetchListener : public ProbeListenerArgBase<PacketPtr>
     {

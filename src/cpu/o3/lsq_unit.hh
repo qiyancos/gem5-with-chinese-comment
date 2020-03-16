@@ -380,10 +380,12 @@ class LSQUnit
 
     BaseTLB* dTLB() { return cpu->dtb; }
 
-  private:
+  /// 改变属性为public以便获取信息
+  public:
     /** Pointer to the CPU. */
     O3CPU *cpu;
-
+  
+  private:
     /** Pointer to the IEW stage. */
     IEW *iewStage;
 
@@ -664,7 +666,7 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
         ThreadContext *thread = cpu->tcBase(lsqID);
         PacketPtr main_pkt = new Packet(req->mainRequest(), MemCmd::ReadReq);
         /// 添加最近的分支指令地址
-        main_pkt->recentBranchPC_ = cpu->commitPtr->recentBranchPC_;
+        main_pkt->recentBranchPC_ = cpu->commitPtr_->recentBranchPC_;
 
         Cycles delay = req->handleIprRead(thread, main_pkt);
 
@@ -736,7 +738,7 @@ LSQUnit<Impl>::read(LSQRequest *req, int load_idx)
                 PacketPtr data_pkt = new Packet(req->mainRequest(),
                         MemCmd::ReadReq);
                 /// 添加最近的分支指令地址
-                data_pkt->recentBranchPC_ = cpu->commitPtr->recentBranchPC_;
+                data_pkt->recentBranchPC_ = cpu->commitPtr_->recentBranchPC_;
                 
                 data_pkt->dataStatic(load_inst->memData);
 

@@ -786,7 +786,7 @@ LSQUnit<Impl>::writebackStores()
                         inst->seqNum);
                 PacketPtr new_pkt = new Packet(*req->packet());
                 /// 添加最近的分支指令地址
-                new_pkt->recentBranchPC_ = cpu->commitPtr->recentBranchPC_;
+                new_pkt->recentBranchPC_ = cpu->commitPtr_->recentBranchPC_;
                 
                 WritebackEvent *wb = new WritebackEvent(inst,
                         new_pkt, this);
@@ -806,7 +806,7 @@ LSQUnit<Impl>::writebackStores()
             PacketPtr main_pkt = new Packet(req->mainRequest(),
                                             MemCmd::WriteReq);
             /// 添加最近的分支指令地址
-            main_pkt->recentBranchPC_ = cpu->commitPtr->recentBranchPC_;
+            main_pkt->recentBranchPC_ = cpu->commitPtr_->recentBranchPC_;
             
             main_pkt->dataStatic(inst->memData);
             req->handleIprWrite(thread, main_pkt);

@@ -82,7 +82,7 @@
 
 class BaseMasterPort;
 class BasePrefetcher;
-class prefetch_filter::BasePrefetchFilter;
+class BasePrefetchFilter;
 class BaseSlavePort;
 class MSHR;
 class MasterPort;
@@ -102,19 +102,19 @@ class BaseCache : public MemObject
         uint8_t prefetcherId_;
 
         /// 和当前级别Cache连接的所有CPUID
-        const std::set<int> cpuIds_;
+        const std::set<uint8_t> cpuIds_;
 
         /// 存放了当前Cache对应的等级
         const uint8_t cacheLevel_;
         
         /// Prefetch Filter 
-        prefetch_filter::BasePrefetchFilter *prefetchFilter_;
+        BasePrefetchFilter *prefetchFilter_;
         
         /// 是否开启记录预取有害性的表格
         const bool enableHarmTable_;
 
         /// 存放了每一个缓存等级和的
-        const static std::vector<std::string> levelName_;
+        static std::vector<std::string> levelName_;
         
     protected:
     /**

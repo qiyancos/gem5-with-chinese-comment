@@ -371,7 +371,7 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
     
     /// 进行发生Miss情况的训练操作
     if (prefetchFilter_) {
-        Addr combinedAddr = mshr ? mshr->getTarget()->pkt->addr : 0;
+        Addr combinedAddr = mshr ? mshr->getTarget()->pkt->getAddr() : 0;
         prefetch_filter::DataTypeInfo infoPair;
         infoPair.source = pkt->cmd == MemCmd::HardPFReq ?
                 prefetch_filter::Pref : prefetch_filter::Dmd;
@@ -745,10 +745,11 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             /// 则会当作预取处理
             if (tgt_pkt->packetType_ == prefetch_filter::Pref &&
                     tgt_pkt->targetCacheLevel_ == cacheLevel_) {
-                target.source == MSHR::Target::FromPrefetcher;
+                target.source = MSHR::Target::FromPrefetcher;
                 delete tgt_pkt;
                 break;
             }
+            
             Tick completion_time;
             // Here we charge on completion_time the delay of the xbar if the
             // packet comes from it, charged on headerDelay.

@@ -34,12 +34,12 @@
 namespace prefetch_filter {
 
 SaturatedCounter::SaturatedCounter(const uint8_t bits) {
-    bits = bits > 31 ? 31 : bits;
+    bits_ = bits > 31 ? 31 : bits;
     maxValue_ = (1 << bits) - 1;
 }
 
 SaturatedCounter::SaturatedCounter(const uint8_t bits, const int value) {
-    bits = bits > 31 ? 31 : bits;
+    bits_ = bits > 31 ? 31 : bits;
     maxValue_ = (1 << bits) - 1;
     value_ = value;
 }

@@ -78,11 +78,11 @@ class BaseCache(MemObject):
     abstract = True
     cxx_header = "mem/cache/base.hh"
 
-    ### 新增的信息初始化
-    cpu_ids = VectorParam.Int([-2],
+    ### Init newly added info
+    cpu_ids = VectorParam.UInt8([255],
             "Ids of all the cpus which can access this cache.")
     cache_level = Param.UInt8(255, "Level ID of this cache.")
-    prefetch_filter = Param.BasePrefetchFilter(PerceptronPrefetchFilter,
+    prefetch_filter = Param.BasePrefetchFilter(PerceptronPrefetchFilter(),
             "Prefetch filter attached to cache")
     enable_harm_table = Param.Bool(True,
             "Use harmful table to record prefetch harm")

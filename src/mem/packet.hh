@@ -260,7 +260,7 @@ class Packet : public Printable
 {
   public:
     /// 用于记录相关的Cache
-    std::vector<BaseCache*> caches_;
+    std::set<BaseCache*> caches_;
     
     /// 记录目标的Cache等级，若是非Prefetch，該数值应该是255
     uint8_t targetCacheLevel_;
@@ -276,7 +276,7 @@ class Packet : public Printable
         caches_ = pkt->caches_;
         targetCacheLevel_ = pkt->targetCacheLevel_;
         packetType_ = pkt->packetType_;
-        recentBranchPC__ = pkt->recentBranchPC_;
+        recentBranchPC_ = pkt->recentBranchPC_;
     }
 
     typedef uint32_t FlagsType;

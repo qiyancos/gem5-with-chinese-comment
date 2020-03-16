@@ -69,7 +69,7 @@ class BaseSlavePort;
 
 using namespace std;
 
-const std::vector<std::string> BaseCache::levelName_;
+std::vector<std::string> BaseCache::levelName_;
 
 uint8_t BaseCache::initPrefetcherCount_ = 0;
 
@@ -121,20 +121,28 @@ BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
       addrRanges(p->addr_ranges.begin(), p->addr_ranges.end()),
       system(p->system)
 {
-    /// 更新全局实例化指针
-    prefetchFilter_->updateInstance(&prefetchFilter);
-    /// 初始化CacheID
-    prefetcherId_ = prefetcher ? initPrefetcherCount_++ : 255;
-    /// 初始化LevelName
-    if (levelName_.size() < cacheLevel_ + 2) {
-        levelName_.resize(cacheLevel_ + 2);
-        levelName_.back() = "DRAM";
-    }
-    switch(cacheLevel_) {
-    case 0: levelName_[cacheLevel_] = "L1ICache"; break;
-    case 1: levelName_[cacheLevel_] = "L1DCache"; break;
-    default: levelName_[cacheLevel_] = std::string("L") +
-            std::to_string(cacheLevel_) + "Cache"; break;
+    // 只针对标准化的CPU Cache进行初始化
+    if (cacheLevel_ != 255) {
+        if (prefetchFilter_) {
+            /// 更新全局实例化指针
+            prefetchFilter_->updateInstance(&prefetchFilter_);
+        }
+        /// 初始化CacheID
+        prefetcherId_ = prefetcher ? initPrefetcherCount_++ : 255;
+        /// 初始化LevelName
+        if (levelName_.size() < cacheLevel_ + 2) {
+            levelName_.resize(cacheLevel_ + 2);
+            levelName_.back() = "DRAM";
+        }
+        switch(cacheLevel_) {
+        case 0: levelName_[cacheLevel_] = "L1ICache"; break;
+        case 1: levelName_[cacheLevel_] = "L1DCache"; break;
+        default: levelName_[cacheLevel_] = std::string("L") +
+                std::to_string(cacheLevel_) + "Cache"; break;
+        }
+    } else if (prefetchFilter_) {
+        delete prefetchFilter_;
+        prefetchFilter_ = nullptr;
     }
 
     // the MSHR queue has no reserve entries as we check the MSHR
@@ -1353,7 +1361,7 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
         assert(pkt->getSize() == blkSize);
 
         /// 针对Fill事件进行处理
-        if (pkt->packetType_ == prefetch_filter::Pref) {
+        if (prefetchFilter_ && pkt->packetType_ == prefetch_filter::Pref) {
             Addr evictedAddr = regenerateBlkAddr(blk);
             prefetch_filter::DataTypeInfo infoPair;
             infoPair.source = pkt->cmd == MemCmd::HardPFReq ?
@@ -1448,8 +1456,8 @@ BaseCache::invalidateBlock(CacheBlk *blk)
     // process, which will update stats and invalidate the block itself
     if (blk != tempBlock) {
         /// 添加无效化预取的相关通知
-        if (blk->wasPrefetched) {
-            prefetchFilter_->invalidatePrefetch(this, regenerateAddr(blk));
+        if (prefetchFilter_ && blk->wasPrefetched()) {
+            prefetchFilter_->invalidatePrefetch(this, regenerateBlkAddr(blk));
         }
         tags->invalidate(blk);
     } else {
@@ -2567,12 +2575,12 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
         MSHR* mshr = dynamic_cast<MSHR*>(entry);
         PacketPtr tgt_pkt = mshr->getTarget()->pkt;
         if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
-            if (tgt_pkt->targetCacheLevel_ < cacheLevel_) {
+            if (tgt_pkt->targetCacheLevel_ < cache.cacheLevel_) {
                 /// 如果目标的MSHR是一个降级别预取，发送之后立即清空MSHR
-                mshrQueue.deallocate(entry);
-            } else if (tgt_pkt->targetCacheLevel_ > cacheLevel_) {
+                cache.mshrQueue.deallocate(mshr);
+            } else if (tgt_pkt->targetCacheLevel_ > cache.cacheLevel_) {
                 /// 如果是一个提升级别的预取，将对应MSHR的Target属性设置为CPU
-                tgt_pkt->source = MSHR::Target::FromCPU;
+                mshr->getTarget()->source = MSHR::Target::FromCPU;
             }
         }
     }

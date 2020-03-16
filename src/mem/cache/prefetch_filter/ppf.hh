@@ -69,10 +69,11 @@ private:
 class PrefetchUsefulTable {
 public:
     // 进行表格的初始化
-    int init(const uint8_t counterBits, const uint32_t CCsize,
+    int init(const uint8_t counterBits, const uint32_t CCSize,
             const uint8_t CCAssoc, const uint32_t VCSize,
-            const uint8_t VCAssoc, BaseCache* cache = nullptr,
-            int8_t CCTagBits = -1);
+            const uint8_t VCAssoc, const int counterInit,
+            BaseCache* cache = nullptr,
+            const int8_t CCTagBits = -1, const int8_t VCTagBits = -1);
 
     // 对命中Pref的情况进行处理
     int updateHit(const uint64_t& addr);
@@ -90,6 +91,9 @@ public:
     // Counter的大小
     uint8_t counterBits_;
 
+    // Counter的初始化数值
+    int counterInit_;
+
     // Counter Cache的Tag大小
     int8_t counterCacheTagBits_;
     
@@ -99,6 +103,9 @@ public:
     // Counter Cache的组相联毒
     uint8_t counterCacheAssoc_;
 
+    // Counter Cache的Tag大小
+    int8_t victimCacheTagBits_;
+    
     // Victim Cache的大小
     uint32_t victimCacheSize_;
 
@@ -111,9 +118,18 @@ public:
     public:
         // 默认初始化函数
         CounterEntry() {}
-        // 初始化函数
-        CounterEntry(const uint8_t counterBits, const uint64_t& prefAddr,
-                const uint64_t& evictedAddr_);
+        
+        // 默认初始化函数
+        CounterEntry(const uint8_t counterBits, const int counterInit) {
+            counter_.init(counterBits, counterInit);
+        }
+        
+        // 完整初始化函数
+        CounterEntry(const uint8_t counterBits, const int counterInit,
+                const uint64_t& prefAddr, const uint64_t& evictedAddr) :
+                prefAddr_(prefAddr), evictedAddr_(evictedAddr) {
+            counter_.init(counterBits, counterInit);
+        }
 
     public:
         // 计数器大小
@@ -139,12 +155,17 @@ private:
     CacheTable<CounterEntry> counterCache_;
 };
 
+} // namespace prefetch_filter
+
 // 基于感知器的预取过滤器
 class PerceptronPrefetchFilter final : public BasePrefetchFilter {
-
-typedef CacheTable<std::vector<SaturatedCounter>> FeatureIndexTable;
-typedef CacheTable<int8_t> FeatureWeightTable;
-typedef CacheTable<BaseCache*> OldPrefTable;
+private:
+    typedef prefetch_filter::CacheTable<std::vector<uint16_t>>
+            FeatureIndexTable;
+    typedef prefetch_filter::CacheTable<prefetch_filter::SaturatedCounter>
+            FeatureWeightTable;
+    typedef prefetch_filter::Feature Feature;
+    typedef prefetch_filter::PrefetchUsefulTable PrefetchUsefulTable;
 
 public:
     // 构造函数 
@@ -169,7 +190,7 @@ public:
             const uint64_t& evictedAddr, const DataTypeInfo& info) override;
 
     // 对一个预取进行过滤，返回发送的Cache Level(0-3)或者不预取(4)
-    int filterPrefetch(BaseCache* cache, const PacketPtr &pkt,
+    int filterPrefetch(BaseCache* cache, const uint64_t& prefAddr,
             const PrefetchInfo& info) override;
     
     // 删除一个被无效化的预取
@@ -181,10 +202,66 @@ public:
 private:
     // 针对不同类型预取的训练方法对应的enum类型
     enum TrainType {GoodPref, BadPref, UselessPref};
+    
+    // 一套PPF基本表格的数据结构
+    class Tables {
+    public:
+        // 默认初始化函数
+        Tables() {}
+
+        class PrefInfoEntry {
+        public:
+            // 简单初始化函数
+            PrefInfoEntry() {}
+
+            // 带数值的初始化函数
+            PrefInfoEntry(const std::set<BaseCache*>& caches,
+                    const uint8_t timesPT = 0, const uint8_t timesRT = 0) :
+                    caches_(caches), timesPT_(timesPT), timesRT_(timesRT) {}
+            
+            // 添加新的Cache信息
+            int addCache(BaseCache* newCache) {
+                caches_.insert(newCache);
+                return 0;
+            }
+
+        public:
+            // 和当前Prefetch有关的缓存
+            std::set<BaseCache*> caches_;
+
+            // Prefetch Table中的出现次数
+            uint8_t timesPT_ = 0;
+
+            // Reject Table中的出现次数
+            uint8_t timesRT_ = 0;
+        };
+    
+    public:
+        // 没有被过滤的预取索引表格，区分CPU
+        FeatureIndexTable prefetchTable_;
+    
+        // 被过滤的预取索引表格，区分CPU
+        FeatureIndexTable rejectTable_;
+
+        // 存放Feature权重的表格，区分CPU
+        std::vector<FeatureWeightTable> featureTable_;
+
+        // 存放所有在Prefetch Table和Reject Table中预取的信息，只用于统计
+        std::map<uint64_t, PrefInfoEntry> localPrefTable_;
+        
+        // 存放所有最近被剔除的预取信息
+        prefetch_filter::CacheTable<PrefInfoEntry> oldPrefTable_;
+        
+        // 表格相关结构的名称
+        std::string name_;
+        
+        // 对应着相应统计数据的索引
+        int statsIndex_;
+    };
 
 private:
     // 用于初始化数据的函数
-    int init();
+    int initThis();
 
     // 依据给定的信息确定处理的目标表格
     Tables& getTable(BaseCache* cache);
@@ -195,12 +272,15 @@ private:
 
     // 依据信息对Prefetch Table和Reject Table进行更新
     int updateTable(Tables& workTable, const uint64_t& prefAddr,
-            const uint8_t targetCacheLevel, const std::set<uint8_t>& cpuIds,
-            const uint8_t srcCacheLevel, const std::vector<uint16_t>& indexes);
+            const uint8_t targetCacheLevel, BaseCache* srcCache,
+            const std::vector<uint16_t>& indexes);
 
     // 更新权重的出现次数信息
     int updateFreqStats(Tables& workTable,
             const std::vector<uint16_t>& indexes);
+
+    // 更新PPF表格相关情况的统计信息
+    int updateWorkTableStats(Tables& workTable, const uint64_t& prefAddr);
 
 public:
     // 一直都未被过滤的预取请求个数，区分核心，编号区分缓存
@@ -225,7 +305,7 @@ public:
 
 private:
     // 初始化成功与否的标志
-    bool initFailFlag = false;
+    bool initFailFlag_ = false;
 
     // 是否在不同CPU之间共享表格
     const bool cpuSharedTable_;
@@ -242,6 +322,12 @@ private:
     // Feature权重的bit数
     const uint8_t weightBits_;
 
+    // Feature权重的初始化数值
+    const uint8_t weightInit_;
+
+    // 有害表格计数器的初始化数值
+    const uint8_t counterInit_;
+
     // 将预取设置为到L1的可信度阈值
     std::vector<uint16_t> prefThreshold_;
 
@@ -254,39 +340,11 @@ private:
     // 存放Feature的向量
     std::vector<Feature> featureList_;
 
-private:
-    // 一套基本表格的数据结构
-    struct Tables {
-        // 没有被过滤的预取索引表格，区分CPU
-        FeatureIndexTable prefetchTable_;
-    
-        // 被过滤的预取索引表格，区分CPU
-        FeatureIndexTable rejectTablePtr_;
-
-        // 存放所有在Prefetch Table和Reject Table中预取在两个表格中出现次数
-        // pair中第一个表示PT次数，第二个表示RT次数
-        std::map<uint64_t, std::pair<uint8_t, uint8_t>> prefAppearTime_;
-
-        // 存放Feature权重的表格，区分CPU
-        std::vector<FeatureWeightTable> featureTable_;
-
-        // 记录最近被剔除的预取
-        OldPrefTable oldPrefTable_;
-        
-        // 表格相关结构的名称
-        std::string name_;
-        
-        // 对应着相应统计数据的索引
-        int statsIndex_;
-    };
-    
     // 预取有害性统计相关的表格
     std::map<BaseCache*, PrefetchUsefulTable> prefUsefulTable_;
     
     // 针对非LLC的结构使用的表格
     std::vector<std::vector<Tables>> workTables_;
 };
-
-} // namespace prefetch_filter
 
 #endif // __MEM_CACHE_PREFETCH_FILTER_PPF_HH__

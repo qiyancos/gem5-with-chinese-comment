@@ -30,30 +30,35 @@ from m5.params import *
 from m5.proxy import *
 from m5.SimObject import SimObject
 
-class BasePrefetchFilter(SimObject):
-    type = 'PrefetchFilter'
+from m5.objects.ClockedObject import ClockedObject
+
+class BasePrefetchFilter(ClockedObject):
+    type = 'BasePrefetchFilter'
     cxx_header = "mem/cache/prefetch_filter/base.hh"
+    #sys = Param.System(Parent.any, "System this prefetcher belongs to")
 
     enable_filter = Param.Bool(True, "Whether to enable Filter Engine")
     enable_stats = Param.Bool(True, "Whether to enable Stats Engine")
 
-    stats_period = Param.Uint64(?, "Period of statistics in time dimension")
+    # print per 10000 cycles
+    stats_period = Param.UInt64(5000000,
+            "Period of statistics in time dimension")
     
     block_size = Param.Int(Parent.cache_line_size, "block size in bytes")
 
 class PerceptronPrefetchFilter(BasePrefetchFilter):
-    type = 'PrefetchFilter'
+    type = 'PerceptronPrefetchFilter'
     cxx_header = "mem/cache/prefetch_filter/ppf.hh"
-    
-    # 结构设置
-    cpu_shared_table = Param.Bool(True, "Whether to share table across "
+
+    # Structure Setting
+    cpu_shared_table = Param.Bool(False, "Whether to share table across "
             "differenct cores")
-    cache_shared_table = Param.Bool(True, "Whether to share table across "
+    cache_shared_table = Param.Bool(False, "Whether to share table across "
             "differenct caches")
-    all_shared_table = Param.Bool(True, "Whether to share table across all "
+    all_shared_table = Param.Bool(False, "Whether to share table across all "
             "caches")
-    # 在共享表格方面，LLC一定共享，其他层级选择性共享
-    # 该设计暂时不支持SW架构
+    # LLC must be shared, other level will be shared according to settings
+    # SW not supported
 
     allow_upgrade = Param.Bool(True, "If a pref from low-level cache can be"
             " sent to a higher level cache")
@@ -70,40 +75,41 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     old_pref_table_assoc = Param.UInt8(4, "Associativity of the old prefetch "
             "table")
     
-    # 过滤设置
-    # 0-L1ICache，1-L1DCache，2-L2Cache...n-LnCache
-    prefetch_threashold = VectorParam.UInt16([?, ?, ?],
+    # Filter Setting
+    # 0-L1ICache, 1-L1DCache, 2-L2Cache...n-LnCache
+    prefetch_threshold = VectorParam.UInt16([12, 8, 4],
             "Thresholds for prefetch to different caches")
     
-    # PPF自带的特征
+    # Feature Table Setting
     feature_weight_bits = Param.UInt8(4, "Number of bits of weight for a "
             "feature")
-    feature_weight_init = Param.UInt8(7, "Initiated value for weight")
+    feature_weight_init = Param.UInt8(4, "Initiated value for weight")
 
-    # Feature表示方式: "key1 key2 key3 x n" 表示从[key1]^[key2]^[key3]的结果中
-    #          取第x位开始共n个bits(包括第x位)的数据作为Weight Table的索引
+    # Feature: "key1 key2 key3 x n" means to extract n bits start from
+    #          the xth bit (include xth bit) from '[key1]^[key2]^[key3]'
+    #          as the feature index
     original_features = VectorParam.String([
-            "PC1 Confidence 0 ?", # PC ^ Confidence; ?
-            "Address 0 6", # Address inside a cache block; 64(2^6)
-            "Address 6 12", # Offset of a cache block within a page; 64(2^6)
-            "PageAddress 0 ?", # Lower bits of physical page number; ?
-            "Confidence 0 ?", # Confidence of the prefetch; ?
-            "PC1 PC2>>1 PC3>>2 0 12", # Hash of last insts; 4096(2^12)
-            "Signature Delta 0 ?", # Signature ^ Delta; ? 
-            "PC1 Depth 0 ?", # PC ^ Depth, ?
-            "PC1 Delta 0 ?", # PC ^ Delta, ?
+            "PC1 Confidence 0 12", # PC ^ Confidence;
+            "Address 0 6", # Address inside a cache block;
+            "Address 6 6", # Offset of a cache block within a page;
+            "PageAddress 0 10", # Lower bits of physical page num;
+            "Confidence 0 3", # Confidence of the prefetch;
+            "PC1 PC2>>1 PC3>>2 0 12", # Hash of last insts;
+            "Signature Delta 0 12", # Signature ^ Delta;
+            "PC1 Depth 0 12", # PC ^ Depth;
+            "PC1 Delta 0 12", # PC ^ Delta;
             ], "List of original features used for PPF")
     
-    # 新增的PPF特征
+    # Newly added features
     added_features = VectorParam.String([
-            "BPC1 BPC2>>1 BPC3>>2 0 12", # Hash of branch insts; 4096(2^12)
-            "PrefHarm 0 ?", # Prefetch harmfulness; ?
-            "PrefetcherID PC1 0 ?", # CoreID bitmap ^ PC; ?
-            "PrefetcherID PageAddress 0 ?", # CoreID bitmap ^ Page address; ?
-            "PrefetcherID PrefHarm 0 ?", # CoreID bitmap ^ Prefetch Harmfulness; ?
+            "BPC1 BPC2>>1 BPC3>>2 0 12", # Hash of branch insts;
+            "PrefetcherID PC1 0 12", # CoreID bitmap ^ PC;
+            "PrefetcherID PageAddress 0 12", # CoreID bitmap ^ Page address;
+            # "PrefHarm 0 4", # Prefetch Harm;
+            # "PrefetcherID PrefHarm 0 8", # CoreID bitmap ^ Prefetch Harm;
             ], "List of added features used for PPF")
     
-    # 训练设置
+    # Training Setting
     default_training_step = Param.UInt8(1,
             "Default training step for all caches");
     useless_prefetch_training_step = Param.UInt8(1, "Punish useless prefetch "
@@ -111,11 +117,18 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     training_step = VectorParam.UInt8([3, 2, 1],
             "Step for training of different cache feedback")
     
-    # 有害性统计结构的设置
-    counter_cache_size = Param.UInt32(?, "Size of the counter cache")
-    counter_cache_assoc = Param.UInt8(?, "Associativity of the counter cache")
-    counter_cache_tag_bits = Param.Int8(?, "Number of tag bits of the "
-            "counter cache (-1 means deafult setting)")
-    counter_bits = Param.UInt8(?, "Number of bits for a counter")
-    victim_cache_size = Param.UInt32(?, "Size of the victim cache")
-    victim_cache_assoc = Param.UInt8(?, "Associativity of the victim cache")
+    # Harmful Table Setting
+    # Counter Cache Setting
+    counter_cache_size = Param.UInt32(1024, "Size of the counter cache")
+    counter_cache_assoc = Param.UInt8(4, "Associativity of the counter cache")
+    counter_cache_tag_bits = Param.Int8(-1, "Number of tag bits of the "
+            "counter cache (-1 means using full-length tag)")
+    
+    counter_bits = Param.UInt8(3, "Number of bits for a counter")
+    counter_init_value = Param.UInt8(3, "Initiated value for a counter")
+    
+    # Victim Cache Setting
+    victim_cache_size = Param.UInt32(1024, "Size of the victim cache")
+    victim_cache_assoc = Param.UInt8(4, "Associativity of the victim cache")
+    victim_cache_tag_bits = Param.Int8(-1, "Number of tag bits of the "
+            "victim cache (-1 means using full-length tag)")

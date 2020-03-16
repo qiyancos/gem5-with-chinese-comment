@@ -137,7 +137,8 @@ class MSHR : public QueueEntry, public Printable
         const Tick readyTime; //!< Time when request is ready to be serviced
         const Counter order;  //!< Global order (for memory consistency mgmt)
         const PacketPtr pkt;  //!< Pending request packet.
-        const Source source;  //!< Request from cpu, memory, or prefetcher?
+        /// 去掉const属性以便进行修改
+        Source source;  //!< Request from cpu, memory, or prefetcher?
 
         /**
          * We use this flag to track whether we have cleared the

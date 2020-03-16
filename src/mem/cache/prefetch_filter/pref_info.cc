@@ -34,6 +34,19 @@
 
 namespace prefetch_filter {
 
+uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches) {
+    std::set<uint8_t> cpuIds;
+    for (auto cache : caches) {
+        cpuIds.insert(cache->cpuIds_.begin(), cache->cpuIds_.end());
+    }
+    uint64_t result = 0;
+    for (auto id : cpuIds) {
+        CHECK_ARGS_EXIT(id < 64, "CPU ID out of mapping bound");
+        result |= uint64_t(1) << id;
+    }
+    return result;
+}
+
 std::map<std::string, IndexInfo> PrefInfoIndexMap;
 
 int addNewInfo(const std::string& name, const uint8_t bits) {
@@ -68,55 +81,76 @@ int PrefetchInfo::setInfo(const uint8_t index, const uint32_t value) {
 int PrefetchInfo::setInfo(const std::string& name, const uint32_t value) {
     CHECK_RET(PrefInfoIndexMap.find(name) != PrefInfoIndexMap.end(),
             "Can not find info named as \"%s\"", name);
-    CHECK_RET(setInfo(PrefInfoIndexMap[name], value),
+    CHECK_RET(setInfo(PrefInfoIndexMap[name].index_, value),
             "Failed to set info with index");
     return 0;
 }
 
-int PrefetchInfo::getInfo(const uint8_t index, uint32_t* value) {
-    CHECK_RET(info_.size == Indexmap.size(), "Can not get value from %s",
-            "uninitiated prefetch info");
+int PrefetchInfo::getInfo(const uint8_t index, uint32_t* value) const {
+    CHECK_RET(info_.size() == PrefInfoIndexMap.size(),
+            "Can not get value from uninitiated prefetch info");
     CHECK_ARGS(index < info_.size(), "Prefetch information index %u %s %d",
             index, "out of bound", info_.size());
-    if (valid_ &= uint64_t(1) << index) {
+    if (valid_ & uint64_t(1) << index) {
         *value = info_[index];
         return 1;
     }
     return 0;
 }
 
-int PrefetchInfo::getInfo(const std::string& name, uint32_t* value) {
+int PrefetchInfo::getInfo(const std::string& name, uint32_t* value) const {
     CHECK_RET(PrefInfoIndexMap.find(name) != PrefInfoIndexMap.end(),
             "Can not find info named as \"%s\"", name);
-    CHECK_RET(getInfo(PrefInfoIndexMap[name], value),
+    CHECK_RET(getInfo(PrefInfoIndexMap[name].index_, value),
             "Failed to get info with index");
     return 0;
 }
 
 // Original
-DEF_INFO(PC1, 12) // 触发预取的指令PC, 12 bits
-DEF_INFO(PC2_1, 12) // 触发预取指令之前触发指令的PC(右移1bit), 12 bits
-DEF_INFO(PC3_2, 12) // 触发预取指令之前的之前触发指令的PC(右移2bit), 12 bits
-DEF_INFO(Confidence, 4) // 当前预取的可信度, 4 bits
-DEF_INFO(Address, 32) // 当前预取的目标地址, 32 bits
-DEF_INFO(PageAddress, 12) // 预取地址的物理页号低12bit, 12 bits
-DEF_INFO(Depth, 8) // 预取的深度, 8 bits 
-DEF_INFO(Delta, 7) // 预取的地址间隔, 7 bits
-DEF_INFO(Signature, 12) // SPP使用的签名, 12 bits
-// Added
-DEF_INFO(BPC1, 12) // 触发预取时最近的一个分支PC, 12 bits
-DEF_INFO(BPC2_1, 12) // 触发预取时最近分支之前的分支PC(右移1bit), 12 bits
-DEF_INFO(BPC2_2, 12) // 触发预取时最近分支之前的之前分支PC(右移2bit), 12 bits
-DEF_INFO(PrefHarm, 4) // 预取的有害度信息, 4 bits
-DEF_INFO(CoreIDMap, 8) // 相关核心的BitMap, 最多支持8核心, 8 bits
-DEF_INFO(CoreID, 3) // 相关核心的BitMap, 最多支持8核心, 3 bits
-DEF_INFO(PrefetcherID, 6) // 发射预取的PrefetcherID, 最多支持16核心, 6 bits
+// 触发预取的指令PC, 12 bits
+DEF_INFO(PC1, PC1, 12)
+// 触发预取指令之前触发指令的PC(右移1bit), 12 bits
+DEF_INFO(PC2_1, PC2>>1, 12)
+// 触发预取指令之前的之前触发指令的PC(右移2bit), 12 bits
+DEF_INFO(PC3_2, PC3>>2, 12)
+// 当前预取的可信度, 4 bits
+DEF_INFO(Confidence, Confidence, 3)
+// 当前预取的目标地址, 32 bits
+DEF_INFO(Address, Address, 32)
+// 预取地址的物理页号低12bit, 12 bits
+DEF_INFO(PageAddress, PageAddress, 12)
+// 预取的深度, 8 bits 
+DEF_INFO(Depth, Depth, 8)
+// 预取的地址间隔, 7 bits
+DEF_INFO(Delta, Delta, 7)
+// SPP使用的签名, 12 bits
+DEF_INFO(Signature, Signature, 12) 
 
+// Added
+// 触发预取时最近的一个分支PC, 12 bits
+DEF_INFO(BPC1, BPC1, 12)
+// 触发预取时最近分支之前的分支PC(右移1bit), 12 bits
+DEF_INFO(BPC2_1, BPC2>>1, 12)
+// 触发预取时最近分支之前的之前分支PC(右移2bit), 12 bits
+DEF_INFO(BPC3_2, BPC3>>2, 12)
+// 预取的有害度信息, 4 bits
+DEF_INFO(PrefHarm, PrefHarm, 4)
+// 相关核心的BitMap, 最多支持8核心, 8 bits
+DEF_INFO(CoreIDMap, CoreIDMap, 8)
+// 相关核心的BitMap, 最多支持8核心, 3 bits
+DEF_INFO(CoreID, CoreID, 3)
+// 发射预取的PrefetcherID, 最多支持16核心, 6 bits
+DEF_INFO(PrefetcherID, PrefetcherID, 6)
+
+// 避免出现unused-variable错误提示
+std::vector<int> PrefInfoIndexes {PC1, PC2_1, PC3_2, Confidence, Address,
+        PageAddress, Depth, Delta, Signature, BPC1, BPC2_1, BPC3_2,
+        PrefHarm, CoreIDMap, CoreID, PrefetcherID};
 
 // 多核有用的预取（他核心有用多于单核心有用）
 int CrossCoreUseful = addNewPrefUsefulType("cross_core_useful",
         [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
-        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
                 return (singleCoreUseful >= singleCoreHarm) &&
                 (crossCoreUseful > crossCoreHarm) &&
@@ -127,7 +161,7 @@ int CrossCoreUseful = addNewPrefUsefulType("cross_core_useful",
 // 单核有用的预取（单核心有用多于多他核心有用）
 int SingleCoreUseful = addNewPrefUsefulType("single_core_useful",
         [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
-        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
                 return (singleCoreUseful > singleCoreHarm) &&
                 (crossCoreUseful >= crossCoreHarm) &&
@@ -138,7 +172,7 @@ int SingleCoreUseful = addNewPrefUsefulType("single_core_useful",
 // 自私的预取（单核心有用，他核心有害）
 int Selfish = addNewPrefUsefulType("selfish",
         [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
-        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
                 return (singleCoreUseful > singleCoreHarm) &&
                 (crossCoreUseful < crossCoreHarm);
@@ -147,7 +181,7 @@ int Selfish = addNewPrefUsefulType("selfish",
 // 无私的预取（单核心有害，他核心有用）
 int Selfless = addNewPrefUsefulType("selfless",
         [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
-        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
                 return (singleCoreUseful < singleCoreHarm) &&
                 (crossCoreUseful > crossCoreHarm);
@@ -156,7 +190,7 @@ int Selfless = addNewPrefUsefulType("selfless",
 // 无用预取（单核心无用，他核心无用）
 int Useless = addNewPrefUsefulType("useless",
         [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
-        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
                 return (singleCoreUseful == singleCoreHarm) &&
                 (crossCoreUseful == crossCoreHarm);
@@ -165,7 +199,7 @@ int Useless = addNewPrefUsefulType("useless",
 // 单核有害的预取（单核心有害多于多他核心有害）
 int SingleCoreHarmful = addNewPrefUsefulType("single_core_harmful",
         [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
-        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
                 return (singleCoreUseful < singleCoreHarm) &&
                 (crossCoreUseful < crossCoreHarm) &&
@@ -176,7 +210,7 @@ int SingleCoreHarmful = addNewPrefUsefulType("single_core_harmful",
 // 多核有害的预取（他核心有害多于多单核心有害）
 int CrossCoreHarmful = addNewPrefUsefulType("cross_core_harmful",
         [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
-        const uint64_t& corssCoreUseful, const uint64_t& crossCoreHarm)
+        const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
                 return (singleCoreUseful < singleCoreHarm) &&
                 (crossCoreUseful < crossCoreHarm) &&
@@ -188,17 +222,10 @@ PrefetchUsefulInfo::PrefetchUsefulInfo(BaseCache* srcCache,
         const uint64_t& index) :
         srcCache_(srcCache), index_(index) {}
 
-int PrefetchUsefulInfo::updateUse(const std::set<uint8_t>& cpuIds,
-        std::vector<Stats::Vector*>& cacheStats) {
-    uint8_t cacheLevel = srcCache->cacheLevel_ - 1;
-    if (cacheLevel < 2) {
-        for (uint8_t& cpuId : srcCache_->cpuIds_) {
-            (*cacheStats[cacheLevel])[cpuId]++;
-        }
-    }
+int PrefetchUsefulInfo::updateUse(const std::set<uint8_t>& cpuIds) {
     int singleCoreValue;
     int crossCoreValue;
-    CHECK_RET(getUpdateValue(cpuIds, srcCache->cpuIds, &singleCoreValue,
+    CHECK_RET(getUpdateValue(cpuIds, cpuIds, &singleCoreValue,
             &crossCoreValue), "Failed to get update value");
     info_.singleCoreUsefulCount_ += singleCoreValue;
     info_.crossCoreUsefulCount_ += crossCoreValue;
@@ -208,7 +235,7 @@ int PrefetchUsefulInfo::updateUse(const std::set<uint8_t>& cpuIds,
 int PrefetchUsefulInfo::updateHarm(const std::set<uint8_t>& cpuIds) {
     int singleCoreValue;
     int crossCoreValue;
-    CHECK_RET(getUpdateValue(cpuIds, srcCache->cpuIds, &singleCoreValue,
+    CHECK_RET(getUpdateValue(cpuIds, cpuIds, &singleCoreValue,
             &crossCoreValue), "Failed to get update value");
     info_.singleCoreHarmCount_ += singleCoreValue;
     info_.crossCoreHarmCount_ += crossCoreValue;
@@ -234,22 +261,21 @@ int PrefetchUsefulInfo::getReplacedAddr(BaseCache* cache,
 int PrefetchUsefulInfo::isUseful() {
     // 只有有用程度达到一定标准才是有用预取
     if (info_.singleCoreUsefulCount_ - info_.singleCoreHarmCount_ >
-            POS_DEGREE_DIVIDE && info_.crossCoreUsefulCount >=
-            info_.crossCoreHarmCount) {
+            PREF_DEGREE_2 && info_.crossCoreUsefulCount_ >=
+            info_.crossCoreHarmCount_) {
         return 1;
     } else if (info_.crossCoreUsefulCount_ - info_.crossCoreHarmCount_ >
-            POS_DEGREE_DIVIDE && info_.singleCoreUsefulCount >=
-            info_.singleCoreHarmCount) {
+            PREF_DEGREE_2 && info_.singleCoreUsefulCount_ >=
+            info_.singleCoreHarmCount_) {
         return 1;
     }
     return 0;
 }
 
 int PrefetchUsefulInfo::getTypeIndex() {
-    int typeIndex;
     for (PrefUsefulType& type : PrefUsefulTypeList) {
         if (type.isType(info_.singleCoreUsefulCount_,
-                info_.singleCoreHarmCount_, info_.corssCoreUsefulCount_,
+                info_.singleCoreHarmCount_, info_.crossCoreUsefulCount_,
                 info_.crossCoreHarmCount_)) {
             return type.index_;
         }
@@ -260,15 +286,17 @@ int PrefetchUsefulInfo::getTypeIndex() {
 int PrefetchUsefulInfo::getUpdateValue(const std::set<uint8_t>& srcCpuIds,
         const std::set<uint8_t>& targetCpuIds, int* singleCoreUpdate,
         int* crossCoreUpdate) {
-    *singleCoreUpdate = 0;
-    *crossCoreUpdate = 0;
+    int SCUpdate = 0;
+    int CCUpdate = 0;
     for (uint8_t srcCpuId : srcCpuIds) {
         if (targetCpuIds.find(srcCpuId) != targetCpuIds.end()) {
-            *singleCoreUpdate++;
+            SCUpdate++;
         } else {
-            *crossCoreUpdate++;
+            CCUpdate++;
         }
     }
+    *singleCoreUpdate = SCUpdate;
+    *crossCoreUpdate = CCUpdate;
     return 0;
 }
 

@@ -54,11 +54,15 @@ class BaseCache;
 class Packet;
 struct BasePrefetchFilterParams;
 
-namespace prefetch_filter {
-
 // 过滤器基类，仅仅添加了统计功能，不进行实际过滤
 class BasePrefetchFilter : public ClockedObject {
-typedef Packet *PacketPtr;
+protected:
+    typedef Packet *PacketPtr;
+    typedef prefetch_filter::DataTypeInfo DataTypeInfo;
+    typedef prefetch_filter::PrefetchInfo PrefetchInfo;
+
+private:
+    typedef prefetch_filter::IdealPrefetchUsefulTable IdealPrefetchUsefulTable;
 
 public:
     // 构造函数 
@@ -100,7 +104,7 @@ protected:
 
 private:
     // 进行基本结构的初始化
-    void init();
+    int initThis();
 
     // 该函数会对时间维度信息进行统计和打印
     int checkUpdateTimingStats();
@@ -118,7 +122,7 @@ public:
     // Demand Request发生Miss不同层级, 区分不同核心和命中层级
     std::vector<Stats::Vector*> demandReqMissCount_;
 
-    // L1预取器预取命中不同层级的个数，区分不同核心和命中层级
+    // 预取器预取命中不同层级的个数，区分不同核心和命中层级
     std::vector<std::vector<Stats::Vector*>> prefHitCount_;
 
     // 预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
@@ -137,21 +141,28 @@ public:
     std::vector<std::vector<Stats::Vector*>> prefUsefulType_;
 
     // 时间维度的统计计数数据结构
-    struct TimingStats {
+    class TimingStats {
+    public:
+        // 重置数据
+        void reset();
+        
+    public:
         // Demand请求的命中数量
         std::vector<uint32_t> demandHit_;
 
         // Demand请求的缺失数量
         std::vector<uint32_t> demandMiss_;
 
-        // 统计周期内的不同类型的预取个数
+        // 统计周期内的不同类型的预取个数，第一维度表示Cahce等级
+        // 第二个维度表示单核/多核，第三个维度表示Degee分类
         std::vector<std::vector<std::vector<uint32_t>>> prefDegreeCount_;
-        
-        // 重置数据
-        void reset();
     };
 
-    // 时间维度的统计计数数据
+    // 一个指向时间维度统计数据中prefDegreeCount_的指针，方便计算
+    std::vector<std::vector<std::vector<std::vector<uint32_t>>>*>
+            timingDegree_;
+
+    // 时间维度的统计计数数据，每一个CPU都有一个
     std::vector<TimingStats> timingStats_;
 
 private:
@@ -166,9 +177,6 @@ private:
 
     // 是否开启统计操作，如果不做统计，则所有统计函数将会无效
     const bool enableStats_ = 0;
-    
-    // 是否开启过滤器，如果不开启，则所有预取都不会改变
-    const bool enableFilter_ = 0;
     
     // 全局唯一的实例指针
     static BasePrefetchFilter* onlyInstance_;
@@ -187,6 +195,9 @@ public:
     uint8_t maxCacheLevel_ = 0;
 
 protected:
+    // 是否开启过滤器，如果不开启，则所有预取都不会改变
+    const bool enableFilter_ = 0;
+    
     // 用于记录预取有害信息的结构，每一级缓存都会有一个
     std::map<BaseCache*, IdealPrefetchUsefulTable> usefulTable_;
     
@@ -202,7 +213,5 @@ protected:
     // 当前系统下CPU的个数
     uint8_t numCpus_ = 0;
 };
-
-} // namespace prefetch_filter
 
 #endif // __MEM_CACHE_PREFETCH_FILTER_BASE_HH__

@@ -101,6 +101,9 @@ BasePrefetcher::BasePrefetcher(const BasePrefetcherParams *p)
       useVirtualAddresses(p->use_virtual_addresses), issuedPrefetches(0),
       usefulPrefetches(0)
 {
+    /// 设置PageOffset的位数
+    pageOffsetBits_ = 0;
+    while (pageBytes >> (++pageOffsetBits_)) {}
 }
 
 void

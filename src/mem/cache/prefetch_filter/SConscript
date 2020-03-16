@@ -38,7 +38,7 @@ Source('pref_info.cc')
 Source('ppf.cc')
 Source('saturated_counter.cc')
 
-# 该DebugFlag用于控制是否打印时间维度的统计信息
+# enable timing stats?
 DebugFlag('PrefetchFilter')
 
 # CacheTags is so outrageously verbose, printing the cache's entire tag

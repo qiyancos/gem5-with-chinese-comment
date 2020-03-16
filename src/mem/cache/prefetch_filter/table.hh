@@ -50,12 +50,17 @@ template<typename T>
 class CacheTable {
 public:
     // 初始化函数
-    int init(const uint32_t size, const uint8_t assoc,
-            const int8_t tagBits = -1);
+    int init(const uint32_t size, const uint8_t assoc);
 
     // 初始化函数
-    int init(const uint32_t size, const uint8_t assoc, const T& data,
-            const int8_t tagBits = -1);
+    int init(const int8_t tagBits, const uint32_t size, const uint8_t assoc);
+
+    // 初始化函数
+    int init(const uint32_t size, const uint8_t assoc, const T& data);
+
+    // 初始化函数
+    int init(const int8_t tagBits, const uint32_t size, const uint8_t assoc,
+            const T& data);
 
     // 判断某一个地址是否有数据，0表示不存在，1表示存在，-1表示出现错误
     int touch(const uint64_t& addr);
@@ -83,15 +88,29 @@ public:
 
 private:
     // 表格的表项结构
-    struct CacheEntry {
+    class CacheEntry {
+    public:
+        // 构造函数
+        CacheEntry() {};
+        
+        // 复杂构造函数
+        CacheEntry(const uint64_t& tag, const uint64_t& addr, bool valid) :
+                tag_(tag), addr_(addr), valid_(valid) {}
+
+        // 复杂构造函数
+        CacheEntry(const uint64_t& tag, const uint64_t& addr, bool valid,
+                const T& data) :
+                tag_(tag), addr_(addr), valid_(valid), data_(data) {}
+    
+    public:
         // Tag数值
-        uint64_t tag_;
+        uint64_t tag_ = 0;
 
         // 完整的地址
-        uint64_t addr_;
+        uint64_t addr_ = 0;
         
         // valid bit
-        bool valid_;
+        bool valid_ = false;
         
         // 存放的数值
         T data_;
@@ -115,6 +134,9 @@ typedef Packet *PacketPtr;
 
 public:
     // 初始化函数
+    IdealPrefetchUsefulTable() {}
+    
+    // 初始化函数
     IdealPrefetchUsefulTable(BaseCache* cache);
     
     // 初始化函数
@@ -130,13 +152,13 @@ public:
     int isPrefHit(const uint64_t& addr);
     
     // 查找当前有用信息表中和某一个地址相关的信息，可以使Victim也可以是Pref
-    int findSrcCaches(const uint64_t& addr, std::vector<BaseCache*>* caches);
+    int findSrcCaches(const uint64_t& addr, std::set<BaseCache*>* caches);
 
     // 在数据被命中的时候进行处理，同时会更新计数
     // cacheStats第一个是L1的发出预取对应的统计数据，
     // 第二个是L2发出预取对应的统计数据
     int updateHit(const PacketPtr& srcPkt, const uint64_t& hitAddr,
-            const DataType type, std::vector<Stats::Vector*>& cacheStats);
+            const DataType type);
    
     // 当一个Demand发生Miss进行有害性信息更新
     int updateMiss(const PacketPtr& srcPkt);
@@ -145,13 +167,15 @@ public:
     int updateEvict(const uint64_t& addr);
     
     // 当一个预取替换之前的无用预取时进行更新，同时更新统计计数
-    int replaceEvict(const PacketPtr& prefPkt, const uint64_t& oldPrefAddr,
+    int replaceEvict(const PacketPtr& prefPkt, const uint64_t& oldPrefAddr);
 
     // 对时间维度的信息进行更新，并重置相关信息项
-    int updatePrefTiming(const Stats::Vector* totalUsefulValue[][],
-            Stats::Vector* usefulDegree[][][],
-            std::vector<Stats::Vector*>* usefulType[],
-            uint32_t timingStatus[][][]);
+    int updatePrefTiming(
+            std::vector<std::vector<Stats::Vector*>>& totalUsefulValue,
+            std::vector<std::vector<std::vector<Stats::Vector*>>>&
+            usefulDegree, std::vector<std::vector<Stats::Vector*>>& usefulType,
+            std::vector<std::vector<std::vector<std::vector<uint32_t>>>*>
+            timingStatus);
 
 private:
     // 用于生成一个预取对应的Prefetch Info的Index
@@ -159,10 +183,10 @@ private:
 
 private:
     // 表示当前是否实际有效
-    const bool valid_;
+    const bool valid_ = false;
 
     // 当前表格对应的Cache指针
-    BaseCache* cache_;
+    BaseCache* cache_ = nullptr;
 
     // 依据地址到有用信息的映射，用于对Cache中的预取数据
     std::map<uint64_t, std::vector<PrefetchUsefulInfo*>> prefMap_;

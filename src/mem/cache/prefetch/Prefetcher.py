@@ -71,7 +71,7 @@ class BasePrefetcher(ClockedObject):
     # Get the block size from the parent (system)
     block_size = Param.Int(Parent.cache_line_size, "Block size in bytes")
 
-    ### 是否开启预取过滤
+    ### use prefetch filter
     enable_filter = Param.Bool(True, "If enable prefetch filter")
 
     on_miss = Param.Bool(False, "Only notify prefetcher on misses")

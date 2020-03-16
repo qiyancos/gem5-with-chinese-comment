@@ -37,19 +37,13 @@
 #include <list>
 #include <map>
 
-#include "base/statistics.hh""
+#include "base/statistics.hh"
 class BaseCache;
 
 namespace prefetch_filter {
 
-uint64_t generateCoreIDMap(std::set<uint8_t> cpuIds) {
-    uint64_t result = 0;
-    for (auto id : cpuIds) {
-        CHECK_ARGS_EXIT(id < 64, "CPU ID out of mapping bound");
-        result |= uint64_t(1) << id;
-    }
-    return result;
-}
+// 依据一组Cache指针生成对应的CPUID位向量
+uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches);
 
 // 数据类型
 enum DataType {NullType, Dmd, Pref};
@@ -60,25 +54,36 @@ struct DataTypeInfo {
     DataType source;
     // 被替换的数据是什么属性
     DataType target;
-}
+};
 
 // 一个预取信息项的索引和有效位数信息
-struct IndexInfo {
+class IndexInfo {
+public:
+    // 默认构造函数
+    IndexInfo () {}
+
+    // 构造函数
+    IndexInfo(const uint8_t index, const uint8_t bits) :
+            index_(index), bits_(bits) {}
+
     // 信息项索引
-    uint8_t index_;
+    uint8_t index_ = 0;
     // 信息项有效位数
-    uint8_t bits_;
+    uint8_t bits_ = 0;
 };
 
 // 记录字符串到信息项映射的数据
 extern std::map<std::string, IndexInfo> PrefInfoIndexMap;
 
+// 该变量只是用来避免unsed-variable提示
+extern std::vector<int> PrefInfoIndexes;
+
 // 注册一个新的信息项相关的函数
 int addNewInfo(const std::string& name, const uint8_t bits);
 
 // 注册新信息项的宏
-#define DEF_INFO(STRING, BITS) \
-    const int STRING = addNewInfo(#STRING, BITS);
+#define DEF_INFO(VARNAME, STRING, BITS) \
+    const int VARNAME = addNewInfo(#STRING, BITS);
 
 // 预取信息类，用来从预取器传递预取信息到PPFE中
 class PrefetchInfo {
@@ -97,14 +102,21 @@ public:
     int setInfo(const std::string& name, const uint32_t value);
     
     // 读取一个新的信息，读取成功返回1，失败则返回0，错误则返回-1
-    int getInfo(const uint8_t index, uint32_t* value);
+    int getInfo(const uint8_t index, uint32_t* value) const;
     
     // 读取一个新的信息，读取成功返回1，失败则返回0，错误则返回-1
-    int getInfo(const std::string& name, uint32_t* value);
+    int getInfo(const std::string& name, uint32_t* value) const;
 };
 
 // 预取分类的结构体
-struct PrefUsefulType {
+class PrefUsefulType {
+public:
+    PrefUsefulType(const int index, const std::string& name,
+            std::function<bool(const uint64_t&, const uint64_t&,
+            const uint64_t&,const uint64_t&)> judgeFunc) :
+            index_(index), name_(name), isType(judgeFunc) {}
+
+public:
     // 预取类型对应的Index
     const int index_;
 
@@ -112,33 +124,36 @@ struct PrefUsefulType {
     const std::string name_;
 
     // 进行判断的函数
-    std::funtion<bool(const uint64_t&, const uint64_t&, const uint64_t&,
+    std::function<bool(const uint64_t&, const uint64_t&, const uint64_t&,
             const uint64_t&)> isType;
-}
+};
 
 // 记录每一个预取分类的名称
 extern std::vector<PrefUsefulType> PrefUsefulTypeList;
 
 // 注册一个新的信息项相关的函数
 int addNewPrefUsefulType(const std::string& name,
-        std::funtion<bool(const uint64_t&, const uint64_t&, const uint64_t&,
+        std::function<bool(const uint64_t&, const uint64_t&, const uint64_t&,
         const uint64_t&)> judgeFunc);
 
-#define POS_DEGREE_DIVIDE 4
-#define NEG_DEGREE_DIVIDE -4
+#define TOTAL_DEGREE 4
+#define PREF_DEGREE_1 4
+#define PREF_DEGREE_2 8
+#define PREF_DEGREE_3 12
 
 class PrefetchUsefulInfo {
 public:
-    enum
+    // 默认初始化函数
+    PrefetchUsefulInfo() {}
+    
     // 依据CPU的个数进行大小配置
     PrefetchUsefulInfo(BaseCache* srcCache, const uint64_t& index);
     
     // 更新一个预取有效命中，同时对命中统计数据进行更新
-    int updateUse(const std::set<uint8_t>& cpuIds,
-            std::vector<Stats::Vector*>& cacheStats);
+    int updateUse(const std::set<uint8_t>& cpuIds);
 
     // 更新一个预取有害命中
-    int updateHarm(const uint64_t& coreBitMap);
+    int updateHarm(const std::set<uint8_t>& cpuIds);
 
     // 添加当前预取在某一个Cache中的替换地址
     int addReplacedAddr(BaseCache* cache, const uint64_t& replacedAddr);
@@ -176,14 +191,14 @@ public:
         int crossCoreHarmCount_ = 0;
         
         // 该预取是否曾经被Demand命中过
-        const bool demandHit_ = false;
+        bool demandHit_ = false;
     } info_;
     
     // 发射当前预取的Cache等级
-    const BaseCache* srcCache_;
+    BaseCache* srcCache_ = nullptr;
 
     // 该信息对应的哈希索引
-    const uint64_t index_;
+    const uint64_t index_ = 0;
 
 private:
     // 当前预取对应的替换数据地址，考虑到预取的贯穿效应，

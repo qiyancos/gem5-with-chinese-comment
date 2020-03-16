@@ -59,9 +59,16 @@ class QueuedPrefetcher : public BasePrefetcher
     uint64_t recentTriggerPC_[2] {0};
 
     /// 对AddrPriority进行修改，以获得额外的信息，修改不影响原生预取结构
-    struct AddrPriority {
-        Addr fisrt;
+    class AddrPriority {
+    public:
+        AddrPriority(const Addr & addr, const int32_t& prio) :
+                first(addr), second(prio) {}
+        
+        // 地址
+        Addr first;
+        // 优先级大小
         int32_t second;
+        // 预取相关的信息
         prefetch_filter::PrefetchInfo info_;
     };
 

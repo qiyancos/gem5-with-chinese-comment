@@ -40,7 +40,7 @@ class SaturatedCounter {
 public:
     // 赋值
     template<class T>
-    int& operator= (const T& b) {
+    SaturatedCounter& operator= (const T& b) {
         // 说明一下可能的类型情况
         // 输入是uint64_t，比较会转换为uint64_t比较，不会出错
         // 输入是int64_t，比较会转换为int64_t比较，不会出错
@@ -54,134 +54,184 @@ public:
         } else {
             value_ = b;
         }
-        return value_;
+        return *this;
     }
-
+    
+    SaturatedCounter& operator= (const SaturatedCounter& b) {
+        int bValue = b.getValue();
+        if (bValue >= maxValue_) {
+            value_ = maxValue_;
+        } else if (bValue <= minValue_) {
+            value_ = minValue_;
+        } else {
+            value_ = bValue;
+        }
+        return *this;
+    }
+    
     // 加法
     template<class T>
-    int& operator+ (const T& b) {
+    SaturatedCounter operator+ (const T& b) const {
         // 扩展数值范围避免计算错误
         int64_t temp = value_;
+        SaturatedCounter tempCounter;
         temp += b;
         if (temp > maxValue_) {
-            return maxValue_;
+            temp = maxValue_;
         } else if (temp < minValue_) {
-            return minValue_;
-        } else {
-            return temp;
+            temp = minValue_;
         }
+        tempCounter.init(bits_, temp);
+        return tempCounter;
     }
 
+    SaturatedCounter operator+ (const SaturatedCounter& b) const {
+        int64_t temp = value_;
+        SaturatedCounter tempCounter;
+        int bValue = b.getValue();
+        temp += bValue;
+        if (temp > maxValue_) {
+            temp = maxValue_;
+        } else if (temp < minValue_) {
+            temp = minValue_;
+        }
+        tempCounter.init(bits_, temp);
+        return tempCounter;
+    }
+    
     // 减法
     template<class T>
-    int& operator- (const T& b) {
+    SaturatedCounter operator- (const T& b) const {
         return *this + (-b);
     }
 
-    // 格式自动转换
-    template<class T>
-    const T operator() {
-        // return static_cast<T>(value_);
-        // 使用默认提供的转换函数处理
-        return value_;
+    SaturatedCounter operator- (const SaturatedCounter& b) const {
+        int bValue = b.getValue();
+        return *this + (-bValue);
     }
+
+    // 格式自动转换
+    #define TRANS_TYPE(Type) \
+        operator Type() { \
+            return value_; \
+        }
+
+    TRANS_TYPE(int8_t)
+    TRANS_TYPE(uint8_t)
+    TRANS_TYPE(int16_t)
+    TRANS_TYPE(uint16_t)
+    TRANS_TYPE(int32_t)
+    TRANS_TYPE(uint32_t)
+    TRANS_TYPE(int64_t)
+    TRANS_TYPE(uint64_t)
+    TRANS_TYPE(float)
+    TRANS_TYPE(double)
 
     // 自增
     template<class T>
-    int& operator+= (const T& b) {
-        value_ = *this + b;
-        return value_;
+    SaturatedCounter operator+= (const T& b) const {
+        return *this + b;
     }
     
     // 后递增
-    template<class T>
-    const int operator++ (const T& b) {
-        int value = value_;
+    SaturatedCounter operator++ (int) {
+        SaturatedCounter temp = *this;
         value_ = *this + 1;
-        return value;
+        return temp;
     }
     
     // 前递增
-    template<class T>
-    int& operator++ () {
+    SaturatedCounter operator++ () {
         value_ = *this + 1;
-        return value_;
+        return *this;
     }
     
     // 自减
     template<class T>
-    int& operator-= (const T& b) {
-        value_ = *this - b;
-        return value_;
+    SaturatedCounter operator-= (const T& b) const {
+        return *this - b;
     }
     
     // 后递减
-    template<class T>
-    const int operator-- (const T& b) {
-        int value = value_;
+    SaturatedCounter operator-- (int) {
+        SaturatedCounter temp = *this;
         value_ = *this - 1;
-        return value;
+        return temp;
     }
     
     // 前递减
-    template<class T>
-    int& operator-- () {
+    SaturatedCounter operator-- () {
         value_ = *this - 1;
-        return value_;
+        return *this;
     }
 
     // 不等于
     template<class T>
-    const bool operator!= (const T& b) {
-        return value_ != b;
+    bool operator!= (const T& b) const {
+        return *this - b != 0;
     }
     
     // 等于
     template<class T>
-    const bool operator== (const T& b) {
-        return value_ == b;
+    bool operator== (const T& b) const {
+        return *this - b == 0;
     }
 
     // 大于
     template<class T>
-    const bool operator> (const T& b) {
-        return value_ > b;
+    bool operator> (const T& b) const {
+        return *this - b > 0;
     }
 
     // 大于等于
     template<class T>
-    const bool operator>= (const T& b) {
-        return value_ >= b;
+    bool operator>= (const T& b) const {
+        return *this - b >= 0;
     }
 
     // 小于
     template<class T>
-    const bool operator< (const T& b) {
-        return value_ < b;
+    bool operator< (const T& b) const {
+        return *this - b < 0;
     }
 
     // 小于等于
     template<class T>
-    const bool operator<= (const T& b) {
-        return value_ <= b;
+    bool operator<= (const T& b) const {
+        return *this - b <= 0;
     }
 
-    // 饱和计数器的位数
-    uint8_t bits_;
-
-private:
     // 构造函数
-    SaturatedCounter(const uint8_t bits);
+    SaturatedCounter() : bits_(0), maxValue_(0) {};
+
+    // 构造函数
+    explicit SaturatedCounter(const uint8_t bits);
 
     // 构造函数（带初始化数值）
     SaturatedCounter(const uint8_t bits, const int value);
 
+    // 复制构造函数
+    SaturatedCounter(const SaturatedCounter &) = default;
+
+    // 右值复制构造函数
+    SaturatedCounter(SaturatedCounter&&) = default;
+    
     // 初始化函数
     int init(const uint8_t bits);
     
     // 初始化函数（带初始化数值）
     int init(const uint8_t bits, const int value);
     
+    // 用于获取实际数值
+    int getValue() const {
+        return value_;
+    }
+
+public:
+    // 饱和计数器的位数
+    uint8_t bits_;
+
+private:
     // 最小值
     const int minValue_ = 0;
 

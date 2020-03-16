@@ -32,6 +32,9 @@
 #define __MEM_CACHE_PREFETCH_FILTER_PROGRAM_HELPER_HH__
 
 #include <cstdint>
+#include <string>
+
+#include <stdio.h>
 
 namespace prefetch_filter {
 

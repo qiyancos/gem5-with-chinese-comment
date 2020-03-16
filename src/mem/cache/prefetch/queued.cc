@@ -45,6 +45,8 @@
 #include "base/trace.hh"
 #include "debug/HWPrefetch.hh"
 #include "mem/request.hh"
+#include "mem/cache/base.hh"
+#include "mem/cache/prefetch_filter/base.hh"
 #include "params/QueuedPrefetcher.hh"
 
 QueuedPrefetcher::QueuedPrefetcher(const QueuedPrefetcherParams *p)
@@ -103,27 +105,30 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
             DPRINTF(HWPrefetch, "Found a pf candidate addr: %#x, "
                     "inserting into prefetch queue.\n", new_pfi.getAddr());
 
-            /// 插入单个预取，这里会进行过滤，但是信息只包括了地址
-            prefetch_filter::PrefetchInfo prefInfo = addr_prio.info_;
-            prefInfo.setInfo("BPC1", pkt->recentBranchPC_.front());
-            prefInfo.setInfo("BPC2", *(pkt->recentBranchPC_.begin()++));
-            prefInfo.setInfo("BPC3", pkt->recentBranchPC_.back());
-            prefInfo.setInfo("PC1", pkt->req->getPC());
-            prefInfo.setInfo("PC2", recentTriggerPC[0]);
-            prefInfo.setInfo("PC3", recentTriggerPC[1]);
-            prefInfo.setInfo("Address", pkt->addr);
-            /// CoreID只适合于一般的Cache结构，不适合于SW结构
-            prefInfo.setInfo("CoreID",
-                    *(pkt->caches_.front()->cpuIds_.front()));
-            prefInfo.setInfo("CacheIDMap",
-                    prefetch_filter::generateCoreIDMap(pkt->cpuIds_));
-            prefInfo.setInfo("PrefetcherID", cache->prefetcherId_);
-            
             /// 依据是否开启了预取过滤选择是否进行过滤
-            if (enablePrefetchFilter_) {
+            if (enablePrefetchFilter_ && cache->prefetchFilter_) {
+                /// 插入单个预取，这里会进行过滤，但是信息只包括了地址
+                prefetch_filter::PrefetchInfo prefInfo = addr_prio.info_;
+                prefInfo.setInfo("BPC1", pkt->recentBranchPC_.front());
+                prefInfo.setInfo("BPC2>>1",
+                        (*(pkt->recentBranchPC_.begin()++)) >> 1);
+                prefInfo.setInfo("BPC3>>2", pkt->recentBranchPC_.back() >> 2);
+                prefInfo.setInfo("PC1", pkt->req->getPC());
+                prefInfo.setInfo("PC2>>1", recentTriggerPC_[0] >> 1);
+                prefInfo.setInfo("PC3>>2", recentTriggerPC_[1] >> 2);
+                prefInfo.setInfo("Address", pkt->getAddr());
+                prefInfo.setInfo("PageAddress",
+                        pkt->getAddr() >> pageOffsetBits_);
+                /// CoreID只适合于一般的Cache结构，不适合于SW结构
+                prefInfo.setInfo("CoreID",
+                        *((*pkt->caches_.begin())->cpuIds_.begin()));
+                prefInfo.setInfo("CacheIDMap",
+                        prefetch_filter::generateCoreIDMap(pkt->caches_));
+                prefInfo.setInfo("PrefetcherID", cache->prefetcherId_);
+                
                 uint8_t targetCacheLevel =
                         cache->prefetchFilter_->filterPrefetch(
-                        this, addr_prio.first, prefInfo);
+                        cache, addr_prio.first, prefInfo);
                 if (targetCacheLevel <= 
                         cache->prefetchFilter_->maxCacheLevel_) {
                     // Create and insert the request
@@ -131,7 +136,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                     havePrefetch = true;
                 }
             } else {
-                insert(pkt, new_pfi, addr_prio.second, targetCacheLevel);
+                insert(pkt, new_pfi, addr_prio.second, 255);
             }
         } else {
             // Record the number of page crossing prefetches generate
@@ -141,8 +146,8 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
     }
     /// 如果生成的预取，则会更新触发预取的PC
     if (havePrefetch) {
-        recentTriggerPC[1] = recentTriggerPC[0];
-        recentTriggerPC[0] = pkt->req->getPC();
+        recentTriggerPC_[1] = recentTriggerPC_[0];
+        recentTriggerPC_[0] = pkt->req->getPC();
     }
 }
 
@@ -278,7 +283,7 @@ QueuedPrefetcher::insert(const PacketPtr &pkt, PrefetchInfo &new_pfi,
     PacketPtr pf_pkt = new Packet(pf_req, MemCmd::HardPFReq);
     pf_pkt->allocate();
     /// 设置目标Cache等级
-    pf_pkt->targetCacheLevel_ = targetCacheLevel_;
+    pf_pkt->targetCacheLevel_ = targetCacheLevel;
 
     if (tagPrefetch && new_pfi.hasPC()) {
         // Tag prefetch packet with  accessing pc
