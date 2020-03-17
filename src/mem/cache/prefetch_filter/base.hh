@@ -70,8 +70,8 @@ public:
     // 析构函数
     virtual ~BasePrefetchFilter() {}
 
-    // 获取最新的实例
-    virtual int updateInstance(BasePrefetchFilter** ptr);
+    // 创建全局唯一实例
+    static BasePrefetchFilter* create(const BasePrefetchFilterParams *p);
 
     // 添加一个Cache到Filter中来
     int addCache(BaseCache* newCache);
@@ -95,12 +95,15 @@ public:
     // 对一个预取到的数据进行Invalid的时候需要执行
     virtual int invalidatePrefetch(BaseCache* cache, const uint64_t& prefAddr);
     
+    // 默认的初始化函数
+    void init() override;
+
     // 注册统计变量
     void regStats() override;
-
+    
 protected:
     // 用于生成当前类型实例的hash数值
-    int genHash(const std::string& name);
+    static int genHash(const std::string& name);
 
 private:
     // 进行基本结构的初始化
@@ -111,7 +114,7 @@ private:
 
 public:
     // 用于处理未启用的统计变量
-    Stats::Vector emptyStatsVar_;
+    Stats::Vector* emptyStatsVar_;
     
     // Demand Request总个数
     Stats::Vector* demandReqHitTotal_;
@@ -165,6 +168,16 @@ public:
     // 时间维度的统计计数数据，每一个CPU都有一个
     std::vector<TimingStats> timingStats_;
 
+public:
+    // 提取缓存行地址对应的Mask
+    static uint64_t cacheLineAddrMask_;
+
+    // 缓存行内偏移地址对应的Bits
+    static uint8_t cacheLineOffsetBits_;
+    
+    // 当前系统下的最高缓存等级
+    uint8_t maxCacheLevel_ = 0;
+
 private:
     // 基于时间维度的统计
     const uint64_t statsPeriod_;
@@ -178,23 +191,19 @@ private:
     // 是否开启统计操作，如果不做统计，则所有统计函数将会无效
     const bool enableStats_ = 0;
     
+protected:
     // 全局唯一的实例指针
     static BasePrefetchFilter* onlyInstance_;
     
     // 用于区分不同类型过滤器的哈希数值
     static int64_t typeHash_;
 
-public:
-    // 提取缓存行地址对应的Mask
-    static uint64_t cacheLineAddrMask_;
+    // 用于判断是否进行了初始化
+    static bool initFlag_;
 
-    // 缓存行内偏移地址对应的Bits
-    static uint8_t cacheLineOffsetBits_;
-    
-    // 当前系统下的最高缓存等级
-    uint8_t maxCacheLevel_ = 0;
+    // 用于判断是否进行了注册
+    static bool regFlag_;
 
-protected:
     // 是否开启过滤器，如果不开启，则所有预取都不会改变
     const bool enableFilter_ = 0;
     

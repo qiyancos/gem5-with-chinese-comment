@@ -73,11 +73,12 @@ int Feature::init(const std::string& feature) {
                 "Unknow feature name \"%s\" in \"%s\"", wordList[i].c_str(),
                 feature.c_str());
         infoIndexList_.push_back(infoPair->second.index_);
-        name_ = name_ + wordList[i] + "_";
+        name_ = name_ + infoPair->second.varName_ + "_";
     }
-    name_ = name_.substr(0, name_.size() - 1);
     startBits_ = atoi(wordList[wordList.size() - 2].c_str());
+    name_ = name_ + wordList[wordList.size() - 2] + "_";
     bits_ = atoi(wordList.back().c_str());
+    name_ = name_ + wordList.back();
     return 0;
 }
     
@@ -287,6 +288,7 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
             "Failed to initiate reject table for init");
     initFailFlag_ |= tempFlag < 0;
     
+    LLCTable.featureTable_.resize(featureList_.size());
     for (int j = 0; j < featureList_.size(); j++) {
         CHECK_WARN((tempFlag = LLCTable.featureTable_[j].init(
                 int8_t(-1), featureList_[j].getSize(), 1,
@@ -312,14 +314,15 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
     initFailFlag_ |= tempFlag < 0;
 }
 
-int PerceptronPrefetchFilter::updateInstance(BasePrefetchFilter** ptr) {
+PerceptronPrefetchFilter* PerceptronPrefetchFilter::create(
+        const PerceptronPrefetchFilterParams *p) {
     // 生成hash数值
     CHECK_RET_EXIT(BasePrefetchFilter::genHash("PerceptronPrefetchFilter"),
             "Failed to generate hash for a specific prefetch filter");
-    // 调用父类函数更新指针
-    CHECK_RET_EXIT(BasePrefetchFilter::updateInstance(ptr),
-            "Failed to update pointer with global only instance");
-    return 0;
+    if (!onlyInstance_) {
+        onlyInstance_ = new PerceptronPrefetchFilter(p);
+    }
+    return dynamic_cast<PerceptronPrefetchFilter*>(onlyInstance_);
 }
 
 int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
@@ -584,8 +587,8 @@ int PerceptronPrefetchFilter::initThis() {
                             sample));
                     for (int j = 0; j < cpuSize; j++) {
                         workTables_.back()[j].name_ = cpuSharedTable_ ?
-                                BaseCache::levelName_[j] + "_cpu_shared" :
-                                BaseCache::levelName_[j] + "_cpu_" +
+                                BaseCache::levelName_[i] + "_cpu_shared" :
+                                BaseCache::levelName_[i] + "_cpu_" +
                                 std::to_string(j);
                     }
                 } else {
@@ -634,6 +637,10 @@ int PerceptronPrefetchFilter::initThis() {
     }
 
     // 初始化部分统计变量
+    prefAccepted_.resize(cacheCount);
+    prefRejected_.resize(cacheCount);
+    prefThreshing_.resize(cacheCount);
+    prefNotTrained_.resize(cacheCount);
     for (int i = 0; i < cacheCount; i++) {
         prefTarget_.push_back(usePref_[i] ?
                 std::vector<Stats::Vector*>(cacheCount) :
@@ -839,41 +846,53 @@ int PerceptronPrefetchFilter::updateWorkTableStats(Tables& workTable,
     return 0;
 }
 
+void PerceptronPrefetchFilter::init() {
+    if (initFlag_) {
+        return;
+    }
+    BasePrefetchFilter::init();
+    // 初始化表格
+    CHECK_RET_EXIT(initThis(), "Failed to initiate PPF.");
+    initFlag_ = true;
+}
+
 void PerceptronPrefetchFilter::regStats() {
+    // 如果已经注册则不再注册
+    if (regFlag_) {
+        return;
+    }
+
     // 执行父类的统计数据初始化操作
     BasePrefetchFilter::regStats();
    
-    // 初始化表格
-    CHECK_RET_EXIT(initThis(), "Failed to initiate PPF.");
-    
     uint8_t cacheCount = caches_.size();
     for (int i = 0; i < cacheCount; i++) {
         const std::string srcCacheName = BaseCache::levelName_[i];
         if (usePref_[i]) {
             prefAccepted_[i] = new Stats::Vector();
-            prefAccepted_[i]
-                    ->name(name() + ".accepted_prefetch_from_" + srcCacheName)
+            prefAccepted_[i]->init(numCpus_)
+                    .name(name() + ".accepted_prefetch_from_" + srcCacheName)
                     .desc(std::string("Number of prefetch requests from ") +
                             srcCacheName + " accepted.")
                     .flags(total);
             
             prefRejected_[i] = new Stats::Vector();
-            prefRejected_[i]
-                    ->name(name() + ".rejected_prefetch_from_" + srcCacheName)
+            prefRejected_[i]->init(numCpus_)
+                    .name(name() + ".rejected_prefetch_from_" + srcCacheName)
                     .desc(std::string("Number of prefetch requests from ") +
                             srcCacheName + " rejected.")
                     .flags(total);
             
             prefThreshing_[i] = new Stats::Vector();
-            prefThreshing_[i]
-                    ->name(name() + ".threshing_prefetch_from_" + srcCacheName)
+            prefThreshing_[i]->init(numCpus_)
+                    .name(name() + ".threshing_prefetch_from_" + srcCacheName)
                     .desc(std::string("Number of threshing prefetch requests "
                             "from ") + srcCacheName + ".")
                     .flags(total);
             
             prefNotTrained_[i] = new Stats::Vector();
-            prefNotTrained_[i]
-                    ->name(name() + ".untrained_prefetch_from_" + srcCacheName)
+            prefNotTrained_[i]->init(numCpus_)
+                    .name(name() + ".untrained_prefetch_from_" + srcCacheName)
                     .desc(std::string("Number of prefetch requests not trained"
                             "from ") + srcCacheName + ".")
                     .flags(total);
@@ -881,8 +900,8 @@ void PerceptronPrefetchFilter::regStats() {
             for (int j = 0; j < cacheCount; j++) {
                 const std::string tgtCacheName = BaseCache::levelName_[j];
                 prefTarget_[i][j] = new Stats::Vector();
-                prefTarget_[i][j]
-                        ->name(name() + ".prefetch_sent_to_" + tgtCacheName +
+                prefTarget_[i][j]->init(numCpus_)
+                        .name(name() + ".prefetch_sent_to_" + tgtCacheName +
                                 "_from_" + srcCacheName)
                         .desc(std::string(
                                 "Number of prefetch requests sent to")
@@ -902,10 +921,10 @@ void PerceptronPrefetchFilter::regStats() {
                 }
             }
         } else {
-            prefAccepted_[i] = &emptyStatsVar_;
-            prefRejected_[i] = &emptyStatsVar_;
-            prefThreshing_[i] = &emptyStatsVar_;
-            prefNotTrained_[i] = &emptyStatsVar_;
+            prefAccepted_[i] = emptyStatsVar_;
+            prefRejected_[i] = emptyStatsVar_;
+            prefThreshing_[i] = emptyStatsVar_;
+            prefNotTrained_[i] = emptyStatsVar_;
         }
     }
     
@@ -921,8 +940,8 @@ void PerceptronPrefetchFilter::regStats() {
             workTable.statsIndex_ = i;
             for (int j = 0; j < featureList_.size(); j++) {
                 featureWeightFrequency_[i][j] = new Stats::Vector();
-                featureWeightFrequency_[i][j]
-                        ->name(name() + ".feature_" + featureList_[i].name_ + 
+                featureWeightFrequency_[i][j]->init(weightNum)
+                        .name(name() + ".feature_" + featureList_[j].name_ + 
                                 "_weight_in_" + workTable.name_)
                         .desc(std::string("Time of appearence of a specific") +
                                 " weight for a feature.")
@@ -935,8 +954,11 @@ void PerceptronPrefetchFilter::regStats() {
             i++;
         }
     }
+
+    // 标记已注册状态
+    regFlag_ = true;
 }
 
 PerceptronPrefetchFilter* PerceptronPrefetchFilterParams::create() {
-    return new PerceptronPrefetchFilter(this);
+    return PerceptronPrefetchFilter::create(this);
 }

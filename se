@@ -83,7 +83,7 @@ setGem5(){
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
-        numCpus="1" # []
+        numCpus="16" # []
         # number of cpu you want to run with
 
     enableMem="Yes"

@@ -121,11 +121,11 @@ BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
       addrRanges(p->addr_ranges.begin(), p->addr_ranges.end()),
       system(p->system)
 {
-    // 只针对标准化的CPU Cache进行初始化
+    /// 只针对标准化的CPU Cache进行初始化
     if (cacheLevel_ != 255) {
         if (prefetchFilter_) {
             /// 更新全局实例化指针
-            prefetchFilter_->updateInstance(&prefetchFilter_);
+            prefetchFilter_->addCache(this);
         }
         /// 初始化CacheID
         prefetcherId_ = prefetcher ? initPrefetcherCount_++ : 255;
@@ -141,7 +141,7 @@ BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
                 std::to_string(cacheLevel_) + "Cache"; break;
         }
     } else if (prefetchFilter_) {
-        delete prefetchFilter_;
+        /// 对于非CPU的Cache删除该结构
         prefetchFilter_ = nullptr;
     }
 

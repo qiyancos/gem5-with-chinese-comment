@@ -63,13 +63,18 @@ public:
     IndexInfo () {}
 
     // 构造函数
-    IndexInfo(const uint8_t index, const uint8_t bits) :
-            index_(index), bits_(bits) {}
+    IndexInfo(const uint8_t index, const uint8_t bits,
+            const std::string& varName) :
+            index_(index), bits_(bits), varName_(varName) {}
 
     // 信息项索引
     uint8_t index_ = 0;
+
     // 信息项有效位数
     uint8_t bits_ = 0;
+    
+    // 信息项的变量名称
+    std::string varName_;
 };
 
 // 记录字符串到信息项映射的数据
@@ -79,11 +84,12 @@ extern std::map<std::string, IndexInfo> PrefInfoIndexMap;
 extern std::vector<int> PrefInfoIndexes;
 
 // 注册一个新的信息项相关的函数
-int addNewInfo(const std::string& name, const uint8_t bits);
+int addNewInfo(const std::string& name, const std::string& varName,
+        const uint8_t bits);
 
 // 注册新信息项的宏
 #define DEF_INFO(VARNAME, STRING, BITS) \
-    const int VARNAME = addNewInfo(#STRING, BITS);
+    const int VARNAME = addNewInfo(#STRING, #VARNAME, BITS);
 
 // 预取信息类，用来从预取器传递预取信息到PPFE中
 class PrefetchInfo {

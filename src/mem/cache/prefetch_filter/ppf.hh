@@ -174,8 +174,9 @@ public:
     // 析构函数
     ~PerceptronPrefetchFilter() {}
     
-    // 更新实例为全局实例
-    int updateInstance(BasePrefetchFilter** ptr) override;
+    // 创建全局唯一实例
+    static PerceptronPrefetchFilter* create(
+            const PerceptronPrefetchFilterParams *p);
 
     // 通知发生了Hit事件
     int notifyCacheHit(BaseCache* cache, const PacketPtr& pkt,
@@ -196,6 +197,9 @@ public:
     // 删除一个被无效化的预取
     int invalidatePrefetch(BaseCache* cache, const uint64_t& prefAddr);
     
+    // 默认初始化函数
+    void init() override;
+
     // 注册统计变量
     void regStats() override;
 

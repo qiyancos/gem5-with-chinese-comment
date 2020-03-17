@@ -35,7 +35,7 @@ from m5.objects.ClockedObject import ClockedObject
 class BasePrefetchFilter(ClockedObject):
     type = 'BasePrefetchFilter'
     cxx_header = "mem/cache/prefetch_filter/base.hh"
-    #sys = Param.System(Parent.any, "System this prefetcher belongs to")
+    sys = Param.System(Parent.any, "System this prefetcher belongs to")
 
     enable_filter = Param.Bool(True, "Whether to enable Filter Engine")
     enable_stats = Param.Bool(True, "Whether to enable Stats Engine")

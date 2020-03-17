@@ -49,9 +49,10 @@ uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches) {
 
 std::map<std::string, IndexInfo> PrefInfoIndexMap;
 
-int addNewInfo(const std::string& name, const uint8_t bits) {
+int addNewInfo(const std::string& name, const std::string& varName,
+        const uint8_t bits) {
     const uint8_t index = static_cast<uint8_t>(PrefInfoIndexMap.size());
-    PrefInfoIndexMap[name] = IndexInfo(index, bits);
+    PrefInfoIndexMap[name] = IndexInfo(index, bits, varName);
     return index;
 }
 
