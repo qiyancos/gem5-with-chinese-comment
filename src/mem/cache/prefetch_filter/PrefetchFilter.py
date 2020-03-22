@@ -76,15 +76,16 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
             "table")
     
     # Filter Setting
+    # Feature Table Setting
+    feature_weight_bits = Param.UInt8(4, "Number of bits of weight for a "
+            "feature")
+    feature_weight_init = VectorParam.UInt8([14, 10, 6], "Initiated value "
+            "for weight in differenct cache")
+
     # 0-L1ICache, 1-L1DCache, 2-L2Cache...n-LnCache
     prefetch_threshold = VectorParam.UInt16([12, 8, 4],
             "Thresholds for prefetch to different caches")
     
-    # Feature Table Setting
-    feature_weight_bits = Param.UInt8(4, "Number of bits of weight for a "
-            "feature")
-    feature_weight_init = Param.UInt8(4, "Initiated value for weight")
-
     # Feature: "key1 key2 key3 x n" means to extract n bits start from
     #          the xth bit (include xth bit) from '[key1]^[key2]^[key3]'
     #          as the feature index
@@ -114,7 +115,9 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
             "Default training step for all caches");
     useless_prefetch_training_step = Param.UInt8(1, "Punish useless prefetch "
             "if this number is set nozero")
-    training_step = VectorParam.UInt8([3, 2, 1],
+    miss_training_step = VectorParam.UInt8([3, 2, 1],
+            "Step for training of different cache feedback")
+    hit_training_step = VectorParam.UInt8([1, 2, 3],
             "Step for training of different cache feedback")
     
     # Harmful Table Setting

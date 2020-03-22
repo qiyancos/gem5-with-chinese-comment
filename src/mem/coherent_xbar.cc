@@ -49,6 +49,10 @@
  */
 
 #include "mem/coherent_xbar.hh"
+#include "mem/cache/base.hh"
+#include "mem/cache/prefetch_filter/base.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 #include "base/logging.hh"
 #include "base/trace.hh"
@@ -141,6 +145,24 @@ CoherentXBar::init()
 bool
 CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
 {
+    if (pkt->packetType_ == prefetch_filter::Pref) {
+        DEBUG_MEM("Xbar[%p] recv prefetch req @0x%lx [%s -> %s] from %s",
+                this, pkt->getAddr(),
+                BaseCache::levelName_[pkt->srcCacheLevel_].c_str(),
+                BaseCache::levelName_[pkt->targetCacheLevel_].c_str(),
+                BaseCache::levelName_[pkt->recentCache_->cacheLevel_].c_str());
+    }
+    
+    /// 该标志决定了当前处理的是不是一个降级预取
+    const bool needLevelDownPrefetchProcess = 
+            pkt->packetType_ == prefetch_filter::Pref &&
+            pkt->recentCache_->cacheLevel_ < pkt->targetCacheLevel_;
+
+    /*
+    const bool isLevelDownPrefetch = 
+            pkt->packetType_ == prefetch_filter::Pref &&
+            pkt->recentCache_->cacheLevel_ < pkt->targetCacheLevel_;
+    */
     // determine the source port based on the id
     SlavePort *src_port = slavePorts[slave_port_id];
 
@@ -297,7 +319,9 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
 
     if (snoopFilter && snoop_caches) {
         // Let the snoop filter know about the success of the send operation
-        snoopFilter->finishRequest(!success, addr, pkt->isSecure());
+        /// 对于降级预取，一定会删除对应的记录
+        snoopFilter->finishRequest(!success, addr, pkt->isSecure(),
+                needLevelDownPrefetchProcess);
     }
 
     // check if we were successful in sending the packet onwards
@@ -331,7 +355,9 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
             }
 
             // remember where to route the normal response to
-            if (expect_response || expect_snoop_resp) {
+            /// 对于一个降级预取，不会记录反馈需要使用的port id信息
+            if ((expect_response || expect_snoop_resp) &&
+                    !needLevelDownPrefetchProcess) {
                 assert(routeTo.find(pkt->req) == routeTo.end());
                 routeTo[pkt->req] = slave_port_id;
 
@@ -354,9 +380,10 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
         }
     }
 
-    if (sink_packet)
+    if (sink_packet) {
         // queue the packet for deletion
         pendingDelete.reset(pkt);
+    }
 
     // normally we respond to the packet we just received if we need to
     PacketPtr rsp_pkt = pkt;
@@ -439,10 +466,30 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
     // determine the source port based on the id
     MasterPort *src_port = masterPorts[master_port_id];
 
-    // determine the destination
     const auto route_lookup = routeTo.find(pkt->req);
-    assert(route_lookup != routeTo.end());
-    const PortID slave_port_id = route_lookup->second;
+    PortID slave_port_id = InvalidPortID;
+    if (pkt->packetType_ == prefetch_filter::Pref) {
+        DEBUG_MEM("Xbar[%p] recv prefetch resp @0x%lx [%s -> %s] from %s",
+                this, pkt->getAddr(),
+                BaseCache::levelName_[pkt->srcCacheLevel_].c_str(),
+                BaseCache::levelName_[pkt->targetCacheLevel_].c_str(),
+                BaseCache::levelName_[pkt->recentCache_->cacheLevel_].c_str());
+    }
+
+    if (pkt->packetType_ == prefetch_filter::Pref &&
+            pkt->recentCache_->cacheLevel_ == pkt->srcCacheLevel_) {
+            /// 如果是一个提升级别的预取，那么本地不会有记录，因此需要使用
+            /// 专门的函数获取相应的port id
+            std::vector<PortID> portIds;
+            BasePrefetchFilter::getCpuSideConnectedPortId(pkt, &portIds);
+            assert(portIds.size() == 1);
+            slave_port_id = portIds.front();
+    } else {
+        // determine the destination
+        assert(route_lookup != routeTo.end());
+        slave_port_id = route_lookup->second;
+    }
+
     assert(slave_port_id != InvalidPortID);
     assert(slave_port_id < respLayers.size());
 
@@ -483,7 +530,10 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
     slavePorts[slave_port_id]->schedTimingResp(pkt, curTick() + latency);
 
     // remove the request from the routing table
-    routeTo.erase(route_lookup);
+    /// 如果是一个提升级别的预取，那么不需要删除记录，因为本来就没有
+    if (route_lookup != routeTo.end()) {
+        routeTo.erase(route_lookup);
+    }
 
     respLayers[slave_port_id]->succeededTiming(packetFinishTime);
 

@@ -47,6 +47,7 @@
 #include "mem/request.hh"
 #include "mem/cache/base.hh"
 #include "mem/cache/prefetch_filter/base.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 #include "params/QueuedPrefetcher.hh"
 
 QueuedPrefetcher::QueuedPrefetcher(const QueuedPrefetcherParams *p)
@@ -99,7 +100,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
         addr_prio.first = blockAddress(addr_prio.first);
 
         if (samePage(pfi.getAddr(), addr_prio.first)) {
-            PrefetchInfo new_pfi(pfi,addr_prio.first);
+            PrefetchInfo new_pfi(pfi, addr_prio.first);
 
             pfIdentified++;
             DPRINTF(HWPrefetch, "Found a pf candidate addr: %#x, "
@@ -122,7 +123,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                 /// CoreID只适合于一般的Cache结构，不适合于SW结构
                 prefInfo.setInfo("CoreID",
                         *((*pkt->caches_.begin())->cpuIds_.begin()));
-                prefInfo.setInfo("CacheIDMap",
+                prefInfo.setInfo("CoreIDMap",
                         prefetch_filter::generateCoreIDMap(pkt->caches_));
                 prefInfo.setInfo("PrefetcherID", cache->prefetcherId_);
                 
@@ -131,12 +132,36 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                         cache, addr_prio.first, prefInfo);
                 if (targetCacheLevel <= 
                         cache->prefetchFilter_->maxCacheLevel_) {
-                    // Create and insert the request
-                    insert(pkt, new_pfi, addr_prio.second, targetCacheLevel);
-                    havePrefetch = true;
+                    bool alreadySent = false;
+                    if (targetCacheLevel > cache->cacheLevel_) {
+                        /// 针对降级颠簸的查询
+                        for (auto addrPair : recentLevelDownPref_) {
+                            alreadySent |= (
+                                    addrPair.first == addr_prio.first &&
+                                    addrPair.second <= targetCacheLevel);
+                        }
+                        /// 针对降级颠簸的记录更新
+                        if (!alreadySent) {
+                            recentLevelDownPref_.pop_front();
+                            recentLevelDownPref_.push_back(
+                                    std::pair<Addr, uint8_t>(addr_prio.first,
+                                    targetCacheLevel));
+                        }
+                    }
+                    /// 只有不属于降级预取颠簸才会正确处理
+                    if (!alreadySent) {
+                        // Create and insert the request
+                        insert(pkt, new_pfi, addr_prio.second,
+                                targetCacheLevel);
+                        havePrefetch = true;
+                    } else {
+                        DEBUG_MEM("Level-down prefetch @0x%lx dismissed",
+                                addr_prio.first);
+                    }
                 }
             } else {
                 insert(pkt, new_pfi, addr_prio.second, 255);
+                havePrefetch = true;
             }
         } else {
             // Record the number of page crossing prefetches generate
@@ -194,6 +219,10 @@ QueuedPrefetcher::inPrefetch(const PrefetchInfo &pfi)
 void
 QueuedPrefetcher::regStats()
 {
+    /// 依据预取度初始化
+    assert(degree_ != 0);
+    recentLevelDownPref_.resize(degree_, std::pair<Addr, uint8_t>(0, 0));
+
     BasePrefetcher::regStats();
 
     pfIdentified
@@ -282,8 +311,13 @@ QueuedPrefetcher::insert(const PacketPtr &pkt, PrefetchInfo &new_pfi,
     pf_req->taskId(ContextSwitchTaskId::Prefetcher);
     PacketPtr pf_pkt = new Packet(pf_req, MemCmd::HardPFReq);
     pf_pkt->allocate();
-    /// 设置目标Cache等级
+    /// 添加关键的预取信息
+    pf_pkt->recentCache_ = cache;
+    pf_pkt->caches_.insert(cache);
+    pf_pkt->srcCacheLevel_ = cache->cacheLevel_;
     pf_pkt->targetCacheLevel_ = targetCacheLevel;
+    pf_pkt->packetType_ = prefetch_filter::Pref;
+    pf_pkt->recentBranchPC_ = pkt->recentBranchPC_;
 
     if (tagPrefetch && new_pfi.hasPC()) {
         // Tag prefetch packet with  accessing pc

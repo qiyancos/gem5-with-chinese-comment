@@ -71,43 +71,22 @@ public:
     
     // 加法
     template<class T>
-    SaturatedCounter operator+ (const T& b) const {
-        // 扩展数值范围避免计算错误
-        int64_t temp = value_;
-        SaturatedCounter tempCounter;
-        temp += b;
-        if (temp > maxValue_) {
-            temp = maxValue_;
-        } else if (temp < minValue_) {
-            temp = minValue_;
-        }
-        tempCounter.init(bits_, temp);
-        return tempCounter;
+    T operator+ (const T& b) const {
+        return value_ + b;
     }
 
-    SaturatedCounter operator+ (const SaturatedCounter& b) const {
-        int64_t temp = value_;
-        SaturatedCounter tempCounter;
-        int bValue = b.getValue();
-        temp += bValue;
-        if (temp > maxValue_) {
-            temp = maxValue_;
-        } else if (temp < minValue_) {
-            temp = minValue_;
-        }
-        tempCounter.init(bits_, temp);
-        return tempCounter;
+    int operator+ (const SaturatedCounter& b) const {
+        return value_ + b.getValue();
     }
     
     // 减法
     template<class T>
-    SaturatedCounter operator- (const T& b) const {
+    T operator- (const T& b) const {
         return *this + (-b);
     }
 
-    SaturatedCounter operator- (const SaturatedCounter& b) const {
-        int bValue = b.getValue();
-        return *this + (-bValue);
+    int operator- (const SaturatedCounter& b) const {
+        return *this + (-b.getValue());
     }
 
     // 格式自动转换
@@ -129,8 +108,9 @@ public:
 
     // 自增
     template<class T>
-    SaturatedCounter operator+= (const T& b) const {
-        return *this + b;
+    SaturatedCounter operator+= (const T& b) {
+        *this = *this + b;
+        return *this;
     }
     
     // 后递增
@@ -148,8 +128,9 @@ public:
     
     // 自减
     template<class T>
-    SaturatedCounter operator-= (const T& b) const {
-        return *this - b;
+    SaturatedCounter operator-= (const T& b) {
+        *this = *this - b;
+        return *this;
     }
     
     // 后递减

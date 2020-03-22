@@ -59,6 +59,7 @@
 #include "debug/Cache.hh"
 #include "mem/cache/base.hh"
 #include "mem/cache/prefetch_filter/pref_info.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 #include "mem/request.hh"
 #include "sim/core.hh"
 
@@ -67,6 +68,7 @@ MSHR::MSHR() : downstreamPending(false),
                postInvalidate(false), postDowngrade(false),
                wasWholeLineWrite(false), isForward(false)
 {
+    QueueEntry::isMSHR_ = true;
 }
 
 MSHR::TargetList::TargetList()
@@ -273,7 +275,13 @@ MSHR::allocate(Addr blk_addr, unsigned blk_size, PacketPtr target,
     // snoop (mem-side request), so set source according to request here
     Target::Source source = (target->cmd == MemCmd::HardPFReq) ?
         Target::FromPrefetcher : Target::FromCPU;
+    assert(targets.empty());
     targets.add(target, when_ready, _order, source, true, alloc_on_fill);
+    /// 如果是一个预取，那么会创建一个合并的Target
+    if (target->packetType_ == prefetch_filter::Pref) {
+        prefTarget_ = targets.front();
+        prefTarget_.pkt = new Packet(target, false, true);
+    }
 }
 
 
@@ -315,6 +323,10 @@ MSHR::deallocate()
     targets.resetFlags();
     assert(deferredTargets.isReset());
     inService = false;
+    if (prefTarget_.pkt) {
+        delete prefTarget_.pkt;
+        prefTarget_.pkt = nullptr;
+    }
 }
 
 /*
@@ -326,17 +338,40 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
 {
     /// 依据信息将新的Target合并到第一个里面
     PacketPtr firstPkt = targets.front().pkt;
-    /// 这里合并的请求只可能是Demand合并到Prefetch
-    firstPkt->packetType_ = prefetch_filter::Dmd;
-    /// 预取等级将会因为合并被删除
-    firstPkt->targetCacheLevel_ = 255;
-    /// 合并来源Cache
-    firstPkt->caches_.insert(pkt->caches_.begin(), pkt->caches_.end());
     /// 合并不会修改recentBrnachPC_，以最早的Target为准
 
+    if (firstPkt->packetType_ == prefetch_filter::Pref) {
+        if (pkt->packetType_ == prefetch_filter::Dmd) {
+            /// 这里合并的请求是Demand合并到Prefetch
+            firstPkt->packetType_ = prefetch_filter::Dmd;
+            /// 预取等级将会因为合并被删除
+            firstPkt->srcCacheLevel_ = 255;
+            firstPkt->targetCacheLevel_ = 255;
+            /// 预取备用MSHR指针将会因为合并被删除
+            firstPkt->mshr_ = nullptr;
+        } else {
+            /// 对于预取合并预取的情况，取最高层级作为预取属性
+            prefTarget_.pkt->mshr_ = firstPkt->mshr_ ?
+                    firstPkt->mshr_ : pkt->mshr_;
+            /// 等级合并均选择最高层级
+            prefTarget_.pkt->srcCacheLevel_ = std::min(firstPkt->srcCacheLevel_,
+                    pkt->srcCacheLevel_);
+            prefTarget_.pkt->targetCacheLevel_ =
+                    std::min(firstPkt->targetCacheLevel_,
+                    pkt->targetCacheLevel_);
+        }
+        /// 合并来源Cache
+        prefTarget_.pkt->caches_.insert(pkt->caches_.begin(),
+                pkt->caches_.end());
+    } else {
+        firstPkt->caches_.insert(pkt->caches_.begin(),
+                pkt->caches_.end());
+    }
+    
     // assume we'd never issue a prefetch when we've got an
     // outstanding miss
-    assert(pkt->cmd != MemCmd::HardPFReq);
+    /// 预取合并会保留所有的Target
+    // assert(pkt->cmd != MemCmd::HardPFReq);
 
     // if there's a request already in service for this MSHR, we will
     // have to defer the new target until after the response if any of
@@ -531,6 +566,15 @@ MSHR::extractServiceableTargets(PacketPtr pkt)
     targets.populateFlags();
 
     return ready_targets;
+}
+
+/// 新增的查询合并预取的函数
+MSHR::Target*
+MSHR::getPrefTarget() {
+    assert(hasTargets());
+    assert(targets.front().pkt->packetType_ == prefetch_filter::Pref);
+    assert(prefTarget_.pkt);
+    return &prefTarget_;
 }
 
 bool

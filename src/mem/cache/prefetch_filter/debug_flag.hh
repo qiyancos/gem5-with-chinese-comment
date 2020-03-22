@@ -1,6 +1,15 @@
 /*
  * Copyright (c) 2020 Peking University
- * All rights reserved.
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -28,15 +37,21 @@
  * Authors: Rock Lee
  */
 
-#ifndef __MEM_CACHE_PREFETCH_FILTER_PROGRAM_HELPER_HH__
-#define __MEM_CACHE_PREFETCH_FILTER_PROGRAM_HELPER_HH__
+#ifndef __MEM_CACHE_PREFETCH_FILTER_DEBUG_FLAG_HH__
+#define __MEM_CACHE_PREFETCH_FILTER_DEBUG_FLAG_HH__
 
 #include <cstdint>
 #include <string>
 
 #include <stdio.h>
 
-namespace prefetch_filter {
+// 可以在这里控制总开关，也可以在各自文件中添加
+#define USE_CHECK 1
+#define DEBUG_FILTER 1
+#define DEBUG_CACHE 1
+
+// 下面是带信息的检查宏函数
+#ifdef USE_CHECK
 
 #define CHECK_RET_EXIT(expr, info, ...) { \
     int errCode = expr; \
@@ -84,6 +99,53 @@ namespace prefetch_filter {
     } \
 }
 
-} // namespace prefetch_filter
+#else
 
-#endif // __MEM_CACHE_PREFETCH_FILTER_PROGRAM_HELPER_HH__
+#define CHECK_RET_EXIT(expr, info, ...) { expr; }
+
+#define CHECK_ARGS_EXIT(expr, info, ...) {}
+
+#define CHECK_RET(expr, info, ...) { expr; }
+
+#define CHECK_WARN(expr, info, ...) {}
+
+#define CHECK_ARGS(expr, info, ...) {}
+
+#endif
+
+// 下面是Prefetch Filter中的debug信息宏函数
+#ifdef DEBUG_FILTER
+
+#define DEBUG_PF(indentation, info, ...) { \
+    fprintf(stderr, "[Debug] "); \
+    for (int i = 0; i < indentation; i++) { \
+        fprintf(stderr, "    "); \
+    } \
+    fprintf(stderr, (std::string(">> ") + info + \
+                " In [%s:%d].\n").c_str(), ##__VA_ARGS__, \
+                __func__, __LINE__); \
+    fflush(stderr); \
+}
+
+#else
+
+#define DEBUG_PF(indentation, info, ...) {}
+
+#endif
+
+// 下面是其他结构相关处理信息的Debug函数
+
+#ifdef DEBUG_CACHE
+
+#define DEBUG_MEM(info, ...) { \
+    fprintf(stderr, (std::string("[Debug] -- ") + info + \
+                "\n").c_str(), ##__VA_ARGS__); \
+}
+
+#else
+
+#define DEBUG_MEM(info, ...) {}
+
+#endif
+
+#endif // __MEM_CACHE_PREFETCH_FILTER_DEBUG_FLAG_HH__

@@ -133,11 +133,11 @@ class MSHR : public QueueEntry, public Printable
             FromPrefetcher
         };
 
-        const Tick recvTime;  //!< Time when request was received (for stats)
-        const Tick readyTime; //!< Time when request is ready to be serviced
-        const Counter order;  //!< Global order (for memory consistency mgmt)
-        const PacketPtr pkt;  //!< Pending request packet.
         /// 去掉const属性以便进行修改
+        Tick recvTime;  //!< Time when request was received (for stats)
+        Tick readyTime; //!< Time when request is ready to be serviced
+        Counter order;  //!< Global order (for memory consistency mgmt)
+        PacketPtr pkt = nullptr;  //!< Pending request packet.
         Source source;  //!< Request from cpu, memory, or prefetcher?
 
         /**
@@ -157,8 +157,11 @@ class MSHR : public QueueEntry, public Printable
          */
         bool markedPending;
 
-        const bool allocOnFill;   //!< Should the response servicing this
+        bool allocOnFill;         //!< Should the response servicing this
                                   //!< target list allocate in the cache?
+
+        /// 添加一个空构造函数
+        Target() {}
 
         Target(PacketPtr _pkt, Tick _readyTime, Counter _order,
                Source _source, bool _markedPending, bool alloc_on_fill)
@@ -402,6 +405,9 @@ class MSHR : public QueueEntry, public Printable
 
     TargetList deferredTargets;
 
+    /// 该变量存放着合并预取的Target
+    Target prefTarget_;
+
   public:
     /**
      * Check if this MSHR contains only compatible writes, and if they
@@ -482,6 +488,9 @@ class MSHR : public QueueEntry, public Printable
         assert(hasTargets());
         return &targets.front();
     }
+
+    /// 添加该函数来直接获取预取相关的Target
+    Target *getPrefTarget();
 
     /**
      * Pop first target.

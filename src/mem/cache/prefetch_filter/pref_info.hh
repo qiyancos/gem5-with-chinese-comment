@@ -46,7 +46,10 @@ namespace prefetch_filter {
 uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches);
 
 // 数据类型
-enum DataType {NullType, Dmd, Pref};
+enum DataType {NullType, Dmd, Pref, PendingPref, PendingDmd};
+
+// 获取一个数据类型的字符串表示
+std::string getDataTypeString(const DataType type);
 
 // Miss以及Fill时候的信息
 struct DataTypeInfo {

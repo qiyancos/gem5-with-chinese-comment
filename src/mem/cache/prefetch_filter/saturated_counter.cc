@@ -29,7 +29,7 @@
  */
 
 #include "mem/cache/prefetch_filter/saturated_counter.hh"
-#include "mem/cache/prefetch_filter/program_helper.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 namespace prefetch_filter {
 

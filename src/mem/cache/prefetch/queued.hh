@@ -58,6 +58,12 @@ class QueuedPrefetcher : public BasePrefetcher
     /// 最近三次触发预取的PC地址
     uint64_t recentTriggerPC_[2] {0};
 
+    /// 预取度，由子类初始化
+    uint8_t degree_ = 0;
+
+    /// 为了避免降级预取的颠簸，这里会记录最发出的降级预取
+    std::list<std::pair<Addr, uint8_t>> recentLevelDownPref_;
+
     /// 对AddrPriority进行修改，以获得额外的信息，修改不影响原生预取结构
     class AddrPriority {
     public:

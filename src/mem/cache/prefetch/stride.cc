@@ -88,6 +88,8 @@ StridePrefetcher::StridePrefetcher(const StridePrefetcherParams *p)
       degree(p->degree),
       replacementPolicy(p->replacement_policy)
 {
+    /// 初始化父类的预取度
+    degree_ = degree;
     assert(isPowerOf2(pcTableSets));
 }
 

@@ -143,7 +143,9 @@ class SnoopFilter : public SimObject {
      * @param will_retry    This request will retry on this bus / snoop filter
      * @param addr          Packet address, merely for sanity checking
      */
-    void finishRequest(bool will_retry, Addr addr, bool is_secure);
+    /// 添加一个标志用于取消对降级预取的记录
+    void finishRequest(bool will_retry, Addr addr, bool is_secure,
+            const bool force = false);
 
     /**
      * Handle an incoming snoop from below (the master port). These
@@ -256,7 +258,9 @@ class SnoopFilter : public SimObject {
     /**
      * Removes snoop filter items which have no requesters and no holders.
      */
-    void eraseIfNullEntry(SnoopFilterCache::iterator& sf_it);
+    /// 添加一个额外的标志避免对降级预取的记录
+    void eraseIfNullEntry(SnoopFilterCache::iterator& sf_it,
+            const bool force = false);
 
     /** Simple hash set of cached addresses. */
     SnoopFilterCache cachedLocations;

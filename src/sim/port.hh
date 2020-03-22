@@ -65,14 +65,16 @@ class Port
     /** Descriptive name (for DPRINTF output) */
     std::string portName;
 
-  protected:
+  public:
 
     /**
      * A numeric identifier to distinguish ports in a vector, and set
      * to InvalidPortID in case this port is not part of a vector.
      */
+    /// 修改为public以便仅次那个访问处理
     const PortID id;
 
+  protected:
     /**
      * Abstract base class for ports
      *

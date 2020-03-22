@@ -70,6 +70,7 @@
 #include "mem/cache/write_queue_entry.hh"
 #include "mem/cache/prefetch_filter/base.hh"
 #include "mem/cache/prefetch_filter/pref_info.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 #include "mem/request.hh"
 #include "params/Cache.hh"
 
@@ -320,8 +321,7 @@ Cache::handleTimingReqHit(PacketPtr pkt, CacheBlk *blk, Tick request_time)
     if (prefetchFilter_ && blk) {
         Addr hitAddr = regenerateBlkAddr(blk);
         prefetch_filter::DataTypeInfo infoPair;
-        infoPair.source = pkt->cmd == MemCmd::HardPFReq ?
-                prefetch_filter::Pref : prefetch_filter::Dmd;
+        infoPair.source = pkt->packetType_;
         infoPair.target = blk->wasPrefetched() ? prefetch_filter::Pref :
                 prefetch_filter::Dmd;
         prefetchFilter_->notifyCacheHit(this, pkt, hitAddr, infoPair);
@@ -371,13 +371,12 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
     
     /// 进行发生Miss情况的训练操作
     if (prefetchFilter_) {
-        Addr combinedAddr = mshr ? mshr->getTarget()->pkt->getAddr() : 0;
+        PacketPtr combinedPkt = mshr ? mshr->getTarget()->pkt : nullptr;
         prefetch_filter::DataTypeInfo infoPair;
-        infoPair.source = pkt->cmd == MemCmd::HardPFReq ?
-                prefetch_filter::Pref : prefetch_filter::Dmd;
+        infoPair.source = pkt->packetType_;
         infoPair.target =  mshr ? mshr->getTarget()->pkt->packetType_ :
                 prefetch_filter::NullType;
-        prefetchFilter_->notifyCacheMiss(this, pkt, combinedAddr, infoPair);
+        prefetchFilter_->notifyCacheMiss(this, pkt, combinedPkt, infoPair);
     }
 
     // Software prefetch handling:
@@ -408,6 +407,7 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
                                                        pkt->req->masterId());
             pf = new Packet(req, pkt->cmd);
             /// 初始化新增信息，软件预取我们也当作Demand Request即可
+            pkt->recentCache_ = this;
             pkt->copyNewInfo(pkt);
             
             pf->allocate();
@@ -416,6 +416,8 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
         }
 
         pkt->makeTimingResponse();
+        /// 标记最近处理的Cache
+        pkt->recentCache_ = this;
 
         // request_time is used here, taking into account lat and the delay
         // charged if the packet comes from the xbar.
@@ -437,6 +439,14 @@ Cache::recvTimingReq(PacketPtr pkt)
         pkt->caches_.insert(this);
         pkt->packetType_ = prefetch_filter::Dmd;
         pkt->targetCacheLevel_ = 255;
+    }
+    
+    if (pkt->packetType_ == prefetch_filter::Pref) {
+        assert(pkt->srcCacheLevel_ != 255);
+        DEBUG_MEM("%s recv prefetch req @0x%lx [%s -> %s]",
+                BaseCache::levelName_[cacheLevel_].c_str(), pkt->getAddr(),
+                BaseCache::levelName_[pkt->srcCacheLevel_].c_str(),
+                BaseCache::levelName_[pkt->targetCacheLevel_].c_str());
     }
 
     DPRINTF(CacheTags, "%s tags:\n%s\n", __func__, tags->print());
@@ -474,6 +484,7 @@ Cache::recvTimingReq(PacketPtr pkt)
         // packet is merely used to co-ordinate state transitions
         /// 该构造函数自动添加新增变量信息
         Packet *snoop_pkt = new Packet(pkt, true, false);
+        snoop_pkt->recentCache_ = this;
 
         // also reset the bus time that the original packet has
         // not yet paid for
@@ -576,6 +587,7 @@ Cache::createMissPacket(PacketPtr cpu_pkt, CacheBlk *blk,
     
     /// 为新的Packet添加旧Packet的关键信息
     pkt->copyNewInfo(cpu_pkt);
+    pkt->recentCache_ = const_cast<Cache*>(this);
 
     // if there are upstream caches that have already marked the
     // packet as having sharers (not passing writable), pass that info
@@ -737,17 +749,38 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
         !mshr->wasWholeLineWrite;
 
     MSHR::TargetList targets = mshr->extractServiceableTargets(pkt);
+    
+    /// 添加两个变量说明当前的预取是一个提级/降级预取
+    PacketPtr prefPkt = targets.begin()->pkt;
+    const bool needLevelUpPrefProcess = prefPkt->packetType_ ==
+            prefetch_filter::Pref && cacheLevel_ < prefPkt->srcCacheLevel_ &&
+            cacheLevel_ <= prefPkt->targetCacheLevel_;
+    
     for (auto &target: targets) {
-        Packet *tgt_pkt = target.pkt;
+        PacketPtr tgt_pkt = target.pkt;
+        if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
+            DEBUG_MEM("%s service packet[%p] @0x%lx [%s -> %s]",
+                    BaseCache::levelName_[cacheLevel_].c_str(),
+                    tgt_pkt, tgt_pkt->getAddr(),
+                    BaseCache::levelName_[tgt_pkt->srcCacheLevel_].c_str(),
+                    BaseCache::levelName_[tgt_pkt->targetCacheLevel_].c_str());
+        }
         switch (target.source) {
           case MSHR::Target::FromCPU:
-            /// 对于降级预取的情况，如果检查到当前级别就是目标级别
+            /// 对于降级/提级预取的情况，如果检查到当前级别就是目标级别
             /// 则会当作预取处理
-            if (tgt_pkt->packetType_ == prefetch_filter::Pref &&
-                    tgt_pkt->targetCacheLevel_ == cacheLevel_) {
-                target.source = MSHR::Target::FromPrefetcher;
-                delete tgt_pkt;
-                break;
+            if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
+                /// 标记被预取的状况
+                if (blk) {
+                    blk->status |= BlkHWPrefetched;
+                }
+                if (tgt_pkt->targetCacheLevel_ == cacheLevel_) {
+                    target.source = MSHR::Target::FromPrefetcher;
+                    if (!needLevelUpPrefProcess) {
+                        delete tgt_pkt;
+                    }
+                    break;
+                }
             }
             
             Tick completion_time;
@@ -786,19 +819,22 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                 if (transfer_offset < 0) {
                     transfer_offset += blkSize;
                 }
-
+                
                 // If not critical word (offset) return payloadDelay.
                 // responseLatency is the latency of the return path
                 // from lower level caches/memory to an upper level cache or
                 // the core.
+                
                 completion_time += clockEdge(responseLatency) +
                     (transfer_offset ? pkt->payloadDelay : 0);
-
+                
                 assert(!tgt_pkt->req->isUncacheable());
 
                 assert(tgt_pkt->req->masterId() < system->maxMasters());
+                
                 missLatency[tgt_pkt->cmdToIndex()][tgt_pkt->req->masterId()] +=
                     completion_time - target.recvTime;
+
             } else if (pkt->cmd == MemCmd::UpgradeFailResp) {
                 // failed StoreCond upgrade
                 assert(tgt_pkt->cmd == MemCmd::StoreCondReq ||
@@ -840,7 +876,12 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                 // carried over to cache above
                 tgt_pkt->copyResponderFlags(pkt);
             }
+            /// 对改为反馈的情况，需要修改为最近处理的Cache
             tgt_pkt->makeTimingResponse();
+            /// 更新反馈的处理Cache和临时MSHR
+            tgt_pkt->recentCache_ = this;
+            tgt_pkt->mshr_ = pkt->mshr_;
+
             // if this packet is an error copy that to the new packet
             if (is_error)
                 tgt_pkt->copyError(pkt);
@@ -855,6 +896,11 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             }
             // Reset the bus additional time as it is now accounted for
             tgt_pkt->headerDelay = tgt_pkt->payloadDelay = 0;
+            if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
+                DEBUG_MEM("%s send prefetch @0x%lx to port[%d]",
+                        BaseCache::levelName_[cacheLevel_].c_str(),
+                        tgt_pkt->getAddr(), cpuSidePort._baseMasterPort->id);
+            }
             cpuSidePort.schedTimingResp(tgt_pkt, completion_time);
             break;
 
@@ -896,10 +942,12 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
         // an invalidate response stemming from a write line request
         // should not invalidate the block, so check if the
         // invalidation should be discarded
-        if (is_invalidate || mshr->hasPostInvalidate()) {
-            invalidateBlock(blk);
-        } else if (mshr->hasPostDowngrade()) {
-            blk->status &= ~BlkWritable;
+        if (!needLevelUpPrefProcess) {
+            if (is_invalidate || mshr->hasPostInvalidate()) {
+                invalidateBlock(blk);
+            } else if (mshr->hasPostDowngrade()) {
+                blk->status &= ~BlkWritable;
+            }
         }
     }
 }
@@ -932,6 +980,7 @@ Cache::cleanEvictBlk(CacheBlk *blk)
 
     PacketPtr pkt = new Packet(req, MemCmd::CleanEvict);
     /// 初始化新增信息
+    pkt->recentCache_ = this;
     pkt->caches_.insert(this);
     pkt->packetType_ = prefetch_filter::NullType;
     pkt->targetCacheLevel_ = 255;
@@ -960,16 +1009,22 @@ Cache::doTimingSupplyResponse(PacketPtr req_pkt, const uint8_t *blk_data,
     // timing-mode snoop responses require a new packet, unless we
     // already made a copy...
     PacketPtr pkt = req_pkt;
-    if (!already_copied)
+    if (!already_copied) {
         // do not clear flags, and allocate space for data if the
         // packet needs it (the only packets that carry data are read
         // responses)
         /// 该构造函数会自动继承新增信息，无须修改
         pkt = new Packet(req_pkt, false, req_pkt->isRead());
+        pkt->recentCache_ = this;
+    }
 
     assert(req_pkt->req->isUncacheable() || req_pkt->isInvalidate() ||
            pkt->hasSharers());
     pkt->makeTimingResponse();
+    /// 标记最近处理的Cache
+    pkt->recentCache_ = this;
+    pkt->mshr_ = req_pkt->mshr_;
+
     if (pkt->isRead()) {
         pkt->setDataFromBlock(blk_data, blkSize);
     }
@@ -1374,6 +1429,14 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
 
     // use request from 1st target
     PacketPtr tgt_pkt = mshr->getTarget()->pkt;
+    
+    /// 如果是一个预取，选择合并后的Packet
+    if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
+        DEBUG_MEM("%s send MSHR packet[%p] @0x%lx",
+                BaseCache::levelName_[cacheLevel_].c_str(),
+                tgt_pkt, tgt_pkt->getAddr());
+        tgt_pkt = mshr->getPrefTarget()->pkt;
+    }
 
     if (tgt_pkt->cmd == MemCmd::HardPFReq && forwardSnoops) {
         DPRINTF(Cache, "%s: MSHR %s\n", __func__, tgt_pkt->print());
@@ -1436,6 +1499,8 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
             }
 
             // given that no response is expected, delete Request and Packet
+            /// 确保不会轻易删除合并的预取Packet
+            assert(tgt_pkt->packetType_ != prefetch_filter::Pref);
             delete tgt_pkt;
 
             return false;

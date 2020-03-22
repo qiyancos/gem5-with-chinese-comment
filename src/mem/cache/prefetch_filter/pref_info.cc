@@ -30,7 +30,7 @@
 
 #include "mem/cache/base.hh"
 #include "mem/cache/cache.hh"
-#include "mem/cache/prefetch_filter/program_helper.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 namespace prefetch_filter {
 
@@ -45,6 +45,17 @@ uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches) {
         result |= uint64_t(1) << id;
     }
     return result;
+}
+
+std::string getDataTypeString(const DataType type) {
+    switch(type) {
+    case NullType: return "NullType";
+    case Dmd: return "Demand";
+    case Pref: return "Prefetch";
+    case PendingPref: return "Pending Prefetch";
+    case PendingDmd: return "Pending Demand";
+    }
+    return "Unknown";
 }
 
 std::map<std::string, IndexInfo> PrefInfoIndexMap;
@@ -72,7 +83,8 @@ int PrefetchInfo::setInfo(const uint8_t index, const uint32_t value) {
     if (info_.size() != PrefInfoIndexMap.size()) {
         info_.resize(PrefInfoIndexMap.size(), 0);
     }
-    CHECK_ARGS(index < info_.size(), "Prefetch information index %u %s %d",
+    CHECK_ARGS(index < info_.size(),
+            "Prefetch information index %u %s %d",
             index, "out of bound", info_.size());
     info_[index] = value;
     valid_ |= uint64_t(1) << index;
@@ -80,9 +92,9 @@ int PrefetchInfo::setInfo(const uint8_t index, const uint32_t value) {
 }
 
 int PrefetchInfo::setInfo(const std::string& name, const uint32_t value) {
-    CHECK_RET(PrefInfoIndexMap.find(name) != PrefInfoIndexMap.end(),
+    CHECK_RET_EXIT(PrefInfoIndexMap.find(name) != PrefInfoIndexMap.end(),
             "Can not find info named as \"%s\"", name);
-    CHECK_RET(setInfo(PrefInfoIndexMap[name].index_, value),
+    CHECK_RET_EXIT(setInfo(PrefInfoIndexMap[name].index_, value),
             "Failed to set info with index");
     return 0;
 }

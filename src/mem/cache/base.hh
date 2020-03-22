@@ -331,10 +331,10 @@ class BaseCache : public MemObject
 
     };
 
+  public:
+    /// 修改为public以便获取连接的id信息
     CpuSidePort cpuSidePort;
     MemSidePort memSidePort;
-
-  public:
     
     /** Prefetcher */
     // 修改为public主要是用于filter判定预取器的设置情况
@@ -722,6 +722,7 @@ class BaseCache : public MemObject
      * @param allocate Whether to allocate a block or use the temp block
      * @return Pointer to the new cache block.
      */
+    /// 我们额外添加了一个对应的MSHR指针信息
     CacheBlk *handleFill(PacketPtr pkt, CacheBlk *blk,
                          PacketList &writebacks, bool allocate);
 

@@ -67,8 +67,11 @@ class QueueEntry : public Packet::SenderState
     template <class Entry>
     friend class Queue;
 
+  public:
+    /// 添加一个特殊的bit表示当前的Entry是不是一个MSHR
+    bool isMSHR_ = false;
+  
   protected:
-
     /** Tick when ready to issue */
     Tick readyTime;
 

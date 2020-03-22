@@ -72,6 +72,10 @@ public:
 
     // 创建全局唯一实例
     static BasePrefetchFilter* create(const BasePrefetchFilterParams *p);
+    
+    // 获取给定Cache连接的CPU侧连接的接口ID
+    static int getCpuSideConnectedPortId(PacketPtr pkt,
+            std::vector<int16_t>* portIds);
 
     // 添加一个Cache到Filter中来
     int addCache(BaseCache* newCache);
@@ -82,7 +86,7 @@ public:
     
     // 通知发生了Miss事件
     virtual int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
-            const uint64_t& combinedAddr, const DataTypeInfo& info);
+            const PacketPtr& combinedPkt, const DataTypeInfo& info);
     
     // 通知发生了Fill事件
     virtual int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
@@ -104,6 +108,9 @@ public:
 protected:
     // 用于生成当前类型实例的hash数值
     static int genHash(const std::string& name);
+    
+    // 删除和某一个预取相关的记录
+    int removePrefetch(BaseCache* cache, const uint64_t& prefAddr);
 
 private:
     // 进行基本结构的初始化
@@ -211,7 +218,7 @@ protected:
     std::map<BaseCache*, IdealPrefetchUsefulTable> usefulTable_;
     
     // 当前Filter负责监视的所有Cache指针
-    std::vector<std::vector<BaseCache*>> caches_;
+    static std::vector<std::vector<BaseCache*>> caches_;
     
     // 当前某一级缓存是否开启了预取
     std::vector<bool> usePref_;

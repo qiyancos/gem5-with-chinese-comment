@@ -43,6 +43,7 @@
  */
 
 #include "mem/snoop_filter.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 #include "base/logging.hh"
 #include "base/trace.hh"
@@ -50,10 +51,12 @@
 #include "sim/system.hh"
 
 void
-SnoopFilter::eraseIfNullEntry(SnoopFilterCache::iterator& sf_it)
+SnoopFilter::eraseIfNullEntry(SnoopFilterCache::iterator& sf_it,
+        const bool force)
 {
     SnoopItem& sf_item = sf_it->second;
-    if (!(sf_item.requested | sf_item.holder)) {
+    if (!(sf_item.requested | sf_item.holder) || force) {
+        DEBUG_MEM("SnoopFilter[%p] erase entry @0x%lx", this, sf_it->first);
         cachedLocations.erase(sf_it);
         DPRINTF(SnoopFilter, "%s:   Removed SF entry.\n",
                 __func__);
@@ -84,8 +87,12 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port)
         return snoopDown(lookupLatency);
 
     // If no hit in snoop filter create a new element and update iterator
-    if (!is_hit)
+    if (!is_hit) {
+        DEBUG_MEM("SnoopFilter[%p] add entry @0x%lx", this, line_addr);
         reqLookupResult = cachedLocations.emplace(line_addr, SnoopItem()).first;
+    } else {
+        DEBUG_MEM("SnoopFilter[%p] entry @0x%lx already exists", this, line_addr);
+    }
     SnoopItem& sf_item = reqLookupResult->second;
     SnoopMask interested = sf_item.holder | sf_item.requested;
 
@@ -110,7 +117,7 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port)
     if (!allocate)
         return snoopSelected(maskToPortList(interested & ~req_port),
                              lookupLatency);
-
+    
     if (cpkt->needsResponse()) {
         if (!cpkt->cacheResponding()) {
             // Max one request per address per port
@@ -150,7 +157,8 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port)
 }
 
 void
-SnoopFilter::finishRequest(bool will_retry, Addr addr, bool is_secure)
+SnoopFilter::finishRequest(bool will_retry, Addr addr, bool is_secure,
+        const bool force)
 {
     if (reqLookupResult != cachedLocations.end()) {
         // since we rely on the caller, do a basic check to ensure
@@ -170,7 +178,7 @@ SnoopFilter::finishRequest(bool will_retry, Addr addr, bool is_secure)
                     __func__,  retryItem.requested, retryItem.holder);
         }
 
-        eraseIfNullEntry(reqLookupResult);
+        eraseIfNullEntry(reqLookupResult, force);
     }
 }
 

@@ -34,7 +34,7 @@
 #include "mem/cache/base.hh"
 #include "mem/cache/cache.hh"
 #include "mem/cache/prefetch_filter/base.hh"
-#include "mem/cache/prefetch_filter/program_helper.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 class BaseCache;
 
@@ -44,6 +44,7 @@ bool BasePrefetchFilter::initFlag_ = false;
 bool BasePrefetchFilter::regFlag_ = false;
 uint64_t BasePrefetchFilter::cacheLineAddrMask_ = 0;
 uint8_t BasePrefetchFilter::cacheLineOffsetBits_ = 0;
+std::vector<std::vector<BaseCache*>> BasePrefetchFilter::caches_;
 
 using namespace prefetch_filter;
 using namespace Stats;
@@ -57,7 +58,8 @@ BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
     cacheLineAddrMask_ = ~(p->block_size - 1);
     int blockSize = p->block_size;
     cacheLineOffsetBits_ = 0;
-    while(blockSize >> ++cacheLineOffsetBits_) {}
+    while (blockSize >> ++cacheLineOffsetBits_) {}
+    cacheLineOffsetBits_--;
 }
 
 BasePrefetchFilter* BasePrefetchFilter::create(
@@ -66,6 +68,32 @@ BasePrefetchFilter* BasePrefetchFilter::create(
         onlyInstance_ = new BasePrefetchFilter(p);
     }
     return onlyInstance_;
+}
+
+int BasePrefetchFilter::getCpuSideConnectedPortId(PacketPtr pkt,
+        std::vector<int16_t>* portIds) {
+    BaseCache* cache = pkt->recentCache_;
+    CHECK_ARGS_EXIT(cache, "No recent processing cache provided");
+    uint8_t cacheLevel = cache->cacheLevel_;
+    CHECK_ARGS_EXIT(cacheLevel > 1, "Can not find cpu port for a cache");
+    
+    uint64_t cacheCoreIDMap = generateCoreIDMap(std::set<BaseCache*> {cache});
+    BaseCache* connectedCache = nullptr;
+    uint8_t targetCacheLevel = cacheLevel == 2 ? !pkt->req->isInstFetch() :
+            cacheLevel - 1;
+    for (auto upLevelCache : caches_[targetCacheLevel]) {
+        uint64_t coreIDMap = generateCoreIDMap(
+                std::set<BaseCache*> {upLevelCache});
+        if ((coreIDMap & cacheCoreIDMap) == coreIDMap) {
+            CHECK_ARGS_EXIT(connectedCache == nullptr,
+                    "Not supportted for shared cache");
+            connectedCache = upLevelCache;
+            portIds->clear();
+            portIds->push_back(connectedCache->memSidePort._baseSlavePort->id);
+            break;
+        }
+    }
+    return 0;
 }
 
 int BasePrefetchFilter::addCache(BaseCache* newCache) {
@@ -91,37 +119,36 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
         }
     }
     
-    // 暂时不处理ICache的相关内容
-    if (!cache->cacheLevel_) {
-        return 0;
-    }
-
-    std::vector<Stats::Vector*> cacheStats;
-    for (int i = 0; i < cache->cacheLevel_; i++) {
-    }
-    
     // 依据源数据和目标数据类型进行统计数据更新
     if (info.source == Dmd) {
         if (info.target == Pref) {
             // Demand Request命中了预取数据
             CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitBlkAddr, Dmd),
                     "Failed to update when dmd hit pref data");
+            // 如果没有子类，则删除，否则由子类进行删除
+            if (!typeHash_) {
+                CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr),
+                        "Failed to remove prefetch record when hit by dmd");
+            }
         }
     } else {
         // 更新预取请求的命中情况
-        for (BaseCache* cache : pkt->caches_) {
-            int level = cache->cacheLevel_;
-            for (const uint8_t cpuId : cache->cpuIds_) {
-                (*prefHitCount_[level][level ? cache->cacheLevel_ - level - 1 :
-                    cache->cacheLevel_ - 2])[cpuId]++;
+        for (BaseCache* srcCache : pkt->caches_) {
+            int level = srcCache->cacheLevel_;
+            uint8_t targetCacheOffset = level ?
+                    cache->cacheLevel_ - level - 1 : cache->cacheLevel_ - 2;
+            for (const uint8_t cpuId : srcCache->cpuIds_) {
+                (*prefHitCount_[level][targetCacheOffset])[cpuId]++;
             }
         }
-        
+       
         // 预取命中了预取数据
         if (info.target == Pref) {
             CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitBlkAddr,
                     Pref), "Failed to update when useful pref hit %s",
                     "pref data");
+            CHECK_RET_EXIT(usefulTable_[cache].combinePref(pkt, hitBlkAddr),
+                    "Failed to combine two prefetch when pref hit pref data");
         }
     }
 
@@ -132,7 +159,7 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
 }
 
 int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
-        const PacketPtr& pkt, const uint64_t& combinedAddr,
+        const PacketPtr& pkt, const PacketPtr& combinedPkt,
         const DataTypeInfo& info) {
     if (info.source == Dmd) {
         for (BaseCache* cache : pkt->caches_) {
@@ -141,9 +168,6 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
                 (*demandReqMissCount_[cache->cacheLevel_])[cpuId]++;
             }
         }
-    }
-    if (!cache->cacheLevel_) {
-        return 0;
     }
     
     // const uint64_t combinedBlkAddr &= cacheLineAddrMask_;
@@ -161,8 +185,8 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
                 }
             }
         }
-        if (info.target != Dmd) {
-            // 预取命中了预取数据
+        if (info.target != Pref) {
+            // 一个新的Dmd请求发生了Miss
             CHECK_RET_EXIT(usefulTable_[cache].updateMiss(pkt),
                     "Failed to update when demand request miss");
         }
@@ -182,10 +206,6 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
 int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
         const PacketPtr &pkt, const uint64_t& evictedAddr,
         const DataTypeInfo& info) {
-    if (!cache->cacheLevel_) {
-        return 0;
-    }
-    
     const uint64_t evictedBlkAddr = evictedAddr & cacheLineAddrMask_;
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
@@ -196,18 +216,18 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
         // 预取替换了一个Demand Request请求的数据
         // 就需要对相关的替换信息进行记录
         if (info.target == Dmd) {
-            CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedBlkAddr),
-                    "Failed to add pref replacing dmd in the table");
-        } else {
+            CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedBlkAddr,
+                    Dmd), "Failed to add pref replacing dmd in the table");
+        } else if (info.target == Pref) {
             int result;
             CHECK_RET_EXIT(result = usefulTable_[cache].isPrefHit(
                     pkt->getAddr() & cacheLineAddrMask_),
                     "Pref not exist in the table");
             if (result) {
-                // 如果一个预取被Demand Request覆盖，那么它将会被看作是
+                // 如果被替换的预取被Demand Request覆盖，那么它将会被看作是
                 // 一个Demand Request，成为一个有害情况的备选项
-                CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt,
-                        evictedBlkAddr), "Failed to add pref replacing %s",
+                CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedBlkAddr,
+                        Pref), "Failed to add pref replacing %s",
                         "used pref in the table");
             } else {
                 // 如果一个预取替换了一个没有被Demand Request命中过的无用预取
@@ -217,6 +237,10 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                         evictedBlkAddr),
                         "Failed to replace old pref with new pref");
             }
+        } else {
+            CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedBlkAddr,
+                    NullType), "Failed to add pref replacing %s",
+                    "used pref in the table");
         }
     }
     
@@ -235,20 +259,16 @@ int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
 int BasePrefetchFilter::invalidatePrefetch(BaseCache* cache,
         const uint64_t& prefAddr){
     const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
-    // 跳过ICache的更新
-    if (!cache->cacheLevel_) {
-        return 0;
-    }
     // 删除被替换掉的预取
-    CHECK_RET_EXIT(usefulTable_[cache].updateEvict(prefBlkAddr),
-            "Failed to remove pref from the table");
+    CHECK_RET_EXIT(removePrefetch(cache, prefBlkAddr),
+            "Failed to remove prefetch record when invalidated");
     return 0;
 }
 
 int BasePrefetchFilter::genHash(const std::string& name) {   
     register int64_t hash = 0;
     int index = 0;
-    while(index < name.length()) {
+    while (index < name.length()) {
         hash = hash * 131 + name[index++];
     }
     hash = abs(hash);
@@ -258,6 +278,15 @@ int BasePrefetchFilter::genHash(const std::string& name) {
         CHECK_RET(typeHash_ == hash,
                 "Trying to initiate different types of prefetch filter");
     }
+    return 0;
+}
+
+int BasePrefetchFilter::removePrefetch(BaseCache* cache,
+        const uint64_t& prefAddr){
+    const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
+    // 删除被替换掉的预取
+    CHECK_RET(usefulTable_[cache].updateEvict(prefBlkAddr),
+            "Failed to remove pref from the table");
     return 0;
 }
 
@@ -275,7 +304,7 @@ int BasePrefetchFilter::initThis() {
         }
     }
     
-    for (auto level : caches_) {
+    for (auto& level : caches_) {
         uint8_t cacheLevel = level.front()->cacheLevel_;
         // 初始化统计变量
         if (havePref_[cacheLevel] && cacheLevel != maxCacheLevel_) {
@@ -300,7 +329,7 @@ int BasePrefetchFilter::initThis() {
             prefUsefulType_.push_back(std::vector<Stats::Vector*>());
         }
 
-        // 初始化有用/有害信息表格
+        // 初始化有用/有害信息表格（如果存在提升级别的预取，那么需要修正）
         for (auto cache : level) {
             usefulTable_.insert(std::pair<BaseCache*, IdealPrefetchUsefulTable>
                     (cache, IdealPrefetchUsefulTable(cache,
@@ -332,7 +361,7 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
         timingStatsPeriodCount_++;
 
         // 更新时间维度的统计数据
-        for (auto mapPair : usefulTable_) {
+        for (auto& mapPair : usefulTable_) {
             CHECK_RET_EXIT(mapPair.second.updatePrefTiming(
                     prefTotalUsefulValue_, prefUsefulDegree_, prefUsefulType_,
                     timingDegree_), "Failed to update stats timingly");
@@ -345,19 +374,19 @@ int BasePrefetchFilter::checkUpdateTimingStats() {
         for (int i = 0; i < numCpus_; i++) {
             DPRINTF(PrefetchFilter, "    CPU Id: %d\n", i);
             std::stringstream outputInfo;
-            outputInfo << "\tDemand Hit Count: ";
+            outputInfo << "    Demand Hit Count: ";
             for (int j = 0; j < cacheCount; j++) {
                 outputInfo << timingStats_[i].demandHit_[j] << ", ";
             }
             outputInfo << std::endl;
-            outputInfo << "\tDemand Miss Count: ";
+            outputInfo << "    Demand Miss Count: ";
             for (int j = 0; j < cacheCount; j++) {
                 outputInfo << timingStats_[i].demandMiss_[j] << ", ";
             }
-            outputInfo << "\tPref Type Count: \n";
+            outputInfo << "    Pref Type Count: \n";
             for (int j = 0; j < cacheCount; j++) {
                 for (int k = 0; k < 2; k++) {
-                    outputInfo << "\t\t" << BaseCache::levelName_[j] << "-";
+                    outputInfo << "        " << BaseCache::levelName_[j] << "-";
                     std::string usefulTypeStr = k ? "cross_core" :
                             "single_core";
                     outputInfo << usefulTypeStr << ": ";
@@ -462,7 +491,7 @@ void BasePrefetchFilter::regStats() {
                 shadowedPrefCount_[i] = emptyStatsVar_;
             }
 
-            for (j = 0; j < prefHitCount_[j].size(); j++) {
+            for (j = 0; j < prefHitCount_[i].size(); j++) {
                 std::string tgtCacheName = BaseCache::levelName_[i ?
                         j + i + 1 : j + 2];
                 prefHitCount_[i][j] = new Stats::Vector();
@@ -528,7 +557,7 @@ void BasePrefetchFilter::regStats() {
                     prefTotalUsefulValue_[i][j]->subname(k,
                             std::string("cpu") + cpuId);
                 }
-                for (j = 0; j < prefHitCount_[j].size(); j++) {
+                for (j = 0; j < prefHitCount_[i].size(); j++) {
                     prefHitCount_[i][j]->subname(k, std::string("cpu") +
                             std::to_string(k));
                 }

@@ -979,6 +979,9 @@ LSQ<Impl>::SplitDataRequest::recvTimingResp(PacketPtr pkt)
         PacketPtr resp = isLoad()
             ? Packet::createRead(mainReq)
             : Packet::createWrite(mainReq);
+        /// 添加分支指令信息
+        resp->recentBranchPC_ = _port.cpu->commitPtr_->recentBranchPC_;
+
         if (isLoad())
             resp->dataStatic(_inst->memData);
         else
@@ -1001,8 +1004,12 @@ LSQ<Impl>::SingleDataRequest::buildPackets()
                 isLoad()
                     ?  Packet::createRead(request())
                     :  Packet::createWrite(request()));
-        _packets.back()->dataStatic(_inst->memData);
-        _packets.back()->senderState = _senderState;
+        /// 添加分支指令信息
+        PacketPtr pkt = _packets.back();
+        pkt->recentBranchPC_ = _port.cpu->commitPtr_->recentBranchPC_;
+
+        pkt->dataStatic(_inst->memData);
+        pkt->senderState = _senderState;
     }
     assert(_packets.size() == 1);
 }
@@ -1018,10 +1025,16 @@ LSQ<Impl>::SplitDataRequest::buildPackets()
         if (isLoad()) {
             _mainPacket = Packet::createRead(mainReq);
             _mainPacket->dataStatic(_inst->memData);
+            /// 添加分支指令信息
+            _mainPacket->recentBranchPC_ =
+                    _port.cpu->commitPtr_->recentBranchPC_;
         }
         for (auto& r: _requests) {
             PacketPtr pkt = isLoad() ? Packet::createRead(r)
                                     : Packet::createWrite(r);
+            /// 添加分支指令信息
+            pkt->recentBranchPC_ = _port.cpu->commitPtr_->recentBranchPC_;
+            
             if (isLoad()) {
                 pkt->dataStatic(_inst->memData + offset);
             } else {
@@ -1078,7 +1091,7 @@ LSQ<Impl>::SplitDataRequest::handleIprWrite(ThreadContext *thread,
         PacketPtr pkt = new Packet(r, MemCmd::WriteReq);
         /// 添加最近的分支指令地址
         pkt->recentBranchPC_ = _port.cpu->commitPtr_->recentBranchPC_;
-        
+
         pkt->dataStatic(mainPkt->getPtr<uint8_t>() + offset);
         TheISA::handleIprWrite(thread, pkt);
         offset += r->getSize();

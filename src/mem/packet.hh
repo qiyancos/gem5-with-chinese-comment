@@ -248,6 +248,7 @@ class MemCmd
 };
 
 class BaseCache;
+class MSHR;
 
 /**
  * A Packet is used to encapsulate a transfer between two objects in
@@ -259,9 +260,18 @@ class BaseCache;
 class Packet : public Printable
 {
   public:
+    /// 该结构用于记录提升级别操作的MSHR数据
+    MSHR* mshr_;
+
+    /// 用于记录最近处理该Packet的Cache指针
+    BaseCache* recentCache_;
+
     /// 用于记录相关的Cache
     std::set<BaseCache*> caches_;
     
+    /// 记录生成该Packet的源头
+    uint8_t srcCacheLevel_;
+
     /// 记录目标的Cache等级，若是非Prefetch，該数值应该是255
     uint8_t targetCacheLevel_;
 
@@ -273,7 +283,10 @@ class Packet : public Printable
 
     /// 用于拷贝另一个Packet的新增信息
     void copyNewInfo(const PacketPtr pkt) {
+        mshr_ = pkt->mshr_;
+        recentCache_ = pkt->recentCache_;
         caches_ = pkt->caches_;
+        srcCacheLevel_ = pkt->srcCacheLevel_;
         targetCacheLevel_ = pkt->targetCacheLevel_;
         packetType_ = pkt->packetType_;
         recentBranchPC_ = pkt->recentBranchPC_;
@@ -817,7 +830,9 @@ class Packet : public Printable
            payloadDelay(0), senderState(NULL)
     {
         /// 添加针对信息的初始化
+        mshr_ = nullptr;
         packetType_ = prefetch_filter::Dmd;
+        srcCacheLevel_ = 255;
         targetCacheLevel_ = 255;
         
         if (req->hasPaddr()) {
@@ -843,7 +858,9 @@ class Packet : public Printable
            snoopDelay(0), payloadDelay(0), senderState(NULL)
     {
         /// 添加针对信息的初始化
+        mshr_ = nullptr;
         packetType_ = prefetch_filter::Dmd;
+        srcCacheLevel_ = 255;
         targetCacheLevel_ = 255;
         
         if (req->hasPaddr()) {
@@ -874,10 +891,7 @@ class Packet : public Printable
            senderState(pkt->senderState)
     {
         /// 添加针对信息的初始化
-        caches_ = pkt->caches_;
-        packetType_ = pkt->packetType_;
-        targetCacheLevel_ = pkt->targetCacheLevel_;
-        recentBranchPC_ = pkt->recentBranchPC_;
+        copyNewInfo(pkt);
 
         if (!clear_flags)
             flags.set(pkt->flags & COPY_FLAGS);
@@ -1213,14 +1227,7 @@ class Packet : public Printable
      * matter how data was allocted.
      */
     void
-    deleteData()
-    {
-        if (flags.isSet(DYNAMIC_DATA))
-            delete [] data;
-
-        flags.clear(STATIC_DATA|DYNAMIC_DATA);
-        data = NULL;
-    }
+    deleteData();
 
     /** Allocate memory for the packet. */
     void

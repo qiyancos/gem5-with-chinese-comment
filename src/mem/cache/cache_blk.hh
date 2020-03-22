@@ -85,6 +85,9 @@ enum CacheBlkStatusBits : unsigned {
 class CacheBlk : public ReplaceableEntry
 {
   public:
+    /// 该变量被用来表明当前的CacheBlock是否是一个新分配的
+    bool wasInvalid_;
+
     /** Task Id associated with this block */
     uint32_t task_id;
 

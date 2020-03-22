@@ -68,9 +68,11 @@ class BaseSlavePort;
 class BaseMasterPort : public Port
 {
 
-  protected:
-
+  public:
+    /// 修改其属性为public以便获取port连接关系
     BaseSlavePort* _baseSlavePort;
+
+  protected:
 
     BaseMasterPort(const std::string& name, PortID id=InvalidPortID);
     virtual ~BaseMasterPort();
@@ -91,9 +93,11 @@ class BaseMasterPort : public Port
 class BaseSlavePort : public Port
 {
 
-  protected:
-
+  public:
+    /// 修改其属性为public以便获取port连接关系
     BaseMasterPort* _baseMasterPort;
+
+  protected:
 
     BaseSlavePort(const std::string& name, PortID id=InvalidPortID);
     virtual ~BaseSlavePort();

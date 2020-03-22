@@ -28,13 +28,15 @@
  * Authors: Rock Lee
  */
 
+#include <cmath>
+
 #include "base/stats/info.hh"
 #include "params/PerceptronPrefetchFilter.hh"
 #include "mem/packet.hh"
 #include "mem/cache/base.hh"
 #include "mem/cache/cache.hh"
 #include "mem/cache/prefetch_filter/ppf.hh"
-#include "mem/cache/prefetch_filter/program_helper.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 namespace prefetch_filter {
 
@@ -89,7 +91,7 @@ int Feature::getIndex(const PrefetchInfo& info, uint16_t* index) {
     int result;
     for (int i = 0; i < infoIndexList_.size(); i++) {
         uint32_t temp;
-        CHECK_ARGS(result = info.getInfo(infoIndexList_[i], &temp),
+        CHECK_RET(result = info.getInfo(infoIndexList_[i], &temp),
                 "Failed to get a proper index");
         if (!result) {
             *index = 0xffff;
@@ -99,10 +101,10 @@ int Feature::getIndex(const PrefetchInfo& info, uint16_t* index) {
         } else {
             genIndex = temp;
         }
+        DEBUG_PF(3, "Feature %s: Info[%d], 0x%x", name_.c_str(),
+                infoIndexList_[i], temp);
     }
-    uint32_t mask = -1;
-    mask = mask >> startBits_ << (32 - bits_) >> (32 - bits_);
-    *index = genIndex & mask;
+    *index = genIndex >> startBits_ << (32 - bits_) >> (32 - bits_);
     return 0;
 }
 
@@ -132,7 +134,7 @@ int PrefetchUsefulTable::init(const uint8_t counterBits, const uint32_t CCSize,
     CHECK_RET(counterCache_.init(CCTagBits, CCSize, CCAssoc,
             CounterEntry(counterBits, counterInit)),
             "Failed to init counter cache");
-    CHECK_RET(victimCache_.init(VCSize, VCAssoc, VCTagBits),
+    CHECK_RET(victimCache_.init(VCTagBits, VCSize, VCAssoc),
             "Failed to init victim cache");
     return 0;
 }
@@ -154,7 +156,7 @@ int PrefetchUsefulTable::updateMiss(const uint64_t& addr) {
     if (!valid_) return 0;
     // 如果发生了一个Demand Miss情况
     uint64_t* counterIndex;
-    CHECK_ARGS(victimCache_.read(addr, &counterIndex),
+    CHECK_RET(victimCache_.read(addr, &counterIndex),
             "Failed to find record for demand miss in the table");
     if (!counterIndex) {
         // 如果一个Demand Miss没有找到，那么可以跳过
@@ -168,33 +170,39 @@ int PrefetchUsefulTable::updateMiss(const uint64_t& addr) {
 }
 
 int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
-        const uint64_t evictedAddr) {
-    if (!valid_) return 0;
+        const uint64_t evictedAddr, const DataType type) {
+    if (!valid_) {
+        DEBUG_PF(2, "Invalid add pref");
+        return 0;
+    }
     // 发生了新的预取替换Demand/Pref数据，相关记录被更新
     CHECK_ARGS(prefInCache_.find(prefAddr) == prefInCache_.end(),
             "Found prefetch already in record when adding prefetch");
     prefInCache_.insert(prefAddr);
     
-    // 更新Victim Cache
-    uint64_t replacedPrefAddr, replacedEvictedAddr;
     int result;
-    CHECK_RET(result = victimCache_.write(evictedAddr, prefAddr,
-            &replacedPrefAddr, &replacedEvictedAddr),
-            "Failed to add prefetch victim info to victim cache");
-    if (result == 0) {
-        // 可能发生了问题，导致两个预取替换了同一个地址的数据
-        // TODO 目前我们不处理，并报错
-        CHECK_ARGS(false, "Two different prefetch replaced the %s",
-                "same cache block");
-    } else if (result == 2) {
-        // 两个预取发生了冲突，导致新的预取替换信息和原来的替换信息发生冲突
-        // 这时候应该将原来的预取删除，并进行更新；这会导致一个结果，
-        // 被替换掉替换信息的预取之后只能进行有益性提升，无法进行有益性递减
-        // TODO 我们暂时不处理该问题
-    } else {
-        // 新的预取替换的地址加入并且使用了空表项，可以继续执行
+    if (type != NullType) {
+        // 更新Victim Cache
+        uint64_t replacedPrefAddr, replacedEvictedAddr;
+        CHECK_RET(result = victimCache_.write(evictedAddr, prefAddr,
+                &replacedPrefAddr, &replacedEvictedAddr),
+                "Failed to add prefetch victim info to victim cache");
+        if (result == 0) {
+            // 可能发生了问题，导致两个预取替换了同一个地址的数据
+            // TODO 目前我们不处理，并报错
+            CHECK_ARGS(false, "Two different prefetch replaced the %s",
+                    "same cache block");
+        } else if (result == 2) {
+            // 两个预取发生了冲突，导致新的预取替换信息和原来的替换信息发生冲突
+            // 这时候应该将原来的预取删除，并进行更新；这会导致一个结果，
+            // 被替换掉替换信息的预取之后只能进行有益性提升，无法进行有益性递减
+            // TODO 我们暂时不处理该问题
+        } else {
+            // 新的预取替换的地址加入并且使用了空表项，可以继续执行
+        }
     }
-    
+   
+    DEBUG_PF(2, "Write new counter for prefetch @0x%lx", prefAddr);
     // 更新Counter Cache
     // 实际上由于Cache比Counter Cache大得多，必然会导致Counter冲突
     // TODO 这时候，我们应该将Counter的信息进行更新
@@ -225,6 +233,7 @@ int PrefetchUsefulTable::evictPref(const uint64_t& addr, uint8_t* counterPtr) {
     CHECK_RET(victimCache_.invalidate(counterEntry->evictedAddr_),
             "Failed to invalidate victim data in victim cache");
     
+    DEBUG_PF(2, "Invalidate counter for prefetch @0x%lx", addr);
     CHECK_RET(counterCache_.invalidate(addr),
             "Failed to invalidate counter in counter cache");
     return 0;
@@ -249,9 +258,12 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
         prefThreshold_(p->prefetch_threshold),
         uselessPrefStep_(p->useless_prefetch_training_step) {
     // 初始化训练幅度
-    trainStep_ = p->training_step;
-    trainStep_.push_back(p->default_training_step);
+    hitTrainStep_ = p->hit_training_step;
+    hitTrainStep_.push_back(p->default_training_step);
 
+    missTrainStep_ = p->miss_training_step;
+    missTrainStep_.push_back(p->default_training_step);
+    
     initFailFlag_ = false;
     int tempFlag;
     // 初始化Feature
@@ -292,7 +304,7 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
     for (int j = 0; j < featureList_.size(); j++) {
         CHECK_WARN((tempFlag = LLCTable.featureTable_[j].init(
                 int8_t(-1), featureList_[j].getSize(), 1,
-                SaturatedCounter(weightBits_, p->feature_weight_init))) >= 0,
+                SaturatedCounter(weightBits_, 0), true)) >= 0,
                 "Failed to initiate feature %s \"%s\" %s",
                 "table for", featureList_[j].name_.c_str(), "in init");
         initFailFlag_ |= tempFlag < 0;
@@ -328,11 +340,12 @@ PerceptronPrefetchFilter* PerceptronPrefetchFilter::create(
 int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
         const PacketPtr& pkt, const uint64_t& hitAddr,
         const DataTypeInfo& info) {
+    DEBUG_PF(0, "Event Hit From %s[%p]",
+            BaseCache::levelName_[cache->cacheLevel_].c_str(), cache);
+    DEBUG_PF(1, "%s @0x%lx Hit %s @0x%lx",
+            getDataTypeString(info.source).c_str(), pkt->getAddr(),
+            getDataTypeString(info.target).c_str(), hitAddr);
     BasePrefetchFilter::notifyCacheHit(cache, pkt, hitAddr, info);
-    // 对于指令Cache的预取不进行过滤和训练处理
-    if (!cache->cacheLevel_) {
-        return 0;
-    }
     
     const uint64_t hitBlkAddr = hitAddr & cacheLineAddrMask_;
     const uint8_t cacheLevel = cache->cacheLevel_;
@@ -341,6 +354,8 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
         CHECK_RET_EXIT(usefulTable_[cache].findSrcCaches(hitBlkAddr,
                 &srcCaches), "Failed to found prefetch recorded in cache");
         for (BaseCache* srcCache : srcCaches) {
+            // 不对ICache进行训练
+            if (!srcCache->cacheLevel_) continue;
             Tables& workTable = getTable(srcCache);
             // 一个Demand Request命中了预取数据，因此训练奖励
             CHECK_RET_EXIT(train(workTable, hitBlkAddr, cacheLevel, GoodPref),
@@ -349,26 +364,28 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
         // 更新预取有害性统计数据
         CHECK_RET_EXIT(prefUsefulTable_[cache].updateHit(hitBlkAddr),
                 "Failed to update pref hit to prefetch useful table");
-        // TODO 由于Demand命中，是否需要强制删除记录
+        // 由于Demand命中，需要强制删除记录
+        CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr),
+                "Failed to remove prefetch record when hit by dmd");
     }
-    /*
-    else if (info.source == Pref && info.target == Dmd) {
-        // 考虑预取会命中低等级的Cache，是正常现象，因此不属于无用预取
-    }
-    */
+    // TODO 预取命中预取暂时不做处理
+    fprintf(stderr, "\n");
     return 0;
 }
 
 int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
-        const PacketPtr& pkt, const uint64_t& combinedAddr,
+        const PacketPtr& pkt, const PacketPtr& combinedPkt,
         const DataTypeInfo& info) {
-    BasePrefetchFilter::notifyCacheMiss(cache, pkt, combinedAddr, info);
-    // 对于指令Cache的预取不进行过滤和训练处理
-    if (!cache->cacheLevel_) {
-        return 0;
-    }
+    DEBUG_PF(0, "Event Miss From %s[%p]",
+            BaseCache::levelName_[cache->cacheLevel_].c_str(), cache);
+    DEBUG_PF(1, "%s @0x%lx Miss %s @0x%lx",
+            getDataTypeString(info.source).c_str(), pkt->getAddr(),
+            getDataTypeString(info.target).c_str(),
+            combinedPkt ? combinedPkt->getAddr() : 0);
+    BasePrefetchFilter::notifyCacheMiss(cache, pkt, combinedPkt, info);
     
-    const uint64_t combinedBlkAddr = combinedAddr & cacheLineAddrMask_;
+    const uint64_t combinedBlkAddr = cacheLineAddrMask_ &
+            (combinedPkt ? combinedPkt->getAddr() : 0);
     uint8_t cacheLevel = cache->cacheLevel_;
     if (info.source == Dmd) {
         if (info.target != Dmd) {
@@ -381,10 +398,12 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
         // 如果一个预取Miss被Demand Request覆盖了，预取是无用的
         if (info.target == Pref) {
             std::set<BaseCache*> srcCaches;
-            CHECK_RET_EXIT(usefulTable_[cache].findSrcCaches(pkt->getAddr() &
-                    cacheLineAddrMask_, &srcCaches),
+            CHECK_RET_EXIT(usefulTable_[cache].findAllSrcCaches(cache,
+                    combinedPkt, &srcCaches),
                     "Failed to found prefetch recorded in cache");
             for (BaseCache* srcCache : srcCaches) {
+                // 不对ICache进行训练
+                if (!srcCache->cacheLevel_) continue;
                 Tables& workTable = getTable(srcCache);
                 CHECK_RET_EXIT(train(workTable, combinedBlkAddr, cacheLevel,
                         UselessPref), "Failed to update training when dmd %s",
@@ -394,6 +413,8 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
     } else if (info.target == Dmd) {
         // 如果一个预取Miss并合并到了Demand Request Miss，属于无用预取
         for (BaseCache* srcCache : pkt->caches_) {
+            // 不对ICache进行训练
+            if (!srcCache->cacheLevel_) continue;
             Tables& workTable = getTable(srcCache);
             CHECK_RET_EXIT(train(workTable, pkt->getAddr() &
                     cacheLineAddrMask_, cacheLevel, UselessPref),
@@ -401,17 +422,21 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
                     "when pref miss added to demand miss"); 
         }
     }
-    
+    // TODO 预取合并预取暂时无须处理
+
+    fprintf(stderr, "\n");
     return 0;
 }
 
 int PerceptronPrefetchFilter::notifyCacheFill(BaseCache* cache,
         const PacketPtr &pkt, const uint64_t& evictedAddr,
         const DataTypeInfo& info) {
-    // 对于指令Cache的预取不进行过滤和训练处理
-    if (!cache->cacheLevel_) {
-        return 0;
-    }
+    DEBUG_PF(0, "Event Fill From %s[%p]",
+            BaseCache::levelName_[cache->cacheLevel_].c_str(), cache);
+    DEBUG_PF(1, "%s @0x%lx Replace %s @0x%lx",
+            getDataTypeString(info.source).c_str(), pkt->getAddr(),
+            getDataTypeString(info.target).c_str(), evictedAddr);
+    BasePrefetchFilter::notifyCacheFill(cache, pkt, evictedAddr, info);
     
     const uint64_t evictedBlkAddr = evictedAddr & cacheLineAddrMask_;
     uint8_t cacheLevel = cache->cacheLevel_;
@@ -428,6 +453,8 @@ int PerceptronPrefetchFilter::notifyCacheFill(BaseCache* cache,
         // 基于被替换的预取有害情况进行训练，只有开启有害统计，才会训练
         if (prefUsefulTable_[cache].valid_ && counter <= counterInit_) {
             for (BaseCache* srcCache : srcCaches) {
+                // 不对ICache进行训练
+                if (!srcCache->cacheLevel_) continue;
                 Tables& workTable = getTable(srcCache);
                 CHECK_RET_EXIT(train(workTable, evictedBlkAddr, cacheLevel,
                         counter == counterInit_ ? UselessPref : BadPref),
@@ -438,26 +465,35 @@ int PerceptronPrefetchFilter::notifyCacheFill(BaseCache* cache,
         // 如果产生替换的也是预取，需要新增一个记录
         if (info.source == Pref) {
             CHECK_RET_EXIT(prefUsefulTable_[cache].addPref(pkt->getAddr() &
-                    cacheLineAddrMask_, evictedBlkAddr),
+                    cacheLineAddrMask_, evictedBlkAddr, info.target),
                     "Failed to add new pref info when pref replaced pref");
         }
     } else if (info.source == Pref) {
         // 如果一个Demand Request数据被预取替换了需要新增一个记录
         CHECK_RET_EXIT(prefUsefulTable_[cache].addPref(pkt->getAddr() &
-                cacheLineAddrMask_, evictedBlkAddr),
+                cacheLineAddrMask_, evictedBlkAddr, info.target),
                 "Failed to add new pref info when pref replaced dmd");
     }
     
+    fprintf(stderr, "\n");
     return 0;
 }
 
 int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
         const uint64_t& prefAddr, const PrefetchInfo& info) {
+    DEBUG_PF(0, "Event Filter From %s[%p]",
+            BaseCache::levelName_[cache->cacheLevel_].c_str(), cache);
     if (!enableFilter_) {
         return BasePrefetchFilter::filterPrefetch(cache, prefAddr, info);
     }
     const int featureCount = featureList_.size();
     const uint8_t cacheLevel = cache->cacheLevel_;
+    // 不会对L1ICache的预取进行处理
+    if (!cacheLevel) {
+        fprintf(stderr, "\n");
+        return 0;
+    }
+    
     Tables& workTable = getTable(cache);
 
     // 计算权重加和
@@ -466,27 +502,34 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
     // uint16_t的最大数值
     std::vector<uint16_t> indexes;
     int validFeatureCount = 0;
+    DEBUG_PF(1, "Filter Pref @0x%lx", prefAddr);
     for (int i = 0; i < featureCount; i++) {
         uint16_t featureIndex;
-        CHECK_RET(featureList_[i].getIndex(info, &featureIndex),
+        CHECK_RET_EXIT(featureList_[i].getIndex(info, &featureIndex),
                 "Failed to get index for a feature");
         indexes.push_back(featureIndex);
         if (featureIndex != 0xffff) {
             validFeatureCount++;
             SaturatedCounter* weight;
-            CHECK_RET(workTable.featureTable_[i].read(featureIndex, &weight),
+            CHECK_RET_EXIT(workTable.featureTable_[i].read(
+                    featureIndex, &weight),
                     "Failed to read weight for feature \"%s\" with index %d",
                     featureList_[i].name_.c_str(), featureIndex);
+            CHECK_ARGS_EXIT(weight, "Feature index [%d] illegal for \"%s\"",
+                    featureIndex, featureList_[i].name_.c_str());
+            DEBUG_PF(2, "Weight @%s[%d]: %u",
+                    featureList_[i].name_.c_str(), featureIndex,
+                    uint32_t(*weight));
             weightSum = *weight + weightSum;
         }
     }
 
     // 取Weight均值，而非总和来避免可用Feature数量的影响
     // 该特性仅仅适用于软件，硬件设计无需要按照均值处理
-    weightSum = double(weightSum) / validFeatureCount;
+    weightSum = std::round(double(weightSum) / validFeatureCount);
     
     // 依据权重加和进行预取更改和过滤
-    uint8_t targetCacheLevel = 0;
+    uint8_t targetCacheLevel = 1;
     for (auto threshold : prefThreshold_) {
         if (weightSum >= threshold) {
             // 不会预取到L1Icache的
@@ -504,6 +547,10 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
         targetCacheLevel = cacheLevel;
     }
     
+    DEBUG_PF(2, "Filter From %s To %s with %d Weights[%d]",
+            BaseCache::levelName_[cache->cacheLevel_].c_str(),
+            BaseCache::levelName_[targetCacheLevel].c_str(),
+            validFeatureCount, weightSum);
     // 根据最后的结果更新统计数据
     if (targetCacheLevel <= maxCacheLevel_) {
         for (auto cpuId : cache->cpuIds_) {
@@ -515,34 +562,18 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
     CHECK_RET_EXIT(updateTable(workTable, prefAddr & cacheLineAddrMask_,
             targetCacheLevel, cache, indexes),
             "Failed to update prefetch table & reject table");
+    fprintf(stderr, "\n");
     return targetCacheLevel;
 }
 
 int PerceptronPrefetchFilter::invalidatePrefetch(BaseCache* cache,
         const uint64_t& prefAddr) {
-    BasePrefetchFilter::invalidatePrefetch(cache, prefAddr);
-    const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
+    DEBUG_PF(0, "PPF Event Invalidate From %s[0x%p]",
+            BaseCache::levelName_[cache->cacheLevel_].c_str(), cache);
     
-    // 首先查找相关的源Cache
-    std::set<BaseCache*> srcCaches;
-    CHECK_RET_EXIT(usefulTable_[cache].findSrcCaches(prefBlkAddr,
-            &srcCaches), "Failed to found prefetch recorded in cache");
-    
-    uint8_t counter;
-    // 说明一个预取数据被预取替换了，需要删除相应的记录
-    CHECK_RET_EXIT(prefUsefulTable_[cache].evictPref(prefBlkAddr,
-            &counter), "Failed to remove old pref info when replaced");
-    
-    // 基于被替换的预取有害情况进行训练，只有开启统计表格才会进行训练
-    if (prefUsefulTable_[cache].valid_ && counter <= counterInit_) {
-        for (BaseCache* srcCache : srcCaches) {
-            Tables& workTable = getTable(srcCache);
-            CHECK_RET_EXIT(train(workTable, prefBlkAddr, cache->cacheLevel_,
-                    counter == counterInit_ ? UselessPref : BadPref),
-                    "Failed to update training when pref evicted"); 
-        }
-    }
-    
+    CHECK_RET_EXIT(removePrefetch(cache, prefAddr),
+            "Failed to remove prefetch record when invalidated");
+    fprintf(stderr, "\n");
     return 0;
 }
 
@@ -550,14 +581,26 @@ int PerceptronPrefetchFilter::initThis() {
     CHECK_ARGS(!initFailFlag_, "Failed when trying to initiate PPF");
     uint8_t cacheCount = caches_.size();
     // 重新初始化训练幅度
-    CHECK_WARN(trainStep_.size() - 1 <= cacheCount,
+    CHECK_WARN(missTrainStep_.size() - 1 <= cacheCount,
             "Too many train steps are given.");
-    trainStep_.resize(cacheCount, trainStep_.back());
+    missTrainStep_.resize(cacheCount, missTrainStep_.back());
     
+    CHECK_WARN(hitTrainStep_.size() - 1 <= cacheCount,
+            "Too many train steps are given.");
+    hitTrainStep_.resize(cacheCount, hitTrainStep_.back());
+    
+    // 重新初始化权重初始化数值
+    CHECK_WARN(weightInit_.size() <= cacheCount,
+            "Too many weight init value are given");
+    uint8_t lastWeightInit = weightInit_.empty() ?
+            uint8_t(1) << (weightBits_ - 1) : weightInit_.back();
+    weightInit_.resize(cacheCount, uint8_t(1) << (weightBits_ - 1));
+
     // 重新初始化预取阈值设置
     CHECK_WARN(prefThreshold_.size() <= cacheCount,
             "Too many threshold value are given");
-    prefThreshold_.resize(cacheCount, weightInit_);
+    // 我们选择权重初始化量中的最后一个数值，一般也是最小值，作为阈值
+    prefThreshold_.resize(cacheCount, lastWeightInit);
 
     // 初始化PPF表格
     if (!allSharedTable_ && maxCacheLevel_ > 1) {
@@ -568,13 +611,19 @@ int PerceptronPrefetchFilter::initThis() {
         int cpuSize = cpuSharedTable_ ? 1 : numCpus_;
         if (cacheSharedTable_) {
             // 针对Cache共享PPF表格的情况
+            // （由于是共享状态，只要有一个预取，就需要开启）
             if (havePref_[maxCacheLevel_ - 1]) {
                 workTables_.push_back(std::vector<Tables>(cpuSize, sample));
                 for (int i = 0; i < cpuSize; i++) {
-                    workTables_.back()[i].name_ = cpuSharedTable_ ?
+                    workTables_[0][i].name_ = cpuSharedTable_ ?
                             "cpu_cache_shared" :
                             std::string("cache_shared_cpu_") +
                             std::to_string(i);
+                    // 对于部分共享，权重初始化为平均值
+                    for (auto& table : workTables_[0][i].featureTable_) {
+                        table.writeAll(SaturatedCounter(weightBits_,
+                                (weightInit_[0] + weightInit_.back()) >> 1));
+                    }
                 }
             } else {
                 workTables_.push_back(std::vector<Tables>());
@@ -590,6 +639,11 @@ int PerceptronPrefetchFilter::initThis() {
                                 BaseCache::levelName_[i] + "_cpu_shared" :
                                 BaseCache::levelName_[i] + "_cpu_" +
                                 std::to_string(j);
+                        for (auto& table :
+                                workTables_.back()[j].featureTable_) {
+                            table.writeAll(SaturatedCounter(weightBits_,
+                                    weightInit_[i - 1]));
+                        }
                     }
                 } else {
                     workTables_.push_back(std::vector<Tables>());
@@ -601,6 +655,10 @@ int PerceptronPrefetchFilter::initThis() {
             workTables_.push_back(std::vector<Tables>(1, sample));
             workTables_.back()[0].name_ =
                     BaseCache::levelName_[maxCacheLevel_];
+            for (auto& table : workTables_.back()[0].featureTable_) {
+                table.writeAll(SaturatedCounter(weightBits_,
+                        weightInit_[maxCacheLevel_]));
+            }
         } else {
             workTables_.push_back(std::vector<Tables>());
         }
@@ -610,10 +668,28 @@ int PerceptronPrefetchFilter::initThis() {
             workTables_.clear();
         } else {
             workTables_[0][0].name_ = "all_shared";
+            // 全局共享的PPF表格权重会被初始化为中间值
+            for (auto& table : workTables_[0][0].featureTable_) {
+                table.writeAll(SaturatedCounter(weightBits_,
+                        uint8_t(1) << (weightBits_ - 1)));
+            }
         }
     }
-
+    
     // 初始化有害性统计表格
+    CHECK_RET(initStats(), "Failed to initiate stats variables");
+
+    // 修正BasePrefetchFilter的设置
+    if (allowUpgrade_ || havePref_[maxCacheLevel_]) {
+        for (auto& tablePair : usefulTable_) {
+            tablePair.second.setValidBit(true);
+        }
+    }
+    return 0;
+}
+
+int PerceptronPrefetchFilter::initStats() {
+    uint8_t cacheCount = caches_.size();
     const uint8_t counterBits = prefUsefulTable_[nullptr].counterBits_;
     const int8_t CCTagBits = prefUsefulTable_[nullptr].counterCacheTagBits_;
     const uint32_t CCSize = prefUsefulTable_[nullptr].counterCacheSize_;
@@ -622,12 +698,10 @@ int PerceptronPrefetchFilter::initThis() {
     const uint32_t VCSize = prefUsefulTable_[nullptr].victimCacheSize_;
     const uint8_t VCAssoc = prefUsefulTable_[nullptr].victimCacheAssoc_;
     prefUsefulTable_.clear();
-    bool usePrefNow = false;
-    for (auto level : caches_) {
-        usePrefNow |= usePref_[level.front()->cacheLevel_];
+    for (auto& level : caches_) {
         for (BaseCache* cache : level) {
             prefUsefulTable_[cache] = PrefetchUsefulTable();
-            if (usePrefNow) {
+            if (havePref_[cache->cacheLevel_] || allowUpgrade_) {
                 CHECK_RET(prefUsefulTable_[cache].init(counterBits, CCSize,
                         CCAssoc, VCSize, VCAssoc, counterInit_, cache,
                         CCTagBits, VCTagBits),
@@ -646,7 +720,6 @@ int PerceptronPrefetchFilter::initThis() {
                 std::vector<Stats::Vector*>(cacheCount) :
                 std::vector<Stats::Vector*>());
     }
-
     return 0;
 }
 
@@ -658,6 +731,8 @@ PerceptronPrefetchFilter::Tables& PerceptronPrefetchFilter::getTable(
         return workTables_.back()[0];
     } else {
         uint8_t cpuIndex = cpuSharedTable_ ? 0 : *(cache->cpuIds_.begin());
+        CHECK_ARGS_EXIT(cache->cacheLevel_ != 0,
+                "ICache work table not supportted");
         uint8_t cacheIndex = cacheSharedTable_ ? 0 : cache->cacheLevel_ - 1;
         CHECK_ARGS_EXIT(!workTables_[cacheIndex].empty(),
                 "Trying to get a worktable for cache without prefetch");
@@ -706,8 +781,10 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
     
     int8_t step = 0;
     switch (type) {
-    case GoodPref: step = trainStep_[cacheLevel]; break;
-    case BadPref: step = -trainStep_[cacheLevel]; break;
+    case GoodPref: step =
+            hitTrainStep_[cacheLevel ? cacheLevel - 1 : cacheLevel]; break;
+    case BadPref: step =
+            -missTrainStep_[cacheLevel ? cacheLevel - 1 : cacheLevel]; break;
     case UselessPref: step = -uselessPrefStep_; break;
     }
 
@@ -718,8 +795,44 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
         if ((*indexPtr)[i] != 0xffff) {
             workTable.featureTable_[i].read((*indexPtr)[i], &weight);
             *weight += step;
+            DEBUG_PF(2, "Weight @%s[%d]: %u(add with %d)",
+                    featureList_[i].name_.c_str(), (*indexPtr)[i],
+                    uint32_t(*weight), step);
         }
     }
+    return 0;
+}
+
+int PerceptronPrefetchFilter::removePrefetch(BaseCache* cache,
+        const uint64_t& prefAddr) {
+    DEBUG_PF(1, "Invalidate Prefetch @0x%lx", prefAddr);
+    const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
+    
+    // 首先查找相关的源Cache
+    std::set<BaseCache*> srcCaches;
+    CHECK_RET(usefulTable_[cache].findSrcCaches(prefBlkAddr,
+            &srcCaches), "Failed to found prefetch recorded in cache");
+    
+    uint8_t counter;
+    // 说明一个预取数据被预取替换了，需要删除相应的记录
+    CHECK_RET(prefUsefulTable_[cache].evictPref(prefBlkAddr,
+            &counter), "Failed to remove old pref info when replaced");
+    
+    // 基于被替换的预取有害情况进行训练，只有开启统计表格才会进行训练
+    if (prefUsefulTable_[cache].valid_ && counter <= counterInit_) {
+        for (BaseCache* srcCache : srcCaches) {
+            // 不对ICache进行训练
+            if (!srcCache->cacheLevel_) continue;
+            Tables& workTable = getTable(srcCache);
+            CHECK_RET(train(workTable, prefBlkAddr, cache->cacheLevel_,
+                    counter == counterInit_ ? UselessPref : BadPref),
+                    "Failed to update training when pref evicted"); 
+        }
+    }
+    
+    CHECK_RET(BasePrefetchFilter::removePrefetch(cache, prefAddr),
+            "Failed to remove prefetch record from Base Prefetch Filter");
+    
     return 0;
 }
 

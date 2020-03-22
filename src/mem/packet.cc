@@ -49,6 +49,9 @@
  */
 
 #include "mem/packet.hh"
+#include "mem/cache/base.hh"
+#include "mem/cache/mshr.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 #include <algorithm>
 #include <cstring>
@@ -226,6 +229,17 @@ MemCmd::commandInfo[] =
     { SET2(IsInvalidate, IsResponse),
       InvalidCmd, "InvalidateResp" }
 };
+
+/// 迁移到cc以避免头文件互相包含问题
+void
+Packet::deleteData() {
+    DEBUG_MEM("Delete packet[%p] @0x%lx data[%p]", this, addr, data);
+    if (flags.isSet(DYNAMIC_DATA))
+        delete [] data;
+
+    flags.clear(STATIC_DATA|DYNAMIC_DATA);
+    data = NULL;
+}
 
 bool
 Packet::trySatisfyFunctional(Printable *obj, Addr addr, bool is_secure, int size,

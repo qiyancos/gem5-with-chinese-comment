@@ -82,7 +82,8 @@ public:
     int updateMiss(const uint64_t& addr);
     
     // 当新的Pref出现的时候，进行替换信息的更新
-    int addPref(const uint64_t& prefAddr, const uint64_t evictedAddr);
+    int addPref(const uint64_t& prefAddr, const uint64_t evictedAddr,
+            const DataType type);
     
     // 当前Cache中的预取被替换了
     int evictPref(const uint64_t& addr, uint8_t* counterPtr);
@@ -184,7 +185,7 @@ public:
     
     // 通知发生了Miss事件
     int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
-            const uint64_t& combinedAddr, const DataTypeInfo& info) override;
+            const PacketPtr& combinedPkt, const DataTypeInfo& info) override;
     
     // 通知发生了Fill事件
     int notifyCacheFill(BaseCache* cache, const PacketPtr &pkt,
@@ -267,12 +268,18 @@ private:
     // 用于初始化数据的函数
     int initThis();
 
+    // 用于初始化统计变量
+    int initStats();
+
     // 依据给定的信息确定处理的目标表格
     Tables& getTable(BaseCache* cache);
 
     // 对一个给定的预取进行奖励或者惩罚，处理成功返回1，失败返回0，错误返回-1
     int train(Tables& workTable, const uint64_t& prefAddr,
             const uint8_t cacheLevel, const TrainType type);
+    
+    // 执行删除Prefetch记录操作的内部函数
+    int removePrefetch(BaseCache* cache, const uint64_t& prefAddr);
 
     // 依据信息对Prefetch Table和Reject Table进行更新
     int updateTable(Tables& workTable, const uint64_t& prefAddr,
@@ -327,7 +334,7 @@ private:
     const uint8_t weightBits_;
 
     // Feature权重的初始化数值
-    const uint8_t weightInit_;
+    std::vector<uint8_t> weightInit_;
 
     // 有害表格计数器的初始化数值
     const uint8_t counterInit_;
@@ -335,8 +342,11 @@ private:
     // 将预取设置为到L1的可信度阈值
     std::vector<uint16_t> prefThreshold_;
 
-    // 不同层级缓存相关反馈对应的训练幅度
-    std::vector<uint8_t> trainStep_;
+    // 不同层级缓存相关反馈对应的训练幅度(Miss)
+    std::vector<uint8_t> missTrainStep_;
+
+    // 不同层级缓存相关反馈对应的训练幅度(Hit)
+    std::vector<uint8_t> hitTrainStep_;
 
     // 对于无用预取的训练Step，为0则表示不处理
     const uint8_t uselessPrefStep_;
@@ -347,7 +357,7 @@ private:
     // 预取有害性统计相关的表格
     std::map<BaseCache*, PrefetchUsefulTable> prefUsefulTable_;
     
-    // 针对非LLC的结构使用的表格
+    // 针对非LLC的结构使用的表格（目前不对L1ICache设置表格）
     std::vector<std::vector<Tables>> workTables_;
 };
 

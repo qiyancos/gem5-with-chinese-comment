@@ -104,6 +104,7 @@ BasePrefetcher::BasePrefetcher(const BasePrefetcherParams *p)
     /// 设置PageOffset的位数
     pageOffsetBits_ = 0;
     while (pageBytes >> (++pageOffsetBits_)) {}
+    pageOffsetBits_--;
 }
 
 void
