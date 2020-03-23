@@ -33,11 +33,14 @@
 
 #include <cstdint>
 #include <string>
+#include <functional>
 #include <map>
 #include <set>
 #include <list>
+#include <queue>
 
 #include "base/statistics.hh"
+#include "base/types.hh"
 #include "mem/cache/prefetch_filter/pref_info.hh"
 
 class BaseCache;
@@ -176,12 +179,19 @@ public:
     // 当一个Demand发生Miss进行有害性信息更新
     int updateMiss(const PacketPtr& srcPkt);
     
-    // 在预取被Demand Request替换掉的时候进行处理，同时更新统计计数
-    int updateEvict(const uint64_t& addr);
+    // 在预取被Demand Request替换掉的时候进行处理，同时处理无效化
+    int updateEvict(const uint64_t& addr,
+            std::set<BaseCache*>* invalidatingCaches = nullptr);
     
     // 当一个预取替换之前的无用预取时进行更新，同时更新统计计数
     int replaceEvict(const PacketPtr& prefPkt, const uint64_t& oldPrefAddr);
 
+    // 将给定的预取无效化
+    int invalidatePref(const Tick& completeTick, const uint64_t& addr);
+    
+    // 依据给定的时钟周期将到点的预取无效化
+    int updateInvalidation(const Tick& tickNow);
+    
     // 对时间维度的信息进行更新，并重置相关信息项
     int updatePrefTiming(
             std::vector<std::vector<Stats::Vector*>>& totalUsefulValue,
@@ -200,7 +210,7 @@ private:
     
     // 用于生成一个预取对应的Prefetch Info的Index
     int genIndex(const PacketPtr& prefPkt, std::vector<uint64_t>* indexes);
-
+    
 private:
     // 表示当前是否实际有效
     bool valid_ = false;
@@ -214,11 +224,28 @@ private:
     // 依据地址到有用信息的映射，用于对Cache中被预取替换的数据
     std::map<uint64_t, std::set<PrefetchUsefulInfo*>> evictMap_;
 
+    // 记录无效化信息的结构
+    typedef std::pair<Tick, uint64_t> Invalidation;
+
+    // 用于快速找到下一个需要无效化的预取
+    std::priority_queue<Invalidation, std::vector<Invalidation>,
+            std::greater<Invalidation>> invalidatingTick_;
+
+    // 无效化被打断，直接删除的预取
+    std::set<uint64_t> forceDeletion_;
+
+    // 当前正在被处于无效化计时的预取
+    std::map<uint64_t, std::set<PrefetchUsefulInfo*>> invalidatingMap_;
+
+    // 已经被无效化的预取
+    std::map<uint64_t, std::set<PrefetchUsefulInfo*>> invalidatedMap_;
+
+    // 所有Cache均已经被删除的预取，准备用于统计
+    static std::vector<PrefetchUsefulInfo> deletedPref_;
+    
     // 存放全局有用信息的结构
     static std::map<uint64_t, PrefetchUsefulInfo> infoList_;
     
-    // 存放时间维度统计周期内新被替换的预取
-    std::vector<PrefetchUsefulInfo> evictedPref_;
 };
 
 } // namespace prefetch_filter

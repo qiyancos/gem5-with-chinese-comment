@@ -108,6 +108,9 @@ int BasePrefetchFilter::addCache(BaseCache* newCache) {
 int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
         const PacketPtr& pkt, const uint64_t& hitAddr,
         const DataTypeInfo& info) {
+    // 时间维度的更新
+    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    
     const uint64_t hitBlkAddr = hitAddr & cacheLineAddrMask_; 
     if (info.source == Dmd) {
         for (BaseCache* cache : pkt->caches_) {
@@ -127,7 +130,7 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
                     "Failed to update when dmd hit pref data");
             // 如果没有子类，则删除，否则由子类进行删除
             if (!typeHash_) {
-                CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr),
+                CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr, true),
                         "Failed to remove prefetch record when hit by dmd");
             }
         }
@@ -161,6 +164,9 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
 int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
         const PacketPtr& pkt, const PacketPtr& combinedPkt,
         const DataTypeInfo& info) {
+    // 时间维度的更新
+    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    
     if (info.source == Dmd) {
         for (BaseCache* cache : pkt->caches_) {
             for (const uint8_t cpuId : cache->cpuIds_) {
@@ -206,6 +212,9 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
 int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
         const PacketPtr &pkt, const uint64_t& evictedAddr,
         const DataTypeInfo& info) {
+    // 时间维度的更新
+    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    
     const uint64_t evictedBlkAddr = evictedAddr & cacheLineAddrMask_;
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
@@ -252,15 +261,21 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
 
 int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
         const uint64_t& prefAddr, const PrefetchInfo& info) {
+    // 时间维度的更新
+    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    
     // 默认的过滤器没有实现，因此不会改变预取数据的存放位置
     return cache->cacheLevel_;
 }
 
 int BasePrefetchFilter::invalidatePrefetch(BaseCache* cache,
         const uint64_t& prefAddr){
+    // 时间维度的更新
+    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    
     const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
     // 删除被替换掉的预取
-    CHECK_RET_EXIT(removePrefetch(cache, prefBlkAddr),
+    CHECK_RET_EXIT(removePrefetch(cache, prefBlkAddr, false),
             "Failed to remove prefetch record when invalidated");
     return 0;
 }
@@ -282,11 +297,28 @@ int BasePrefetchFilter::genHash(const std::string& name) {
 }
 
 int BasePrefetchFilter::removePrefetch(BaseCache* cache,
-        const uint64_t& prefAddr){
+        const uint64_t& prefAddr, const bool isHit){
     const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
+    std::set<BaseCache*> correlatedCaches;
     // 删除被替换掉的预取
-    CHECK_RET(usefulTable_[cache].updateEvict(prefBlkAddr),
+    CHECK_RET(usefulTable_[cache].updateEvict(prefBlkAddr, &correlatedCaches),
             "Failed to remove pref from the table");
+    // 对无效化传递进行设置
+    if (isHit) {
+        uint8_t cacheLevel = cache->cacheLevel_ ? cache->cacheLevel_ : 1;
+        Tick completedTick = curTick() + cache->forwardLatency * clockPeriod();
+        while (++cacheLevel <= maxCacheLevel_) {
+            completedTick += caches_[cacheLevel].front()->forwardLatency *
+                    clockPeriod();
+            for (auto otherCache : correlatedCaches) {
+                if (otherCache->cacheLevel_ == cacheLevel) {
+                    CHECK_RET(usefulTable_[otherCache].invalidatePref(
+                            completedTick, prefAddr),
+                            "Failed to forward invalidate prefetch");
+                }
+            }
+        }
+    }
     return 0;
 }
 
@@ -352,6 +384,14 @@ int BasePrefetchFilter::initThis() {
     timingStats_.resize(numCpus_, sample);
     for (int i = 0; i < numCpus_; i++) {
         timingDegree_.push_back(&(timingStats_[i].prefDegreeCount_));
+    }
+    return 0;
+}
+
+int BasePrefetchFilter::checkUpdateTiming() {
+    for (auto& tablePair : usefulTable_) {
+        CHECK_RET(tablePair.second.updateInvalidation(curTick()),
+                "Failed to update invalidation for a cache");
     }
     return 0;
 }

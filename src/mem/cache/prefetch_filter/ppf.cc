@@ -365,7 +365,7 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
         CHECK_RET_EXIT(prefUsefulTable_[cache].updateHit(hitBlkAddr),
                 "Failed to update pref hit to prefetch useful table");
         // 由于Demand命中，需要强制删除记录
-        CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr),
+        CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr, true),
                 "Failed to remove prefetch record when hit by dmd");
     }
     // TODO 预取命中预取暂时不做处理
@@ -571,7 +571,7 @@ int PerceptronPrefetchFilter::invalidatePrefetch(BaseCache* cache,
     DEBUG_PF(0, "PPF Event Invalidate From %s[0x%p]",
             BaseCache::levelName_[cache->cacheLevel_].c_str(), cache);
     
-    CHECK_RET_EXIT(removePrefetch(cache, prefAddr),
+    CHECK_RET_EXIT(removePrefetch(cache, prefAddr, false),
             "Failed to remove prefetch record when invalidated");
     fprintf(stderr, "\n");
     return 0;
@@ -804,8 +804,7 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
 }
 
 int PerceptronPrefetchFilter::removePrefetch(BaseCache* cache,
-        const uint64_t& prefAddr) {
-    DEBUG_PF(1, "Invalidate Prefetch @0x%lx", prefAddr);
+        const uint64_t& prefAddr, const bool isHit) {
     const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
     
     // 首先查找相关的源Cache
@@ -830,7 +829,7 @@ int PerceptronPrefetchFilter::removePrefetch(BaseCache* cache,
         }
     }
     
-    CHECK_RET(BasePrefetchFilter::removePrefetch(cache, prefAddr),
+    CHECK_RET(BasePrefetchFilter::removePrefetch(cache, prefAddr, isHit),
             "Failed to remove prefetch record from Base Prefetch Filter");
     
     return 0;
@@ -1043,7 +1042,7 @@ void PerceptronPrefetchFilter::regStats() {
     
     CHECK_ARGS_EXIT(weightBits_ > 0, "Bit number of the feature weight must%s",
             " be greater than zero");
-    int weightNum = 1 << (weightBits_ - 1);
+    int weightNum = 1 << weightBits_;
     const std::vector<Stats::Vector*> sample(featureList_.size());
     // 为LLC设置Stats变量
     int i = 0;

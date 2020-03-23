@@ -167,12 +167,19 @@ public:
     // 添加当前预取在某一个Cache中的替换地址
     int addReplacedAddr(BaseCache* cache, const uint64_t& replacedAddr);
 
+    // 删除一个预取在某一个Cache中的替换地址，并返回可能相关的需要无效化Cache
+    int rmReplacedAddr(BaseCache* cache,
+            std::set<BaseCache*>* correlatedCaches);
+
     // 获取当前预取在某一个Cache中的替换地址
     int getReplacedAddr(BaseCache* cache, uint64_t* replacedAddr);
 
     // 判断当前的预取是不是一个足够有用的预取
     int isUseful();
-   
+  
+    // 判断当前的预取是否可以被删除
+    int canDelete();
+
     // 判断当前的预取是那一类预取
     int getTypeIndex();
 

@@ -263,6 +263,28 @@ int PrefetchUsefulInfo::addReplacedAddr(BaseCache* cache,
     return 0;
 }
 
+int PrefetchUsefulInfo::rmReplacedAddr(BaseCache* cache,
+        std::set<BaseCache*>* correlatedCaches) {
+    CHECK_ARGS(replacedAddress_.find(cache) != replacedAddress_.end(),
+            "Replaced address does not exist");
+    replacedAddress_.erase(cache);
+    if (correlatedCaches) {
+        uint64_t evictCoreIDMap =
+                generateCoreIDMap(std::set<BaseCache*> {cache});
+        for (auto mapPair : replacedAddress_) {
+            BaseCache* otherCache = mapPair.first;
+            if (otherCache->cacheLevel_ > cache->cacheLevel_) {
+                uint64_t coreIDMap = generateCoreIDMap(
+                        std::set<BaseCache*> {cache});
+                if ((coreIDMap & evictCoreIDMap) == evictCoreIDMap) {
+                    correlatedCaches->insert(otherCache);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 int PrefetchUsefulInfo::getReplacedAddr(BaseCache* cache,
         uint64_t* replacedAddr) {
     CHECK_ARGS(replacedAddress_.find(cache) != replacedAddress_.end(),
@@ -283,6 +305,10 @@ int PrefetchUsefulInfo::isUseful() {
         return 1;
     }
     return 0;
+}
+
+int PrefetchUsefulInfo::canDelete() {
+    return replacedAddress_.empty();
 }
 
 int PrefetchUsefulInfo::getTypeIndex() {

@@ -55,21 +55,15 @@
 
 #define CHECK_RET_EXIT(expr, info, ...) { \
     int errCode = expr; \
-    if (errCode < 0) { \
-        fprintf(stderr, (std::string("[ERROR] ") + __FILE__ + "[%d]: " + \
-                info + " In [%s]." + " Error code = %d\n").c_str(), \
-                __LINE__, ##__VA_ARGS__, __func__, errCode); \
-        exit(errCode); \
-    } \
+    panic_if(errCode < 0, (std::string(__FILE__) + "[%d]: " + \
+            info + " In [%s]." + " Error code = %d\n").c_str(), \
+            __LINE__, ##__VA_ARGS__, __func__, errCode); \
 }
 
 #define CHECK_ARGS_EXIT(expr, info, ...) { \
-    if (!(expr)) { \
-        fprintf(stderr, (std::string("[ERROR] ") + __FILE__ + "[%d]: " + \
-                info + " In [%s].\n").c_str(), __LINE__, \
-                ##__VA_ARGS__, __func__); \
-        exit(-1); \
-    } \
+    panic_if(!(expr), (std::string(__FILE__) + "[%d]: " + \
+            info + " In [%s].\n").c_str(), __LINE__, \
+            ##__VA_ARGS__, __func__); \
 }
 
 #define CHECK_RET(expr, info, ...) { \

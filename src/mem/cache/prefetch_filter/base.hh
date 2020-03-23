@@ -110,11 +110,15 @@ protected:
     static int genHash(const std::string& name);
     
     // 删除和某一个预取相关的记录
-    int removePrefetch(BaseCache* cache, const uint64_t& prefAddr);
+    int removePrefetch(BaseCache* cache, const uint64_t& prefAddr,
+            const bool isHit);
 
 private:
     // 进行基本结构的初始化
     int initThis();
+
+    // 该函数会执行和时序相关的更新
+    int checkUpdateTiming();
 
     // 该函数会对时间维度信息进行统计和打印
     int checkUpdateTimingStats();
@@ -187,10 +191,10 @@ public:
 
 private:
     // 基于时间维度的统计
-    const uint64_t statsPeriod_;
+    const Tick statsPeriod_;
 
     // 下一个统计周期开始的Tick位置
-    uint64_t nextPeriodTick_;
+    Tick nextPeriodTick_;
     
     // 时间维度统计周期的计数
     uint64_t timingStatsPeriodCount_ = 0;

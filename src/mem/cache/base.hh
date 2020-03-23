@@ -838,13 +838,16 @@ class BaseCache : public MemObject
      */
     const Cycles dataLatency;
 
+  public:
     /**
      * This is the forward latency of the cache. It occurs when there
      * is a cache miss and a request is forwarded downstream, in
      * particular an outbound miss.
      */
+    /// 修改为public以便进行访问
     const Cycles forwardLatency;
 
+  protected:
     /** The latency to fill a cache block */
     const Cycles fillLatency;
 

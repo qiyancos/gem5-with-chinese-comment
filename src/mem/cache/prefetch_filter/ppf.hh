@@ -279,7 +279,8 @@ private:
             const uint8_t cacheLevel, const TrainType type);
     
     // 执行删除Prefetch记录操作的内部函数
-    int removePrefetch(BaseCache* cache, const uint64_t& prefAddr);
+    int removePrefetch(BaseCache* cache, const uint64_t& prefAddr,
+            const bool isHit);
 
     // 依据信息对Prefetch Table和Reject Table进行更新
     int updateTable(Tables& workTable, const uint64_t& prefAddr,
