@@ -75,6 +75,9 @@ public:
             BaseCache* cache = nullptr,
             const int8_t CCTagBits = -1, const int8_t VCTagBits = -1);
 
+    // 判断一个预取是否可用
+    int isPrefValid(const uint64_t& addr);
+
     // 对命中Pref的情况进行处理
     int updateHit(const uint64_t& addr);
     
@@ -85,8 +88,15 @@ public:
     int addPref(const uint64_t& prefAddr, const uint64_t evictedAddr,
             const DataType type);
     
-    // 当前Cache中的预取被替换了
+    // 当前Cache中的预取被替换了（如果需要训练返回1，否则返回0）
     int evictPref(const uint64_t& addr, uint8_t* counterPtr);
+   
+    // 将给定的预取无效化
+    int invalidatePref(const uint64_t& addr, uint8_t* counterPtr);
+
+private:
+    // 该函数负责完全删除一个预取的记录
+    int deletePref(const uint64_t& addr, uint8_t* counterPtr);
 
 public:
     // Counter的大小
@@ -154,6 +164,9 @@ private:
 
     // Counter Cache
     CacheTable<CounterEntry> counterCache_;
+
+    // 最近被无效化但是尚未删除的预取地址（仅用于正确性检查）
+    std::set<uint64_t> invalidatedPref_;
 };
 
 } // namespace prefetch_filter
@@ -184,7 +197,7 @@ public:
             const uint64_t& hitAddr, const DataTypeInfo& info) override;
     
     // 通知发生了Miss事件
-    int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
+    int notifyCacheMiss(BaseCache* cache, PacketPtr& pkt,
             const PacketPtr& combinedPkt, const DataTypeInfo& info) override;
     
     // 通知发生了Fill事件
@@ -208,6 +221,9 @@ private:
     // 针对不同类型预取的训练方法对应的enum类型
     enum TrainType {GoodPref, BadPref, UselessPref};
     
+    // 获取训练类型的字符串表示，用于Debug
+    std::string getTrainTypeStr(const TrainType type);
+
     // 一套PPF基本表格的数据结构
     class Tables {
     public:
@@ -273,6 +289,10 @@ private:
 
     // 依据给定的信息确定处理的目标表格
     Tables& getTable(BaseCache* cache);
+
+    // 该函数被用于接收并处里来自父类的预取无效化操作
+    int helpInvalidatePref(BaseCache* cache,
+            const std::set<uint64_t>& addrs);
 
     // 对一个给定的预取进行奖励或者惩罚，处理成功返回1，失败返回0，错误返回-1
     int train(Tables& workTable, const uint64_t& prefAddr,

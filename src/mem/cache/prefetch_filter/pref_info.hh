@@ -39,11 +39,17 @@
 
 #include "base/statistics.hh"
 class BaseCache;
+class Packet;
 
 namespace prefetch_filter {
 
+typedef Packet *PacketPtr;
+
 // 依据一组Cache指针生成对应的CPUID位向量
 uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches);
+
+// 依据预取的信息生成当前预取的全局唯一ID
+uint64_t generatePrefIndex(const PacketPtr pkt);
 
 // 数据类型
 enum DataType {NullType, Dmd, Pref, PendingPref, PendingDmd};
@@ -174,6 +180,9 @@ public:
     // 获取当前预取在某一个Cache中的替换地址
     int getReplacedAddr(BaseCache* cache, uint64_t* replacedAddr);
 
+    // 获取当前Cache所有的所在Cache记录
+    int getLocatedCaches(std::set<BaseCache*>* caches);
+
     // 判断当前的预取是不是一个足够有用的预取
     int isUseful();
   
@@ -205,9 +214,6 @@ public:
         
         // 多核心预取有害统计的次数
         int crossCoreHarmCount_ = 0;
-        
-        // 该预取是否曾经被Demand命中过
-        bool demandHit_ = false;
     } info_;
     
     // 发射当前预取的Cache等级

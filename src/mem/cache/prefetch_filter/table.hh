@@ -54,19 +54,21 @@ class CacheTable {
 public:
     // 初始化函数
     int init(const uint32_t size, const uint8_t assoc,
+            const uint8_t rightShiftBits, const bool valid = false);
+
+    // 初始化函数
+    int init(const int8_t tagBits, const uint32_t size, const uint8_t assoc,
+            const uint8_t rightShiftBits, const bool valid = false);
+
+    // 初始化函数
+    int init(const uint32_t size, const uint8_t assoc,
+            const uint8_t rightShiftBits, const T& data,
             const bool valid = false);
 
     // 初始化函数
     int init(const int8_t tagBits, const uint32_t size, const uint8_t assoc,
+            const uint8_t rightShiftBits, const T& data,
             const bool valid = false);
-
-    // 初始化函数
-    int init(const uint32_t size, const uint8_t assoc, const T& data,
-            const bool valid = false);
-
-    // 初始化函数
-    int init(const int8_t tagBits, const uint32_t size, const uint8_t assoc,
-            const T& data, const bool valid = false);
 
     // 判断某一个地址是否有数据，0表示不存在，1表示存在，-1表示出现错误
     int touch(const uint64_t& addr);
@@ -129,7 +131,10 @@ private:
 
     // 表格的数据实体
     std::vector<Set> data_;
-    
+
+    // 表示了右侧忽略的位数
+    uint8_t rightShiftBits_ = 0;
+
     // 依据Tag的大小，通过压缩地址空间节省开销，但是会出现部分错误识别
     // 该变量会屏蔽地址中的高位，压缩Tag空间
     uint64_t tagMask_;
@@ -139,7 +144,8 @@ private:
 };
 
 class IdealPrefetchUsefulTable {
-typedef Packet *PacketPtr;
+public:
+    typedef Packet *PacketPtr;
 
 public:
     // 初始化函数
@@ -150,21 +156,35 @@ public:
     
     // 初始化函数
     IdealPrefetchUsefulTable(BaseCache* cache, const bool valid);
+    
+    // 判断一个预取是否被Demand Request覆盖了
+    int isPrefValid(const uint64_t& addr);
 
     // 为一个新的预取生成信息项
-    int newPref(const PacketPtr& prefPkt);
+    int newPref(PacketPtr& prefPkt);
+
+    // 删除一个预取的所有信息香
+    int deletePref(const PacketPtr& prefPkt);
 
     // 当新的预取插入时添加表项，一次会更新多个对应的预取信息
     int addPref(const PacketPtr& prefPkt, const uint64_t& replacedAddr,
             const DataType type);
 
-    // 判断一个预取是否被Demand Request覆盖了
-    int isPrefHit(const uint64_t& addr);
+    // 在预取数据被预取命中的时候进行合并记录
+    int combinePref(const PacketPtr& srcPkt, const uint64_t& hitAddr);
+   
+    // 在预取被Demand Request替换掉的时候进行处理，同时处理无效化
+    int evictPref(const uint64_t& addr,
+            std::set<BaseCache*>* invalidatingCaches = nullptr);
     
-    // 查找当前有用信息表中和某一个地址相关的信息，可以使Victim也可以是Pref
+    // 查找当前有用信息表中和某一个地址相关的信息
     int findSrcCaches(const uint64_t& addr, std::set<BaseCache*>* caches);
 
-    // 查找当前有用信息表中和某一个地址相关的信息，可以使Victim也可以是Pref
+    // 查找包含被无效化预取的源Cache（该函数会在无效化之后使用）
+    int findInvalidatedCaches(const uint64_t& addr,
+            std::set<BaseCache*>* caches);
+
+    // 查找当前有用信息表中和某一个地址相关的信息
     // 该函数不仅会查找Cache的预取，还会查找处理中的预取
     int findAllSrcCaches(BaseCache* cache, const PacketPtr& pkt,
             std::set<BaseCache*>* caches);
@@ -173,24 +193,19 @@ public:
     int updateHit(const PacketPtr& srcPkt, const uint64_t& hitAddr,
             const DataType srcType);
    
-    // 在预取数据被预取命中的时候进行合并记录
-    int combinePref(const PacketPtr& srcPkt, const uint64_t& hitAddr);
-   
     // 当一个Demand发生Miss进行有害性信息更新
     int updateMiss(const PacketPtr& srcPkt);
-    
-    // 在预取被Demand Request替换掉的时候进行处理，同时处理无效化
-    int updateEvict(const uint64_t& addr,
-            std::set<BaseCache*>* invalidatingCaches = nullptr);
     
     // 当一个预取替换之前的无用预取时进行更新，同时更新统计计数
     int replaceEvict(const PacketPtr& prefPkt, const uint64_t& oldPrefAddr);
 
-    // 将给定的预取无效化
-    int invalidatePref(const Tick& completeTick, const uint64_t& addr);
+    // 设置预取无效化任务
+    int addPrefInvalidation(BaseCache* cache, const Tick& completeTick,
+            const uint64_t& addr);
     
     // 依据给定的时钟周期将到点的预取无效化
-    int updateInvalidation(const Tick& tickNow);
+    int updateInvalidation(const Tick& tickNow,
+            std::set<uint64_t>* invalidatedPref);
     
     // 对时间维度的信息进行更新，并重置相关信息项
     int updatePrefTiming(
@@ -204,14 +219,8 @@ public:
     int setValidBit(const bool valid);
 
 private:
-    // 用于生成一个预取对应的Prefetch Info的Index
-    uint64_t genIndex(BaseCache* cache, const uint8_t targetCacheLevel,
-            const uint64_t& addr);
-    
-    // 用于生成一个预取对应的Prefetch Info的Index
-    int genIndex(const PacketPtr& prefPkt, std::vector<uint64_t>* indexes);
-    
-private:
+    // 下面是基本数据结构
+
     // 表示当前是否实际有效
     bool valid_ = false;
 
@@ -224,21 +233,46 @@ private:
     // 依据地址到有用信息的映射，用于对Cache中被预取替换的数据
     std::map<uint64_t, std::set<PrefetchUsefulInfo*>> evictMap_;
 
+private:
+    // 下面是和无效化有关的结构
+    
     // 记录无效化信息的结构
-    typedef std::pair<Tick, uint64_t> Invalidation;
+    struct Invalidation {
+        // 对应的无效化完成时间
+        Tick completeTick_;
+        // 对应的地址
+        uint64_t addr_;
+        // 发送请求的Cache
+        BaseCache* cache_;
+        // 比较大小排序函数
+        bool operator< (const Invalidation& b) const {
+            return completeTick_ > b.completeTick_;
+        }
+    };
+    
+    // 记录已经无效化的信息
+    struct InvalidatedRecord {
+        // 无效化的源头
+        BaseCache* srcCache_;
+        // 相关的预取信息
+        std::set<PrefetchUsefulInfo*> infoList_;
+    };
 
     // 用于快速找到下一个需要无效化的预取
-    std::priority_queue<Invalidation, std::vector<Invalidation>,
-            std::greater<Invalidation>> invalidatingTick_;
+    std::priority_queue<Invalidation, std::vector<Invalidation>>
+            invalidatingTick_;
+    
+    // 当前正在被处于无效化计时的预取
+    std::set<uint64_t> invalidatingPref_;
 
     // 无效化被打断，直接删除的预取
-    std::set<uint64_t> forceDeletion_;
+    std::set<uint64_t> forceDeletedPref_;
 
-    // 当前正在被处于无效化计时的预取
-    std::map<uint64_t, std::set<PrefetchUsefulInfo*>> invalidatingMap_;
-
-    // 已经被无效化的预取
-    std::map<uint64_t, std::set<PrefetchUsefulInfo*>> invalidatedMap_;
+    // 已经被无效化的预取信息
+    std::map<uint64_t, InvalidatedRecord> invalidatedMap_;
+    
+private:
+    // 下面是全局记录的预取信息结构
 
     // 所有Cache均已经被删除的预取，准备用于统计
     static std::vector<PrefetchUsefulInfo> deletedPref_;

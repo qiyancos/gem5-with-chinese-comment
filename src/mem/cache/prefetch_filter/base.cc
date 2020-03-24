@@ -125,9 +125,11 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
     // 依据源数据和目标数据类型进行统计数据更新
     if (info.source == Dmd) {
         if (info.target == Pref) {
-            // Demand Request命中了预取数据
-            CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitBlkAddr, Dmd),
-                    "Failed to update when dmd hit pref data");
+            if (usefulTable_[cache].isPrefValid(hitBlkAddr)) {
+                // Demand Request命中了预取数据，只有当前预取还是预取才会处理
+                CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitBlkAddr,
+                        Dmd), "Failed to update when dmd hit pref data");
+            }
             // 如果没有子类，则删除，否则由子类进行删除
             if (!typeHash_) {
                 CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr, true),
@@ -146,9 +148,11 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
         }
        
         // 预取命中了预取数据
-        if (info.target == Pref) {
+        if (info.target == Pref &&
+                usefulTable_[cache].isPrefValid(hitBlkAddr)) {
+            // 只有目标预取确实是一个预取，才会更新
             CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitBlkAddr,
-                    Pref), "Failed to update when useful pref hit %s",
+                    Pref), "Failed to update when useful pref hit "
                     "pref data");
             CHECK_RET_EXIT(usefulTable_[cache].combinePref(pkt, hitBlkAddr),
                     "Failed to combine two prefetch when pref hit pref data");
@@ -162,7 +166,7 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
 }
 
 int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
-        const PacketPtr& pkt, const PacketPtr& combinedPkt,
+        PacketPtr& pkt, const PacketPtr& combinedPkt,
         const DataTypeInfo& info) {
     // 时间维度的更新
     CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
@@ -184,14 +188,16 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
     CHECK_ARGS_EXIT(info.source != Pref || info.target != Dmd,
             "Prefetch will not combined with demand in mshr.");
     if (info.source == Dmd) {
-        for (BaseCache* cache : pkt->caches_) {
-            if (info.target == Pref && cache->cacheLevel_) {
+        if (info.target == Pref) {
+            for (BaseCache* cache : pkt->caches_) {
                 for (const uint8_t cpuId : cache->cpuIds_) {
                     (*shadowedPrefCount_[cache->cacheLevel_])[cpuId]++;
                 }
             }
-        }
-        if (info.target != Pref) {
+            // 一个新生成的没有合并的预取，需要添加对应信息进行追踪
+            CHECK_RET_EXIT(usefulTable_[cache].deletePref(combinedPkt),
+                    "Failed to add new prefetch info to useful table");
+        } else {
             // 一个新的Dmd请求发生了Miss
             CHECK_RET_EXIT(usefulTable_[cache].updateMiss(pkt),
                     "Failed to update when demand request miss");
@@ -219,8 +225,10 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
         // 则会将对应预取从当前Cache记录表中剔除
-        CHECK_RET_EXIT(usefulTable_[cache].updateEvict(evictedBlkAddr),
-                "Failed to remove pref from the table");
+        if (!typeHash_) {
+            CHECK_RET_EXIT(removePrefetch(cache, evictedBlkAddr, false),
+                    "Failed to remove prefetch record when hit by dmd");
+        }
     } else if (info.source == Pref) {
         // 预取替换了一个Demand Request请求的数据
         // 就需要对相关的替换信息进行记录
@@ -228,11 +236,7 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
             CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedBlkAddr,
                     Dmd), "Failed to add pref replacing dmd in the table");
         } else if (info.target == Pref) {
-            int result;
-            CHECK_RET_EXIT(result = usefulTable_[cache].isPrefHit(
-                    pkt->getAddr() & cacheLineAddrMask_),
-                    "Pref not exist in the table");
-            if (result) {
+            if (!usefulTable_[cache].isPrefValid(evictedBlkAddr)) {
                 // 如果被替换的预取被Demand Request覆盖，那么它将会被看作是
                 // 一个Demand Request，成为一个有害情况的备选项
                 CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedBlkAddr,
@@ -296,27 +300,32 @@ int BasePrefetchFilter::genHash(const std::string& name) {
     return 0;
 }
 
+int BasePrefetchFilter::helpInvalidatePref(BaseCache* cache,
+        const std::set<uint64_t>& addrs) {
+    return 0;
+}
+
 int BasePrefetchFilter::removePrefetch(BaseCache* cache,
         const uint64_t& prefAddr, const bool isHit){
     const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
     std::set<BaseCache*> correlatedCaches;
     // 删除被替换掉的预取
-    CHECK_RET(usefulTable_[cache].updateEvict(prefBlkAddr, &correlatedCaches),
+    CHECK_RET(usefulTable_[cache].evictPref(prefBlkAddr, &correlatedCaches),
             "Failed to remove pref from the table");
     // 对无效化传递进行设置
     if (isHit) {
         uint8_t cacheLevel = cache->cacheLevel_ ? cache->cacheLevel_ : 1;
         Tick completedTick = curTick() + cache->forwardLatency * clockPeriod();
         while (++cacheLevel <= maxCacheLevel_) {
-            completedTick += caches_[cacheLevel].front()->forwardLatency *
-                    clockPeriod();
             for (auto otherCache : correlatedCaches) {
                 if (otherCache->cacheLevel_ == cacheLevel) {
-                    CHECK_RET(usefulTable_[otherCache].invalidatePref(
-                            completedTick, prefAddr),
+                    CHECK_RET(usefulTable_[otherCache].addPrefInvalidation(
+                            cache, completedTick, prefAddr),
                             "Failed to forward invalidate prefetch");
                 }
             }
+            completedTick += caches_[cacheLevel].front()->forwardLatency *
+                    clockPeriod();
         }
     }
     return 0;
@@ -390,8 +399,14 @@ int BasePrefetchFilter::initThis() {
 
 int BasePrefetchFilter::checkUpdateTiming() {
     for (auto& tablePair : usefulTable_) {
-        CHECK_RET(tablePair.second.updateInvalidation(curTick()),
+        std::set<uint64_t> invalidatedPref;
+        CHECK_RET(tablePair.second.updateInvalidation(curTick(),
+                &invalidatedPref),
                 "Failed to update invalidation for a cache");
+        if (!invalidatedPref.empty()) {
+            CHECK_RET(helpInvalidatePref(tablePair.first, invalidatedPref),
+                    "Failed to forward invalidation info to child class");
+        }
     }
     return 0;
 }

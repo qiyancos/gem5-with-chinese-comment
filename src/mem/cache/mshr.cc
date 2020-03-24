@@ -363,6 +363,8 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
         /// 合并来源Cache
         prefTarget_.pkt->caches_.insert(pkt->caches_.begin(),
                 pkt->caches_.end());
+        prefTarget_.pkt->indexes_.insert(pkt->indexes_.begin(),
+                pkt->indexes_.end());
     } else {
         firstPkt->caches_.insert(pkt->caches_.begin(),
                 pkt->caches_.end());

@@ -91,7 +91,7 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     #          as the feature index
     original_features = VectorParam.String([
             "PC1 Confidence 0 12", # PC ^ Confidence;
-            "Address 0 6", # Address inside a cache block;
+            #"Address 0 6", # Address inside a cache block;
             "Address 6 6", # Offset of a cache block within a page;
             "PageAddress 0 10", # Lower bits of physical page num;
             "Confidence 0 3", # Confidence of the prefetch;

@@ -85,7 +85,7 @@ public:
             const uint64_t& hitAddr, const DataTypeInfo& info);
     
     // 通知发生了Miss事件
-    virtual int notifyCacheMiss(BaseCache* cache, const PacketPtr& pkt,
+    virtual int notifyCacheMiss(BaseCache* cache, PacketPtr& pkt,
             const PacketPtr& combinedPkt, const DataTypeInfo& info);
     
     // 通知发生了Fill事件
@@ -108,7 +108,11 @@ public:
 protected:
     // 用于生成当前类型实例的hash数值
     static int genHash(const std::string& name);
-    
+   
+    // 该函数被用于处理子类的预取无效化操作，减轻子类压力
+    virtual int helpInvalidatePref(BaseCache* cache,
+            const std::set<uint64_t>& addrs);
+
     // 删除和某一个预取相关的记录
     int removePrefetch(BaseCache* cache, const uint64_t& prefAddr,
             const bool isHit);

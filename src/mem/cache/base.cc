@@ -874,11 +874,7 @@ BaseCache::getNextQueueEntry()
                 assert(pkt->req->masterId() < system->maxMasters());
                 mshr_misses[pkt->cmdToIndex()][pkt->req->masterId()]++;
 
-                // allocate an MSHR and return it, note
-                // that we send the packet straight away, so do not
-                // schedule the send
-                MSHR* mshr = allocateMissBuffer(pkt, curTick(), false);
-                /// 通知为Prefetch分配MSHR的事件
+                /// 通知为Prefetch分配MSHR的事件（会对预取添加Index）
                 if (prefetchFilter_) {
                     prefetch_filter::DataTypeInfo infoPair;
                     infoPair.source = prefetch_filter::Pref;
@@ -886,6 +882,12 @@ BaseCache::getNextQueueEntry()
                     prefetchFilter_->notifyCacheMiss(this, pkt, nullptr,
                             infoPair);
                 }
+                
+                // allocate an MSHR and return it, note
+                // that we send the packet straight away, so do not
+                // schedule the send
+                MSHR* mshr = allocateMissBuffer(pkt, curTick(), false);
+                
                 return mshr;
             } else {
                 // free the request and packet

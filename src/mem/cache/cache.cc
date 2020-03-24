@@ -407,8 +407,8 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
                                                        pkt->req->masterId());
             pf = new Packet(req, pkt->cmd);
             /// 初始化新增信息，软件预取我们也当作Demand Request即可
-            pkt->recentCache_ = this;
-            pkt->copyNewInfo(pkt);
+            pf->recentCache_ = this;
+            pf->copyNewInfo(pkt);
             
             pf->allocate();
             assert(pf->getAddr() == pkt->getAddr());

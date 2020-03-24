@@ -47,6 +47,17 @@ uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches) {
     return result;
 }
 
+uint64_t generatePrefIndex(const PacketPtr pkt) {
+    // 只对新的预取生成Index
+    CHECK_ARGS_EXIT(pkt->caches_.size() == 1,
+            "Only generate index for newly generated prefetch");
+    CHECK_ARGS_EXIT(pkt->indexes_.size() == 0,
+            "Only generate index for newly generated prefetch");
+    return pkt->getAddr() ^
+            (uint64_t((*pkt->caches_.begin())->prefetcherId_) << 48) ^
+            (uint64_t(pkt->targetCacheLevel_) << 56);
+}
+
 std::string getDataTypeString(const DataType type) {
     switch(type) {
     case NullType: return "NullType";
@@ -290,6 +301,13 @@ int PrefetchUsefulInfo::getReplacedAddr(BaseCache* cache,
     CHECK_ARGS(replacedAddress_.find(cache) != replacedAddress_.end(),
             "Replaced address not exists");
     *replacedAddr = replacedAddress_[cache];
+    return 0;
+}
+
+int PrefetchUsefulInfo::getLocatedCaches(std::set<BaseCache*>* caches) {
+    for (auto mapPair : replacedAddress_) {
+        caches->insert(mapPair.first);
+    }
     return 0;
 }
 

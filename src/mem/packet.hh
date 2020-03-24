@@ -275,6 +275,9 @@ class Packet : public Printable
     /// 记录目标的Cache等级，若是非Prefetch，該数值应该是255
     uint8_t targetCacheLevel_;
 
+    /// 记录当前Packet包含预取的全局唯一Index
+    std::set<uint64_t> indexes_;
+
     /// 当前Packet的类型，预取/Demand Request
     prefetch_filter::DataType packetType_;
 
@@ -288,6 +291,7 @@ class Packet : public Printable
         caches_ = pkt->caches_;
         srcCacheLevel_ = pkt->srcCacheLevel_;
         targetCacheLevel_ = pkt->targetCacheLevel_;
+        indexes_.insert(pkt->indexes_.begin(), pkt->indexes_.end());
         packetType_ = pkt->packetType_;
         recentBranchPC_ = pkt->recentBranchPC_;
     }

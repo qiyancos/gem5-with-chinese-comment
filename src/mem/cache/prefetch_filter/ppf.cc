@@ -132,11 +132,23 @@ int PrefetchUsefulTable::init(const uint8_t counterBits, const uint32_t CCSize,
         return 0;
     }
     CHECK_RET(counterCache_.init(CCTagBits, CCSize, CCAssoc,
+            BasePrefetchFilter::cacheLineOffsetBits_,
             CounterEntry(counterBits, counterInit)),
             "Failed to init counter cache");
-    CHECK_RET(victimCache_.init(VCTagBits, VCSize, VCAssoc),
+    CHECK_RET(victimCache_.init(VCTagBits, VCSize, VCAssoc,
+            BasePrefetchFilter::cacheLineOffsetBits_),
             "Failed to init victim cache");
     return 0;
+}
+
+int PrefetchUsefulTable::isPrefValid(const uint64_t& addr) {
+    if (prefInCache_.find(addr) == prefInCache_.end()) {
+        CHECK_ARGS_EXIT(invalidatedPref_.find(addr) != invalidatedPref_.end(),
+                "Can not find invalidation record when checking prefetch");
+        return 0;
+    } else {
+        return 1;
+    }
 }
 
 int PrefetchUsefulTable::updateHit(const uint64_t& addr) {
@@ -171,10 +183,8 @@ int PrefetchUsefulTable::updateMiss(const uint64_t& addr) {
 
 int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
         const uint64_t evictedAddr, const DataType type) {
-    if (!valid_) {
-        DEBUG_PF(2, "Invalid add pref");
-        return 0;
-    }
+    if (!valid_) return 0;
+    DEBUG_PF(2, "PPF add prefetch @0x%lx with new counter", prefAddr);
     // 发生了新的预取替换Demand/Pref数据，相关记录被更新
     CHECK_ARGS(prefInCache_.find(prefAddr) == prefInCache_.end(),
             "Found prefetch already in record when adding prefetch");
@@ -202,7 +212,6 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
         }
     }
    
-    DEBUG_PF(2, "Write new counter for prefetch @0x%lx", prefAddr);
     // 更新Counter Cache
     // 实际上由于Cache比Counter Cache大得多，必然会导致Counter冲突
     // TODO 这时候，我们应该将Counter的信息进行更新
@@ -217,9 +226,37 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
 
 int PrefetchUsefulTable::evictPref(const uint64_t& addr, uint8_t* counterPtr) {
     if (!valid_) return 0;
-    // 进行删除的时候对应的Pref一定存在
+
+    if (prefInCache_.find(addr) == prefInCache_.end()) {
+        CHECK_ARGS(invalidatedPref_.find(addr) != invalidatedPref_.end(),
+                "Deleted prefetch can not find invalidation record")
+        invalidatedPref_.erase(addr);
+        return 0;
+    }
+    
+    DEBUG_PF(2, "PPF evict prefetch @0x%lx", addr);
+    return deletePref(addr, counterPtr);
+}
+
+int PrefetchUsefulTable::invalidatePref(const uint64_t& addr,
+        uint8_t* counterPtr) {
+    if (!valid_) return 0;
+    DEBUG_PF(2, "PPF invalidate prefetch @0x%lx", addr);
     CHECK_ARGS(prefInCache_.find(addr) != prefInCache_.end(),
-            "Can not find prefetch to be deleted in the prefetch record");
+            "can not find invalidating prefetch in record table");
+    CHECK_RET(deletePref(addr, counterPtr),
+            "Failed to delete prefetch in the prefetch table");
+    CHECK_ARGS(invalidatedPref_.find(addr) == invalidatedPref_.end(),
+            "Can not invalidate prefetch already invalidated");
+    invalidatedPref_.insert(addr);
+    return 0;
+}
+
+int PrefetchUsefulTable::deletePref(const uint64_t& addr,
+        uint8_t* counterPtr) {
+    if (!valid_) return 0;
+    DEBUG_PF(2, "PPF delete prefetch @0x%lx", addr);
+    // 进行删除的时候对应的Pref应该存在，不存在则应该被无效化过
     prefInCache_.erase(addr);
 
     // 对应的Counter也一定的存在
@@ -233,7 +270,6 @@ int PrefetchUsefulTable::evictPref(const uint64_t& addr, uint8_t* counterPtr) {
     CHECK_RET(victimCache_.invalidate(counterEntry->evictedAddr_),
             "Failed to invalidate victim data in victim cache");
     
-    DEBUG_PF(2, "Invalidate counter for prefetch @0x%lx", addr);
     CHECK_RET(counterCache_.invalidate(addr),
             "Failed to invalidate counter in counter cache");
     return 0;
@@ -291,19 +327,21 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
     workTables_.resize(1, std::vector<Tables>(1));
     Tables& LLCTable = workTables_[0][0];
     CHECK_WARN((tempFlag = LLCTable.prefetchTable_.init(p->prefetch_table_size,
-            p->prefetch_table_assoc)) >= 0,
+            p->prefetch_table_assoc,
+            BasePrefetchFilter::cacheLineOffsetBits_)) >= 0,
             "Failed to initiate prefetch table for init");
     initFailFlag_ |= tempFlag < 0;
     
     CHECK_WARN((tempFlag = LLCTable.rejectTable_.init(p->reject_table_size,
-            p->reject_table_assoc)) >= 0,
+            p->reject_table_assoc,
+            BasePrefetchFilter::cacheLineOffsetBits_)) >= 0,
             "Failed to initiate reject table for init");
     initFailFlag_ |= tempFlag < 0;
     
     LLCTable.featureTable_.resize(featureList_.size());
     for (int j = 0; j < featureList_.size(); j++) {
         CHECK_WARN((tempFlag = LLCTable.featureTable_[j].init(
-                int8_t(-1), featureList_[j].getSize(), 1,
+                int8_t(-1), featureList_[j].getSize(), 1, 0,
                 SaturatedCounter(weightBits_, 0), true)) >= 0,
                 "Failed to initiate feature %s \"%s\" %s",
                 "table for", featureList_[j].name_.c_str(), "in init");
@@ -311,7 +349,8 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
     }
     
     CHECK_WARN((tempFlag = LLCTable.oldPrefTable_.init(p->old_pref_table_size,
-            p->old_pref_table_assoc)) >= 0,
+            p->old_pref_table_assoc,
+            BasePrefetchFilter::cacheLineOffsetBits_)) >= 0,
             "Failed to initiate old prefetch table for init");
     initFailFlag_ |= tempFlag < 0;
     
@@ -353,6 +392,7 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
         std::set<BaseCache*> srcCaches;
         CHECK_RET_EXIT(usefulTable_[cache].findSrcCaches(hitBlkAddr,
                 &srcCaches), "Failed to found prefetch recorded in cache");
+        // 如果没有反馈Cache，说明被无效化了，但是删除操作依旧需要处理
         for (BaseCache* srcCache : srcCaches) {
             // 不对ICache进行训练
             if (!srcCache->cacheLevel_) continue;
@@ -361,9 +401,14 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
             CHECK_RET_EXIT(train(workTable, hitBlkAddr, cacheLevel, GoodPref),
                     "Failed to update training data when dmd hit pref");
         }
-        // 更新预取有害性统计数据
-        CHECK_RET_EXIT(prefUsefulTable_[cache].updateHit(hitBlkAddr),
-                "Failed to update pref hit to prefetch useful table");
+        if (!srcCaches.empty()) {
+            // 更新预取有害性统计数据（必须不是无效化预取）
+            CHECK_RET_EXIT(prefUsefulTable_[cache].updateHit(hitBlkAddr),
+                    "Failed to update pref hit to prefetch useful table");
+        } else {
+            CHECK_ARGS_EXIT(!usefulTable_[cache].isPrefValid(hitBlkAddr),
+                    "Find prefetch not invalid in useful table");
+        }
         // 由于Demand命中，需要强制删除记录
         CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr, true),
                 "Failed to remove prefetch record when hit by dmd");
@@ -374,7 +419,7 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
 }
 
 int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
-        const PacketPtr& pkt, const PacketPtr& combinedPkt,
+        PacketPtr& pkt, const PacketPtr& combinedPkt,
         const DataTypeInfo& info) {
     DEBUG_PF(0, "Event Miss From %s[%p]",
             BaseCache::levelName_[cache->cacheLevel_].c_str(), cache);
@@ -388,13 +433,6 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
             (combinedPkt ? combinedPkt->getAddr() : 0);
     uint8_t cacheLevel = cache->cacheLevel_;
     if (info.source == Dmd) {
-        if (info.target != Dmd) {
-            // 对于一个Miss的Demand Request需要确定其有害性
-            CHECK_RET_EXIT(prefUsefulTable_[cache].updateMiss(pkt->getAddr() &
-                    cacheLineAddrMask_),
-                    "Failed to update dmd miss in prefetch useful table");
-        }
-
         // 如果一个预取Miss被Demand Request覆盖了，预取是无用的
         if (info.target == Pref) {
             std::set<BaseCache*> srcCaches;
@@ -409,7 +447,20 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
                         UselessPref), "Failed to update training when dmd %s",
                         "miss added to prefetch miss");
             }
+            if (srcCaches.empty()) {
+                CHECK_ARGS(!usefulTable_[cache].isPrefValid(combinedBlkAddr),
+                        "Find prefetch not invalid in useful table");
+            }
         }
+
+        if (info.target != Dmd) {
+            // 对于一个Miss的Demand Request需要确定其有害性
+            // 生成新的MSHR或者合并到Prefetch的MSHR都可以
+            CHECK_RET_EXIT(prefUsefulTable_[cache].updateMiss(pkt->getAddr() &
+                    cacheLineAddrMask_),
+                    "Failed to update dmd miss in prefetch useful table");
+        }
+        // 对于Demand合并到Prefetch的情况无须处理
     } else if (info.target == Dmd) {
         // 如果一个预取Miss并合并到了Demand Request Miss，属于无用预取
         for (BaseCache* srcCache : pkt->caches_) {
@@ -439,28 +490,11 @@ int PerceptronPrefetchFilter::notifyCacheFill(BaseCache* cache,
     BasePrefetchFilter::notifyCacheFill(cache, pkt, evictedAddr, info);
     
     const uint64_t evictedBlkAddr = evictedAddr & cacheLineAddrMask_;
-    uint8_t cacheLevel = cache->cacheLevel_;
     if (info.target == Pref) {
-        std::set<BaseCache*> srcCaches;
-        CHECK_RET_EXIT(usefulTable_[cache].findSrcCaches(evictedBlkAddr,
-                &srcCaches), "Failed to found prefetch recorded in cache");
-        
-        uint8_t counter;
-        // 说明一个预取数据被预取替换了，需要删除相应的记录
-        CHECK_RET_EXIT(prefUsefulTable_[cache].evictPref(evictedBlkAddr,
-                &counter), "Failed to remove old pref info when replaced");
-        
-        // 基于被替换的预取有害情况进行训练，只有开启有害统计，才会训练
-        if (prefUsefulTable_[cache].valid_ && counter <= counterInit_) {
-            for (BaseCache* srcCache : srcCaches) {
-                // 不对ICache进行训练
-                if (!srcCache->cacheLevel_) continue;
-                Tables& workTable = getTable(srcCache);
-                CHECK_RET_EXIT(train(workTable, evictedBlkAddr, cacheLevel,
-                        counter == counterInit_ ? UselessPref : BadPref),
-                        "Failed to update training when pref evicted"); 
-            }
-        }
+        // 由于替换了预取，需要强制删除记录
+        CHECK_RET_EXIT(removePrefetch(cache,
+                pkt->getAddr() & cacheLineAddrMask_, true),
+                "Failed to remove prefetch record when hit by dmd");
 
         // 如果产生替换的也是预取，需要新增一个记录
         if (info.source == Pref) {
@@ -740,9 +774,40 @@ PerceptronPrefetchFilter::Tables& PerceptronPrefetchFilter::getTable(
     }
 }
 
+int PerceptronPrefetchFilter::helpInvalidatePref(BaseCache* cache,
+        const std::set<uint64_t>& addrs) {
+    for (auto addr : addrs) {
+        uint8_t counter;
+        CHECK_RET(prefUsefulTable_[cache].invalidatePref(addr, &counter),
+                "Failed to invalidate prefetch");
+        
+        // 首先查找相关的源Cache
+        std::set<BaseCache*> srcCaches;
+        CHECK_RET(usefulTable_[cache].findInvalidatedCaches(addr,
+                &srcCaches), "Failed to find invalidated prefetch sources");
+    
+        // 基于被替换的预取有害情况进行训练，只有开启统计表格才会进行训练
+        if (prefUsefulTable_[cache].valid_ && counter <= counterInit_) {
+            for (BaseCache* srcCache : srcCaches) {
+                // 不对ICache进行训练，不训练有用/无用预取
+                if (!srcCache->cacheLevel_ || counter >= counterInit_) {
+                    continue;
+                }
+                Tables& workTable = getTable(srcCache);
+                CHECK_RET(train(workTable, addr, cache->cacheLevel_, BadPref),
+                        "Failed to update training when pref evicted"); 
+            }
+        }
+    }
+    return 0;
+}
+
 int PerceptronPrefetchFilter::train(Tables& workTable,
         const uint64_t& prefAddr, const uint8_t cacheLevel,
         const TrainType type) {
+    DEBUG_PF(1, "Training prefetch @0x%lx with type %s in %s",
+            prefAddr, getTrainTypeStr(type).c_str(), 
+            BaseCache::levelName_[cacheLevel].c_str());
     // 查询Prefetch Table
     std::vector<uint16_t>* indexPtr = nullptr;
     CHECK_RET(workTable.prefetchTable_.read(prefAddr, &indexPtr),
@@ -810,15 +875,18 @@ int PerceptronPrefetchFilter::removePrefetch(BaseCache* cache,
     // 首先查找相关的源Cache
     std::set<BaseCache*> srcCaches;
     CHECK_RET(usefulTable_[cache].findSrcCaches(prefBlkAddr,
-            &srcCaches), "Failed to found prefetch recorded in cache");
+            &srcCaches), "Failed to find prefetch recorded in cache");
     
     uint8_t counter;
-    // 说明一个预取数据被预取替换了，需要删除相应的记录
     CHECK_RET(prefUsefulTable_[cache].evictPref(prefBlkAddr,
             &counter), "Failed to remove old pref info when replaced");
     
     // 基于被替换的预取有害情况进行训练，只有开启统计表格才会进行训练
-    if (prefUsefulTable_[cache].valid_ && counter <= counterInit_) {
+    if (prefUsefulTable_[cache].valid_ &&
+            // 有害预取一定会被训练
+            (counter < counterInit_ ||
+            // 如果是一个命中导致的remove，则不会训练无用预取
+            (counter == counterInit_ && !isHit))) {
         for (BaseCache* srcCache : srcCaches) {
             // 不对ICache进行训练
             if (!srcCache->cacheLevel_) continue;
@@ -826,6 +894,10 @@ int PerceptronPrefetchFilter::removePrefetch(BaseCache* cache,
             CHECK_RET(train(workTable, prefBlkAddr, cache->cacheLevel_,
                     counter == counterInit_ ? UselessPref : BadPref),
                     "Failed to update training when pref evicted"); 
+        }
+        if (srcCaches.empty()) {
+            CHECK_ARGS(!usefulTable_[cache].isPrefValid(prefAddr),
+                    "Find prefetch not invalid in useful table");
         }
     }
     
@@ -1069,6 +1141,15 @@ void PerceptronPrefetchFilter::regStats() {
 
     // 标记已注册状态
     regFlag_ = true;
+}
+
+std::string PerceptronPrefetchFilter::getTrainTypeStr(const TrainType type) {
+    switch (type) {
+    case GoodPref: return "GoodPref";
+    case BadPref: return "BadPref";
+    case UselessPref: return "UselessPref";
+    default: return "Unknown";
+    }
 }
 
 PerceptronPrefetchFilter* PerceptronPrefetchFilterParams::create() {
