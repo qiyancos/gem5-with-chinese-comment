@@ -49,6 +49,7 @@
 #define USE_CHECK 1
 #define DEBUG_FILTER 1
 #define DEBUG_CACHE 1
+#define DEBUG_TEMP 1
 
 // 下面是带信息的检查宏函数
 #ifdef USE_CHECK
@@ -116,8 +117,8 @@
         fprintf(stderr, "    "); \
     } \
     fprintf(stderr, (std::string(">> ") + info + \
-                " In [%s:%d].\n").c_str(), ##__VA_ARGS__, \
-                __func__, __LINE__); \
+            " In [%s:%d].\n").c_str(), ##__VA_ARGS__, \
+            __func__, __LINE__); \
     fflush(stderr); \
 }
 
@@ -128,17 +129,40 @@
 #endif
 
 // 下面是其他结构相关处理信息的Debug函数
-
 #ifdef DEBUG_CACHE
 
 #define DEBUG_MEM(info, ...) { \
     fprintf(stderr, (std::string("[Debug] -- ") + info + \
-                "\n").c_str(), ##__VA_ARGS__); \
+            "\n").c_str(), ##__VA_ARGS__); \
 }
 
 #else
 
 #define DEBUG_MEM(info, ...) {}
+
+#endif
+
+// 下面是针对特殊错误使用的Debug函数
+#ifdef DEBUG_TEMP
+
+#define DEBUG_LINE() { \
+    fprintf(stderr, (std::string("[Debug] == Breakpoint in") + \
+            " %s:%d.\n").c_str(), __func__, __LINE__); \
+}
+
+#define DEBUG_EXIT(expr) { \
+    if (expr) { \
+        fprintf(stderr, (std::string("[Debug] == Exitpoint in") + \
+                "%s:%d.\n").c_str(), __func__, __LINE__); \
+        exit(0); \
+    } \
+}
+
+#else
+
+#define DEBUG_LINE() {}
+
+#define DEBUG_EXIT() {}
 
 #endif
 

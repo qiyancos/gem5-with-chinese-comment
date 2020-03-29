@@ -231,6 +231,16 @@ MemCmd::commandInfo[] =
 };
 
 /// 迁移到cc以避免头文件互相包含问题
+void Packet::initPref(BaseCache* srcCache, const uint8_t targetCacheLevel,
+        const std::list<uint64_t>& recentBranchPC) {
+    srcCacheLevel_ = srcCache->cacheLevel_;
+    targetCacheLevel_ = targetCacheLevel;
+    packetType_ = prefetch_filter::Pref;
+    recentBranchPC_ = recentBranchPC;
+    addSrcCache(srcCache);
+}
+
+/// 迁移到cc以避免头文件互相包含问题
 void
 Packet::deleteData() {
     DEBUG_MEM("Delete packet[%p] @0x%lx data[%p]", this, addr, data);

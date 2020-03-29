@@ -52,7 +52,7 @@ uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches);
 uint64_t generatePrefIndex(const PacketPtr pkt);
 
 // 数据类型
-enum DataType {NullType, Dmd, Pref, PendingPref, PendingDmd};
+enum DataType {NullType, Dmd, Pref, PendingPref};
 
 // 获取一个数据类型的字符串表示
 std::string getDataTypeString(const DataType type);
@@ -162,7 +162,8 @@ public:
     PrefetchUsefulInfo() {}
     
     // 依据CPU的个数进行大小配置
-    PrefetchUsefulInfo(BaseCache* srcCache, const uint64_t& index);
+    PrefetchUsefulInfo(BaseCache* srcCache, const uint64_t& index,
+            const uint64_t& addr);
     
     // 更新一个预取有效命中，同时对命中统计数据进行更新
     int updateUse(const std::set<uint8_t>& cpuIds);
@@ -179,6 +180,10 @@ public:
 
     // 获取当前预取在某一个Cache中的替换地址
     int getReplacedAddr(BaseCache* cache, uint64_t* replacedAddr);
+
+    // 获取预取给定Cache相连接的下层Cache（都包含该预取）
+    int getCorrelatedCaches(BaseCache* cache,
+            std::set<BaseCache*>* correlatedCaches);
 
     // 获取当前Cache所有的所在Cache记录
     int getLocatedCaches(std::set<BaseCache*>* caches);
@@ -221,6 +226,9 @@ public:
 
     // 该信息对应的哈希索引
     const uint64_t index_ = 0;
+
+    // 对应预取的地址
+    const uint64_t addr_ = 0;
 
 private:
     // 当前预取对应的替换数据地址，考虑到预取的贯穿效应，

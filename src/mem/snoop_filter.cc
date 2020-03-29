@@ -43,6 +43,8 @@
  */
 
 #include "mem/snoop_filter.hh"
+#include "mem/cache/base.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
 #include "mem/cache/prefetch_filter/debug_flag.hh"
 
 #include "base/logging.hh"
@@ -52,10 +54,13 @@
 
 void
 SnoopFilter::eraseIfNullEntry(SnoopFilterCache::iterator& sf_it,
-        const bool force)
+        const bool forceDelete, const bool forceNotDelete)
 {
+    /// 不能同时强制保留和删除
+    assert(!(forceDelete && forceNotDelete));
     SnoopItem& sf_item = sf_it->second;
-    if (!(sf_item.requested | sf_item.holder) || force) {
+    if ((!(sf_item.requested | sf_item.holder) || forceDelete) &&
+            !forceNotDelete) {
         DEBUG_MEM("SnoopFilter[%p] erase entry @0x%lx", this, sf_it->first);
         cachedLocations.erase(sf_it);
         DPRINTF(SnoopFilter, "%s:   Removed SF entry.\n",
@@ -64,14 +69,25 @@ SnoopFilter::eraseIfNullEntry(SnoopFilterCache::iterator& sf_it,
 }
 
 std::pair<SnoopFilter::SnoopList, Cycles>
-SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port)
+SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port,
+        bool* success)
 {
     DPRINTF(SnoopFilter, "%s: src %s packet %s\n", __func__,
             slave_port.name(), cpkt->print());
 
+    /// 标记当前处理的是否是一个提升级别的预取
+    const bool isLevelUpPref = cpkt->packetType_ == prefetch_filter::Pref &&
+            cpkt->recentCache_->cacheLevel_ <= cpkt->srcCacheLevel_;
+    
+    if (isLevelUpPref && cpkt->isResponse()) {
+        panic_if(!success, "Success flag must be provided for level up "
+                "prefetch process");
+        *success = true;
+    }
     // check if the packet came from a cache
+    /// 如果是一个提升级别的预取，调用可以当作请求使用
     bool allocate = !cpkt->req->isUncacheable() && slave_port.isSnooping() &&
-        cpkt->fromCache();
+        (cpkt->fromCache() || isLevelUpPref);
     Addr line_addr = cpkt->getBlockAddr(linesize);
     if (cpkt->isSecure()) {
         line_addr |= LineSecure;
@@ -83,17 +99,42 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port)
     // If the snoop filter has no entry, and we should not allocate,
     // do not create a new snoop filter entry, simply return a NULL
     // portlist.
-    if (!is_hit && !allocate)
+    if (!is_hit && !allocate) {
         return snoopDown(lookupLatency);
+    }
 
     // If no hit in snoop filter create a new element and update iterator
     if (!is_hit) {
-        DEBUG_MEM("SnoopFilter[%p] add entry @0x%lx", this, line_addr);
+        if (isLevelUpPref) {
+            DEBUG_MEM("SnoopFilter[%p] add entry @0x%lx for level-up prefetch",
+                    this, line_addr);
+        } else {
+            DEBUG_MEM("SnoopFilter[%p] add entry @0x%lx", this, line_addr);
+        }
         reqLookupResult = cachedLocations.emplace(line_addr, SnoopItem()).first;
     } else {
-        DEBUG_MEM("SnoopFilter[%p] entry @0x%lx already exists", this, line_addr);
+        if (reqLookupResult->second.isLevelUpPref_) {
+            /// 如果发现已经存在一个提级预取的记录，那么会删除旧记录
+            DEBUG_MEM("SnoopFilter[%p] add new demand entry and replace "
+                    "level-up prefetch @0x%lx ", this, line_addr);
+            reqLookupResult = cachedLocations.emplace(line_addr,
+                    SnoopItem()).first;
+        } else {
+            if (isLevelUpPref) {
+                DEBUG_MEM("SnoopFilter[%p] cancle adding new entry for "
+                        "level-up prefetch @0x%lx ", this, line_addr);
+                /// 如果发现已经存在了一个其他记录，当前是一个提级预取
+                /// 那么对应的Packet将不会上传
+                *success = false;
+                return std::pair<SnoopList, Cycles>();
+            }
+            DEBUG_MEM("SnoopFilter[%p] entry @0x%lx already exists",
+                    this, line_addr);
+        }
     }
     SnoopItem& sf_item = reqLookupResult->second;
+    /// 如果是一个提升等级的预取调用该操作，那么设置标志
+    sf_item.isLevelUpPref_ = isLevelUpPref;
     SnoopMask interested = sf_item.holder | sf_item.requested;
 
     // Store unmodified value of snoop filter item in temp storage in
@@ -118,8 +159,9 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port)
         return snoopSelected(maskToPortList(interested & ~req_port),
                              lookupLatency);
     
-    if (cpkt->needsResponse()) {
-        if (!cpkt->cacheResponding()) {
+    /// 如果是一个提级预取，可以模仿一个正常的请求
+    if (cpkt->needsResponse() || isLevelUpPref) {
+        if (!cpkt->cacheResponding() || isLevelUpPref) {
             // Max one request per address per port
             panic_if(sf_item.requested & req_port, "double request :( " \
                      "SF value %x.%x\n", sf_item.requested, sf_item.holder);
@@ -158,8 +200,10 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port)
 
 void
 SnoopFilter::finishRequest(bool will_retry, Addr addr, bool is_secure,
-        const bool force)
+        const bool forceDelete, const bool forceNotDelete)
 {
+    /// 不能同时强制保留和删除
+    assert(!(forceDelete && forceNotDelete));
     if (reqLookupResult != cachedLocations.end()) {
         // since we rely on the caller, do a basic check to ensure
         // that finishRequest is being called following lookupRequest
@@ -178,7 +222,7 @@ SnoopFilter::finishRequest(bool will_retry, Addr addr, bool is_secure,
                     __func__,  retryItem.requested, retryItem.holder);
         }
 
-        eraseIfNullEntry(reqLookupResult, force);
+        eraseIfNullEntry(reqLookupResult, forceDelete, forceNotDelete);
     }
 }
 

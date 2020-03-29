@@ -113,13 +113,16 @@ class BaseCPU : public MemObject
     /// Instruction count used for SPARC misc register
     /// @todo unify this with the counters that cpus individually keep
     Tick instCnt;
-
+  
+  public:
     // every cpu has an id, put it in the base cpu
     // Set at initialization, only time a cpuId might change is during a
     // takeover (which should be done from within the BaseCPU anyway,
     // therefore no setCpuId() method is provided
+    /// 调整该结构的属性以便进行访问
     int _cpuId;
-
+  
+  protected:
     /** Each cpu will have a socket ID that corresponds to its physical location
      * in the system. This is usually used to bucket cpu cores under single DVFS
      * domain. This information may also be required by the OS to identify the

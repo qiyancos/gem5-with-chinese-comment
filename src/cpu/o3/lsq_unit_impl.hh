@@ -785,8 +785,8 @@ LSQUnit<Impl>::writebackStores()
                         "Instantly completing it.\n",
                         inst->seqNum);
                 PacketPtr new_pkt = new Packet(*req->packet());
-                /// 添加最近的分支指令地址
-                new_pkt->recentBranchPC_ = cpu->commitPtr_->recentBranchPC_;
+                /// 初始化一个Demand Request
+                new_pkt->initDemand(cpu->commitPtr_->recentBranchPC_);
                 
                 WritebackEvent *wb = new WritebackEvent(inst,
                         new_pkt, this);
@@ -805,8 +805,8 @@ LSQUnit<Impl>::writebackStores()
             ThreadContext *thread = cpu->tcBase(lsqID);
             PacketPtr main_pkt = new Packet(req->mainRequest(),
                                             MemCmd::WriteReq);
-            /// 添加最近的分支指令地址
-            main_pkt->recentBranchPC_ = cpu->commitPtr_->recentBranchPC_;
+            /// 初始化一个Demand Request
+            main_pkt->initDemand(cpu->commitPtr_->recentBranchPC_);
             
             main_pkt->dataStatic(inst->memData);
             req->handleIprWrite(thread, main_pkt);

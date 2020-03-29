@@ -51,7 +51,7 @@ uint64_t generatePrefIndex(const PacketPtr pkt) {
     // 只对新的预取生成Index
     CHECK_ARGS_EXIT(pkt->caches_.size() == 1,
             "Only generate index for newly generated prefetch");
-    CHECK_ARGS_EXIT(pkt->indexes_.size() == 0,
+    CHECK_ARGS_EXIT(pkt->prefIndex_ == 0,
             "Only generate index for newly generated prefetch");
     return pkt->getAddr() ^
             (uint64_t((*pkt->caches_.begin())->prefetcherId_) << 48) ^
@@ -64,7 +64,6 @@ std::string getDataTypeString(const DataType type) {
     case Dmd: return "Demand";
     case Pref: return "Prefetch";
     case PendingPref: return "Pending Prefetch";
-    case PendingDmd: return "Pending Demand";
     }
     return "Unknown";
 }
@@ -103,9 +102,10 @@ int PrefetchInfo::setInfo(const uint8_t index, const uint32_t value) {
 }
 
 int PrefetchInfo::setInfo(const std::string& name, const uint32_t value) {
-    CHECK_RET_EXIT(PrefInfoIndexMap.find(name) != PrefInfoIndexMap.end(),
+    auto infoIter = PrefInfoIndexMap.find(name);
+    CHECK_RET_EXIT(infoIter != PrefInfoIndexMap.end(),
             "Can not find info named as \"%s\"", name);
-    CHECK_RET_EXIT(setInfo(PrefInfoIndexMap[name].index_, value),
+    CHECK_RET_EXIT(setInfo(infoIter->second.index_, value),
             "Failed to set info with index");
     return 0;
 }
@@ -123,9 +123,10 @@ int PrefetchInfo::getInfo(const uint8_t index, uint32_t* value) const {
 }
 
 int PrefetchInfo::getInfo(const std::string& name, uint32_t* value) const {
-    CHECK_RET(PrefInfoIndexMap.find(name) != PrefInfoIndexMap.end(),
+    auto infoIter = PrefInfoIndexMap.find(name);
+    CHECK_RET(infoIter != PrefInfoIndexMap.end(),
             "Can not find info named as \"%s\"", name);
-    CHECK_RET(getInfo(PrefInfoIndexMap[name].index_, value),
+    CHECK_RET(getInfo(infoIter->second.index_, value),
             "Failed to get info with index");
     return 0;
 }
@@ -243,8 +244,8 @@ int CrossCoreHarmful = addNewPrefUsefulType("cross_core_harmful",
         });
 
 PrefetchUsefulInfo::PrefetchUsefulInfo(BaseCache* srcCache,
-        const uint64_t& index) :
-        srcCache_(srcCache), index_(index) {}
+        const uint64_t& index, const uint64_t& addr) :
+        srcCache_(srcCache), index_(index), addr_(addr) {}
 
 int PrefetchUsefulInfo::updateUse(const std::set<uint8_t>& cpuIds) {
     int singleCoreValue;
@@ -276,31 +277,40 @@ int PrefetchUsefulInfo::addReplacedAddr(BaseCache* cache,
 
 int PrefetchUsefulInfo::rmReplacedAddr(BaseCache* cache,
         std::set<BaseCache*>* correlatedCaches) {
-    CHECK_ARGS(replacedAddress_.find(cache) != replacedAddress_.end(),
+    auto replacedIter = replacedAddress_.find(cache);
+    CHECK_ARGS(replacedIter != replacedAddress_.end(),
             "Replaced address does not exist");
-    replacedAddress_.erase(cache);
-    if (correlatedCaches) {
-        uint64_t evictCoreIDMap =
-                generateCoreIDMap(std::set<BaseCache*> {cache});
-        for (auto mapPair : replacedAddress_) {
-            BaseCache* otherCache = mapPair.first;
-            if (otherCache->cacheLevel_ > cache->cacheLevel_) {
-                uint64_t coreIDMap = generateCoreIDMap(
-                        std::set<BaseCache*> {cache});
-                if ((coreIDMap & evictCoreIDMap) == evictCoreIDMap) {
-                    correlatedCaches->insert(otherCache);
-                }
-            }
-        }
-    }
+    replacedAddress_.erase(replacedIter);
+    getCorrelatedCaches(cache, correlatedCaches);
     return 0;
 }
 
 int PrefetchUsefulInfo::getReplacedAddr(BaseCache* cache,
         uint64_t* replacedAddr) {
-    CHECK_ARGS(replacedAddress_.find(cache) != replacedAddress_.end(),
+    auto replacedIter = replacedAddress_.find(cache);
+    CHECK_ARGS(replacedIter != replacedAddress_.end(),
             "Replaced address not exists");
-    *replacedAddr = replacedAddress_[cache];
+    *replacedAddr = replacedIter->second;
+    return 0;
+}
+
+int PrefetchUsefulInfo::getCorrelatedCaches(BaseCache* cache,
+        std::set<BaseCache*>* correlatedCaches) {
+    if (correlatedCaches) {
+        uint64_t srcCoreIDMap =
+                generateCoreIDMap(std::set<BaseCache*> {cache});
+        for (auto mapPair : replacedAddress_) {
+            BaseCache* otherCache = mapPair.first;
+            if (otherCache->cacheLevel_ > cache->cacheLevel_) {
+                uint64_t coreIDMap = generateCoreIDMap(
+                        std::set<BaseCache*> {otherCache});
+                if ((coreIDMap & srcCoreIDMap) == srcCoreIDMap) {
+                    correlatedCaches->insert(otherCache);
+                }
+            }
+        }
+    }
+    correlatedCaches->erase(cache);
     return 0;
 }
 

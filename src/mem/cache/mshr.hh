@@ -400,13 +400,20 @@ class MSHR : public QueueEntry, public Printable
      */
     Iterator allocIter;
 
+  public:
     /** List of all requests that match the address */
+    /// 修改该属性以便进行查找
     TargetList targets;
 
-    TargetList deferredTargets;
+    /// 该变量存放着唯一有效的预取Target
+    Target* prefTarget_ = nullptr;
+    
+    /// 该变量决定是否因为合并了Pending MSHR，而需要额外操作
+    bool needPostProcess_ = false;
 
-    /// 该变量存放着合并预取的Target
-    Target prefTarget_;
+    /** List of all requests that match the address */
+    /// 修改该属性以便进行查找
+    TargetList deferredTargets;
 
   public:
     /**
@@ -445,8 +452,9 @@ class MSHR : public QueueEntry, public Printable
      * Add a request to the list of targets.
      * @param target The target.
      */
+    /// 添加一个Cache指针说明当前的Cache等级
     void allocateTarget(PacketPtr target, Tick when, Counter order,
-                        bool alloc_on_fill);
+                        bool alloc_on_fill, BaseCache* cache);
     bool handleSnoop(PacketPtr target, Counter order);
 
     /** A simple constructor. */
@@ -483,14 +491,11 @@ class MSHR : public QueueEntry, public Printable
      * Returns a reference to the first target.
      * @return A pointer to the first target.
      */
-    Target *getTarget()
-    {
-        assert(hasTargets());
-        return &targets.front();
-    }
+    /// 定义被迁移到C文件中
+    Target *getTarget();
 
-    /// 添加该函数来直接获取预取相关的Target
-    Target *getPrefTarget();
+    /// 该函数用于初始化提级预取使用的MSHR
+    void initLevelUpPrefMSHR();
 
     /**
      * Pop first target.

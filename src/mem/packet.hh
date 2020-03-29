@@ -261,37 +261,58 @@ class Packet : public Printable
 {
   public:
     /// 该结构用于记录提升级别操作的MSHR数据
-    MSHR* mshr_;
+    MSHR* mshr_ = nullptr;
 
     /// 用于记录最近处理该Packet的Cache指针
-    BaseCache* recentCache_;
+    BaseCache* recentCache_ = nullptr;
 
-    /// 用于记录相关的Cache
+    /// 用于记录和生成该Packet相关的Cache
     std::set<BaseCache*> caches_;
-    
+   
     /// 记录生成该Packet的源头
-    uint8_t srcCacheLevel_;
+    uint8_t srcCacheLevel_ = 255;
 
     /// 记录目标的Cache等级，若是非Prefetch，該数值应该是255
-    uint8_t targetCacheLevel_;
+    uint8_t targetCacheLevel_ = 255;
 
-    /// 记录当前Packet包含预取的全局唯一Index
-    std::set<uint64_t> indexes_;
+    /// 记录当前Packet的全局唯一预取Index
+    uint64_t prefIndex_ = 0;
 
     /// 当前Packet的类型，预取/Demand Request
-    prefetch_filter::DataType packetType_;
+    prefetch_filter::DataType packetType_ = prefetch_filter::NullType;
 
     /// 发射该请求时对应的最近三次分支指令PC
     std::list<uint64_t> recentBranchPC_;
 
+    /// 初始化一个预取Packet
+    void initDemand(const std::list<uint64_t>& recentBranchPC) {
+        packetType_ = prefetch_filter::Dmd;
+        recentBranchPC_ = recentBranchPC;
+    }
+
+    /// 初始化一个预取Packet
+    void initPref(BaseCache* srcCache, const uint8_t targetCacheLevel,
+            const std::list<uint64_t>& recentBranchPC);
+    
+    /// 用于添加一个源Cache，同时他是一个最近处理的Cache
+    void addSrcCache(BaseCache* cache) {
+        recentCache_ = cache;
+        caches_.insert(cache);
+    }
+    
+    /// 用于添加多个源Cache
+    void addCaches(std::set<BaseCache*> caches) {
+        caches_.insert(caches.begin(), caches.end());
+    }
+    
     /// 用于拷贝另一个Packet的新增信息
     void copyNewInfo(const PacketPtr pkt) {
         mshr_ = pkt->mshr_;
         recentCache_ = pkt->recentCache_;
-        caches_ = pkt->caches_;
+        caches_.insert(pkt->caches_.begin(), pkt->caches_.end());
         srcCacheLevel_ = pkt->srcCacheLevel_;
         targetCacheLevel_ = pkt->targetCacheLevel_;
-        indexes_.insert(pkt->indexes_.begin(), pkt->indexes_.end());
+        prefIndex_ = pkt->prefIndex_;
         packetType_ = pkt->packetType_;
         recentBranchPC_ = pkt->recentBranchPC_;
     }
@@ -833,12 +854,6 @@ class Packet : public Printable
            _qosValue(0), headerDelay(0), snoopDelay(0),
            payloadDelay(0), senderState(NULL)
     {
-        /// 添加针对信息的初始化
-        mshr_ = nullptr;
-        packetType_ = prefetch_filter::Dmd;
-        srcCacheLevel_ = 255;
-        targetCacheLevel_ = 255;
-        
         if (req->hasPaddr()) {
             addr = req->getPaddr();
             flags.set(VALID_ADDR);
@@ -861,12 +876,6 @@ class Packet : public Printable
            _qosValue(0), headerDelay(0),
            snoopDelay(0), payloadDelay(0), senderState(NULL)
     {
-        /// 添加针对信息的初始化
-        mshr_ = nullptr;
-        packetType_ = prefetch_filter::Dmd;
-        srcCacheLevel_ = 255;
-        targetCacheLevel_ = 255;
-        
         if (req->hasPaddr()) {
             addr = req->getPaddr() & ~(_blkSize - 1);
             flags.set(VALID_ADDR);

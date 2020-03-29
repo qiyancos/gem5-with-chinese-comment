@@ -75,8 +75,12 @@ public:
             BaseCache* cache = nullptr,
             const int8_t CCTagBits = -1, const int8_t VCTagBits = -1);
 
-    // 判断一个预取是否可用
+    // 判断一个预取是否可用（可以不可训练，但是必须存在，
+    // 既没有被无效化或者删除）
     int isPrefValid(const uint64_t& addr);
+
+    // 获取一个预取当前的替换地址
+    int getReplacedAddr(const uint64_t& addr, uint64_t* replacedAddr);
 
     // 对命中Pref的情况进行处理
     int updateHit(const uint64_t& addr);
@@ -86,7 +90,7 @@ public:
     
     // 当新的Pref出现的时候，进行替换信息的更新
     int addPref(const uint64_t& prefAddr, const uint64_t evictedAddr,
-            const DataType type);
+            const DataType type, std::map<uint64_t, uint8_t>* conflictPref);
     
     // 当前Cache中的预取被替换了（如果需要训练返回1，否则返回0）
     int evictPref(const uint64_t& addr, uint8_t* counterPtr);
@@ -145,8 +149,10 @@ public:
     public:
         // 计数器大小
         SaturatedCounter counter_;
+        
         // 对应的预取地址
         uint64_t prefAddr_;
+        
         // 对应的被替换的地址
         uint64_t evictedAddr_;
     };
@@ -156,10 +162,22 @@ public:
 
 private:
     // 当前处于Cache中的预取地址，此处不做压缩映射，实际硬件设计
-    // Cache中存在压缩地址的相关记录结构
-    std::set<uint64_t> prefInCache_;
+    
+    // 预取的类型
+    enum PrefType {
+            // 当前预取可以训练，有替换数据和Counter
+            Trainable,
+            // 当前预取因为冲突而被剔除，导致无法训练
+            NotTrainable,
+            // 一个没有替换任何数据的预取，并且从未被Demand命中
+            CleanPref,
+            // 一个没有替换任何数据的预取，并且被Demand命中
+            UsefulCleanPref};
 
-    // 被替换数据到Counter Cache压缩地址的映射
+    // Cache中存在压缩地址的相关记录结构，后者说明了预取的类型
+    std::map<uint64_t, PrefType> prefInCache_;
+
+    // 被替换数据到Counter Cache压缩地址的映射（实际上这里使用的是预取地址）
     CacheTable<uint64_t> victimCache_;
 
     // Counter Cache
@@ -301,6 +319,10 @@ private:
     // 执行删除Prefetch记录操作的内部函数
     int removePrefetch(BaseCache* cache, const uint64_t& prefAddr,
             const bool isHit);
+
+    // 训练一个因为冲突导致被删除的预取记录
+    int trainConflictPref(BaseCache* cache,
+            const std::map<uint64_t, uint8_t>& conflictPref);
 
     // 依据信息对Prefetch Table和Reject Table进行更新
     int updateTable(Tables& workTable, const uint64_t& prefAddr,

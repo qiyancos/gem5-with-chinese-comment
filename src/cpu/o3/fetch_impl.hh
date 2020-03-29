@@ -680,8 +680,8 @@ DefaultFetch<Impl>::finishTranslation(const Fault &fault,
 
         // Build packet here.
         PacketPtr data_pkt = new Packet(mem_req, MemCmd::ReadReq);
-        /// 为Pakcet添加最近的分支指令信息
-        data_pkt->recentBranchPC_ = cpu->commitPtr_->recentBranchPC_;
+        /// 初始化为一个Demand Request
+        data_pkt->initDemand(cpu->commitPtr_->recentBranchPC_);
 
         data_pkt->dataDynamic(new uint8_t[fetchBufferSize]);
 

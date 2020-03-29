@@ -40,6 +40,9 @@ class BasePrefetchFilter(ClockedObject):
     enable_filter = Param.Bool(True, "Whether to enable Filter Engine")
     enable_stats = Param.Bool(True, "Whether to enable Stats Engine")
 
+    enable_recursive_replace = Param.Bool(True, "Whether to use old replaced"
+            "addr of replaced prefetch instead of new reaplced prefetch")
+
     # print per 10000 cycles
     stats_period = Param.UInt64(5000000,
             "Period of statistics in time dimension")

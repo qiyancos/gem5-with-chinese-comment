@@ -89,7 +89,8 @@ class SnoopFilter : public SimObject {
     typedef std::vector<QueuedSlavePort*> SnoopList;
 
     SnoopFilter (const SnoopFilterParams *p) :
-        SimObject(p), reqLookupResult(cachedLocations.end()), retryItem{0, 0},
+        SimObject(p), reqLookupResult(cachedLocations.end()),
+        retryItem{0, 0, false},
         linesize(p->system->cacheLineSize()), lookupLatency(p->lookup_latency),
         maxEntryCount(p->max_capacity / p->system->cacheLineSize())
     {
@@ -131,8 +132,10 @@ class SnoopFilter : public SimObject {
      * @param slave_port    Slave port where the request came from.
      * @return Pair of a vector of snoop target ports and lookup latency.
      */
+    /// 添加的第三个参数用于提级预取冲突时的处理
     std::pair<SnoopList, Cycles> lookupRequest(const Packet* cpkt,
-                                               const SlavePort& slave_port);
+                                               const SlavePort& slave_port,
+                                               bool* success = nullptr);
 
     /**
      * For an un-successful request, revert the change to the snoop
@@ -145,7 +148,7 @@ class SnoopFilter : public SimObject {
      */
     /// 添加一个标志用于取消对降级预取的记录
     void finishRequest(bool will_retry, Addr addr, bool is_secure,
-            const bool force = false);
+            const bool forceDelete = false, const bool forceNotDelete = false);
 
     /**
      * Handle an incoming snoop from below (the master port). These
@@ -216,6 +219,8 @@ class SnoopFilter : public SimObject {
     struct SnoopItem {
         SnoopMask requested;
         SnoopMask holder;
+        /// 添加一个新的变量表示是否已个因为提级预取添加的Item
+        bool isLevelUpPref_;
     };
     /**
      * HashMap of SnoopItems indexed by line address
@@ -260,7 +265,7 @@ class SnoopFilter : public SimObject {
      */
     /// 添加一个额外的标志避免对降级预取的记录
     void eraseIfNullEntry(SnoopFilterCache::iterator& sf_it,
-            const bool force = false);
+            const bool forceDelete = false, const bool forceNotDelete = false);
 
     /** Simple hash set of cached addresses. */
     SnoopFilterCache cachedLocations;

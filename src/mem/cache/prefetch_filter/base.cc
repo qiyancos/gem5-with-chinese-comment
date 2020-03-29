@@ -54,7 +54,8 @@ BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
         statsPeriod_(p->stats_period),
         nextPeriodTick_(p->stats_period),
         enableStats_(p->enable_stats),
-        enableFilter_(p->enable_filter) {
+        enableFilter_(p->enable_filter),
+        enableRecursiveReplace_(p->enable_recursive_replace) {
     cacheLineAddrMask_ = ~(p->block_size - 1);
     int blockSize = p->block_size;
     cacheLineOffsetBits_ = 0;
@@ -109,19 +110,27 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
         const PacketPtr& pkt, const uint64_t& hitAddr,
         const DataTypeInfo& info) {
     // 时间维度的更新
+    CHECK_ARGS_EXIT(info.source != NullType && info.target != NullType,
+            "Unexpected source data type");
     CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
-    
+
     const uint64_t hitBlkAddr = hitAddr & cacheLineAddrMask_; 
     if (info.source == Dmd) {
-        for (BaseCache* cache : pkt->caches_) {
-            for (const uint8_t cpuId : cache->cpuIds_) {
-                timingStats_[cpuId].demandHit_[cache->cacheLevel_]++;
-                (*demandReqHitCount_[cache->cacheLevel_])[cpuId]++;
+        for (BaseCache* srcCache : pkt->caches_) {
+            uint8_t cacheLevel = srcCache->cacheLevel_;
+            for (const uint8_t cpuId : srcCache->cpuIds_) {
+                timingStats_[cpuId].demandHit_[cacheLevel]++;
+                (*demandReqHitCount_[cacheLevel])[cpuId]++;
                 (*demandReqHitTotal_)[cpuId]++;
             }
         }
     }
     
+    // 检查目标的正确性
+    CHECK_RET_EXIT(usefulTable_[cache].checkDataType(hitBlkAddr, 0,
+            info.target, false),
+            "Data type not match with the record in BPF");
+
     // 依据源数据和目标数据类型进行统计数据更新
     if (info.source == Dmd) {
         if (info.target == Pref) {
@@ -136,14 +145,17 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
                         "Failed to remove prefetch record when hit by dmd");
             }
         }
-    } else {
+    } else if (info.source == Pref) {
         // 更新预取请求的命中情况
+        CHECK_ARGS(pkt->caches_.size() == 1,
+                "Prefetch pakcet should have only one source cache");
         for (BaseCache* srcCache : pkt->caches_) {
-            int level = srcCache->cacheLevel_;
-            uint8_t targetCacheOffset = level ?
-                    cache->cacheLevel_ - level - 1 : cache->cacheLevel_ - 2;
+            int cacheLevel = srcCache->cacheLevel_;
+            uint8_t targetCacheOffset = cacheLevel ?
+                    cache->cacheLevel_ - cacheLevel - 1 :
+                    cache->cacheLevel_ - 2;
             for (const uint8_t cpuId : srcCache->cpuIds_) {
-                (*prefHitCount_[level][targetCacheOffset])[cpuId]++;
+                (*prefHitCount_[cacheLevel][targetCacheOffset])[cpuId]++;
             }
         }
        
@@ -154,8 +166,30 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
             CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitBlkAddr,
                     Pref), "Failed to update when useful pref hit "
                     "pref data");
-            CHECK_RET_EXIT(usefulTable_[cache].combinePref(pkt, hitBlkAddr),
+            std::set<BaseCache*> correlatedCaches;
+            CHECK_RET_EXIT(usefulTable_[cache].combinePref(hitBlkAddr,
+                    pkt->prefIndex_, &correlatedCaches),
                     "Failed to combine two prefetch when pref hit pref data");
+            
+            // 开始传递合并预取信息
+            if (!correlatedCaches.empty()) {
+                uint8_t cacheLevel = cache->cacheLevel_ ?
+                        cache->cacheLevel_ : 1;
+                Tick completedTick = curTick() +
+                        cache->forwardLatency * clockPeriod();
+                while (++cacheLevel <= maxCacheLevel_) {
+                    for (auto otherCache : correlatedCaches) {
+                        if (otherCache->cacheLevel_ == cacheLevel) {
+                            CHECK_RET(usefulTable_[otherCache].
+                                    addPrefCombination(completedTick,
+                                    hitBlkAddr, pkt->prefIndex_),
+                                    "Failed to forward prefetch combination");
+                        }
+                    }
+                    completedTick += caches_[cacheLevel].front()
+                            ->forwardLatency * clockPeriod();
+                }
+            }
         }
     }
 
@@ -169,18 +203,26 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
         PacketPtr& pkt, const PacketPtr& combinedPkt,
         const DataTypeInfo& info) {
     // 时间维度的更新
+    CHECK_ARGS_EXIT(info.source != NullType, "Unexpected source data type");
+    
+    // 检查目标的正确性
+    CHECK_RET_EXIT(usefulTable_[cache].checkDataType(combinedPkt ?
+            combinedPkt->getAddr() & cacheLineAddrMask_ : 0,
+            combinedPkt ? combinedPkt->prefIndex_ : 0, info.target, true),
+            "Data type not match with the record in BPF");
+    
     CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
     
     if (info.source == Dmd) {
-        for (BaseCache* cache : pkt->caches_) {
-            for (const uint8_t cpuId : cache->cpuIds_) {
-                timingStats_[cpuId].demandMiss_[cache->cacheLevel_]++;
-                (*demandReqMissCount_[cache->cacheLevel_])[cpuId]++;
+        for (BaseCache* srcCache : pkt->caches_) {
+            uint8_t cacheLevel = srcCache->cacheLevel_;
+            for (const uint8_t cpuId : srcCache->cpuIds_) {
+                timingStats_[cpuId].demandMiss_[cacheLevel]++;
+                (*demandReqMissCount_[cacheLevel])[cpuId]++;
             }
         }
     }
     
-    // const uint64_t combinedBlkAddr &= cacheLineAddrMask_;
     // 这里的info记录的source是新的Miss属性
     // 其中的target表示mshr中已存在的内容属性
     // prefetch->nulltype表示prefetch获得了一个新的mshr表项
@@ -189,21 +231,53 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
             "Prefetch will not combined with demand in mshr.");
     if (info.source == Dmd) {
         if (info.target == Pref) {
-            for (BaseCache* cache : pkt->caches_) {
-                for (const uint8_t cpuId : cache->cpuIds_) {
-                    (*shadowedPrefCount_[cache->cacheLevel_])[cpuId]++;
+            CHECK_ARGS(combinedPkt->caches_.size() == 1,
+                    "Prefetch pakcet should have only one source cache");
+            for (BaseCache* srcCache : combinedPkt->caches_) {
+                for (const uint8_t cpuId : srcCache->cpuIds_) {
+                    (*shadowedPrefCount_[srcCache->cacheLevel_])[cpuId]++;
                 }
             }
-            // 一个新生成的没有合并的预取，需要添加对应信息进行追踪
+            // 当一个Demand合并了一个Prefetch，则会导致预取失效
             CHECK_RET_EXIT(usefulTable_[cache].deletePref(combinedPkt),
-                    "Failed to add new prefetch info to useful table");
+                    "Failed to delete prefetch info after being shadowed");
+        } else if (info.target == PendingPref) {
+            // Demand合并PendingPref无须处理，会在PostProcess触发
         } else {
             // 一个新的Dmd请求发生了Miss
             CHECK_RET_EXIT(usefulTable_[cache].updateMiss(pkt),
                     "Failed to update when demand request miss");
         }
-    } else if (info.target == NullType && pkt->caches_.size() == 1 &&
-            *(pkt->caches_.begin()) == cache) {
+    } else if (info.target == Pref) {
+        // 删除的不一定是合并的Target，此处会进行判断
+        // 选择更高等级的决策，或者最高等级的最新决策
+        PacketPtr deletedPkt = pkt->srcCacheLevel_ ==
+                combinedPkt->srcCacheLevel_ ? combinedPkt :
+                (pkt->srcCacheLevel_ > combinedPkt->srcCacheLevel_ ?
+                combinedPkt : pkt);
+        CHECK_ARGS(deletedPkt->caches_.size() == 1,
+                "Prefetch pakcet should have only one source cache");
+        for (BaseCache* srcCache : deletedPkt->caches_) {
+            for (const uint8_t cpuId : srcCache->cpuIds_) {
+                (*squeezedPrefCount_[srcCache->cacheLevel_])[cpuId]++;
+            }
+        }
+        CHECK_RET_EXIT(usefulTable_[cache].deletePref(deletedPkt),
+            "Failed to delete prefetch info after being squeezed");
+    } else if (info.target == PendingPref) {
+        // 如果新的Packet是一个降级预取，则会被删除
+        if (pkt->targetCacheLevel_ <= cache->cacheLevel_) {
+            CHECK_RET_EXIT(usefulTable_[cache].deletePref(pkt),
+                "Failed to delete prefetch info after being squeezed");
+            CHECK_ARGS(pkt->caches_.size() == 1,
+                    "Prefetch pakcet should have only one source cache");
+            for (BaseCache* srcCache : pkt->caches_) {
+                for (const uint8_t cpuId : srcCache->cpuIds_) {
+                    (*squeezedPrefCount_[srcCache->cacheLevel_])[cpuId]++;
+                }
+            }
+        }
+    } else if (info.target == NullType && *(pkt->caches_.begin()) == cache) {
         // 一个新生成的没有合并的预取，需要添加对应信息进行追踪
         CHECK_RET_EXIT(usefulTable_[cache].newPref(pkt),
                 "Failed to add new prefetch info to useful table");
@@ -219,9 +293,15 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
         const PacketPtr &pkt, const uint64_t& evictedAddr,
         const DataTypeInfo& info) {
     // 时间维度的更新
+    CHECK_ARGS_EXIT(info.source != NullType, "Unexpected source data type");
+    const uint64_t evictedBlkAddr = evictedAddr & cacheLineAddrMask_;
+    
+    // 检查目标的正确性
+    CHECK_RET_EXIT(usefulTable_[cache].checkDataType(evictedBlkAddr, 0,
+            info.target, false),
+            "Data type not match with the record in BPF");
     CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
     
-    const uint64_t evictedBlkAddr = evictedAddr & cacheLineAddrMask_;
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
         // 则会将对应预取从当前Cache记录表中剔除
@@ -244,10 +324,22 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                         "used pref in the table");
             } else {
                 // 如果一个预取替换了一个没有被Demand Request命中过的无用预取
-                // 则原预取将会被剔除，并进行记录，同时新的预取替换对象会继承
-                // 之前替换对象的地址
-                CHECK_RET_EXIT(usefulTable_[cache].replaceEvict(pkt,
-                        evictedBlkAddr),
+                // 则原预取将会被剔除，并进行记录
+                uint64_t oldReplacedAddr;
+                CHECK_RET_EXIT(usefulTable_[cache].getReplacedAddr(
+                        evictedBlkAddr, &oldReplacedAddr),
+                        "Failed to get replaced addr for replaced prefetch");
+                if (!typeHash_) {
+                    CHECK_RET_EXIT(removePrefetch(cache, evictedBlkAddr,
+                            false), "Failed to remove prefetch record "
+                            "when hit by dmd");
+                }
+                // 这里我们可以选择使用被替换的Prefetch作为Victim
+                // 也可以选择原本预取替换的Demand地址作为Victim
+                // (只有原来的预取替换了Demand，才会选择)
+                CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt,
+                        enableRecursiveReplace_ && oldReplacedAddr?
+                        oldReplacedAddr : evictedBlkAddr, Pref),
                         "Failed to replace old pref with new pref");
             }
         } else {
@@ -312,6 +404,7 @@ int BasePrefetchFilter::removePrefetch(BaseCache* cache,
     // 删除被替换掉的预取
     CHECK_RET(usefulTable_[cache].evictPref(prefBlkAddr, &correlatedCaches),
             "Failed to remove pref from the table");
+    
     // 对无效化传递进行设置
     if (isHit) {
         uint8_t cacheLevel = cache->cacheLevel_ ? cache->cacheLevel_ : 1;
@@ -383,6 +476,7 @@ int BasePrefetchFilter::initThis() {
     demandReqHitCount_.resize(cacheCount);
     demandReqMissCount_.resize(cacheCount);
     shadowedPrefCount_.resize(cacheCount);
+    squeezedPrefCount_.resize(cacheCount);
     
     // 初始化时间维度的统计变量
     TimingStats sample;
@@ -407,6 +501,8 @@ int BasePrefetchFilter::checkUpdateTiming() {
             CHECK_RET(helpInvalidatePref(tablePair.first, invalidatedPref),
                     "Failed to forward invalidation info to child class");
         }
+        CHECK_RET(tablePair.second.updateCombination(curTick()),
+                "Failed to update combination for a cache");
     }
     return 0;
 }
@@ -542,8 +638,17 @@ void BasePrefetchFilter::regStats() {
                         .desc(std::string("Number of prefetches shadowed by "
                                 "demand requests from ") + srcCacheName)
                         .flags(total);
+                
+                squeezedPrefCount_[i] = new Stats::Vector();
+                squeezedPrefCount_[i]->init(numCpus_)
+                        .name(name() + "." + srcCacheName +
+                                "_squeezed_prefetches")
+                        .desc(std::string("Number of prefetches squeezed by "
+                                "prefetch requests from ") + srcCacheName)
+                        .flags(total);
             } else {
                 shadowedPrefCount_[i] = emptyStatsVar_;
+                squeezedPrefCount_[i] = emptyStatsVar_;
             }
 
             for (j = 0; j < prefHitCount_[i].size(); j++) {
@@ -607,6 +712,8 @@ void BasePrefetchFilter::regStats() {
                 if (usePref_[i]) {
                     shadowedPrefCount_[i]->subname(k, std::string("cpu") +
                             cpuId);
+                    squeezedPrefCount_[i]->subname(k, std::string("cpu") +
+                            cpuId);
                 }
                 for (j = 0; j < prefTotalUsefulValue_[i].size(); j++) {
                     prefTotalUsefulValue_[i][j]->subname(k,
@@ -634,6 +741,7 @@ void BasePrefetchFilter::regStats() {
             demandReqHitCount_[i] = emptyStatsVar_;
             demandReqMissCount_[i] = emptyStatsVar_;
             shadowedPrefCount_[i] = emptyStatsVar_;
+            squeezedPrefCount_[i] = emptyStatsVar_;
             for (j = 0; j < prefHitCount_[j].size(); j++) {
                 prefHitCount_[i][j] = emptyStatsVar_;
             }

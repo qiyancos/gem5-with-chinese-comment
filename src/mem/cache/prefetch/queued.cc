@@ -312,12 +312,7 @@ QueuedPrefetcher::insert(const PacketPtr &pkt, PrefetchInfo &new_pfi,
     PacketPtr pf_pkt = new Packet(pf_req, MemCmd::HardPFReq);
     pf_pkt->allocate();
     /// 添加关键的预取信息
-    pf_pkt->recentCache_ = cache;
-    pf_pkt->caches_.insert(cache);
-    pf_pkt->srcCacheLevel_ = cache->cacheLevel_;
-    pf_pkt->targetCacheLevel_ = targetCacheLevel;
-    pf_pkt->packetType_ = prefetch_filter::Pref;
-    pf_pkt->recentBranchPC_ = pkt->recentBranchPC_;
+    pf_pkt->initPref(cache, targetCacheLevel, pkt->recentBranchPC_);
 
     if (tagPrefetch && new_pfi.hasPC()) {
         // Tag prefetch packet with  accessing pc

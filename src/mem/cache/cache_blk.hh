@@ -57,6 +57,7 @@
 #include "base/printable.hh"
 #include "base/types.hh"
 #include "mem/cache/replacement_policies/base.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
 
@@ -85,8 +86,14 @@ enum CacheBlkStatusBits : unsigned {
 class CacheBlk : public ReplaceableEntry
 {
   public:
-    /// 该变量被用来表明当前的CacheBlock是否是一个新分配的
-    bool wasInvalid_;
+    /// 该变量被用来表明当前的CacheBlock是否是一个有效Block
+    bool wasValid_ = false;
+    
+    /// 表示该Block在被替换前是否是一个预取的数据
+    bool usedToBePrefetched_ = false;
+
+    /// 表示该Block在被替换前的地址
+    uint64_t oldAddr_ = 0;
 
     /** Task Id associated with this block */
     uint32_t task_id;

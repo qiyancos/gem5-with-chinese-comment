@@ -299,11 +299,10 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
         writeAllocator->updateMode(pkt->getAddr(), pkt->getSize(),
                                    pkt->getBlockAddr(blkSize));
     }
-
     if (mshr) {
-        /// MSHR hit
-        /// @note writebacks will be checked in getNextMSHR()
-        /// for any conflicting requests to the same block
+        // MSHR hit
+        // @note writebacks will be checked in getNextMSHR()
+        // for any conflicting requests to the same block
 
         //@todo remove hw_pf here
 
@@ -336,7 +335,7 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
                 // port and also takes into account the additional
                 // delay of the xbar.
                 mshr->allocateTarget(pkt, forward_time, order++,
-                                     allocOnFill(pkt->cmd));
+                                     allocOnFill(pkt->cmd), this);
                 if (mshr->getNumTargets() == numTarget) {
                     noTargetMSHR = mshr;
                     setBlocked(Blocked_NoTargets);
@@ -460,6 +459,9 @@ void
 BaseCache::recvTimingResp(PacketPtr pkt)
 {
     assert(pkt->isResponse());
+    DEBUG_MEM("%s recv timing resp packet[%p : %s] @0x%lx ",
+            BaseCache::levelName_[cacheLevel_].c_str(), pkt,
+            pkt->cmd.toString().c_str(), pkt->getAddr());
 
     if (pkt->packetType_ == prefetch_filter::Pref) {
         DEBUG_MEM("%s recv prefetch resp @0x%lx  [%s -> %s]",
@@ -493,14 +495,15 @@ BaseCache::recvTimingResp(PacketPtr pkt)
 
     MSHR *mshr;
     
-    /// 如果我们发现Packet是一个提升级别的预取
-    /// 那么会获取Pakcet里面存放着的额外MSHR
+    /// 表明当前的预取是否需要执行提级预取的处理
     const bool needLevelUpPrefProcess =
             cacheLevel_ >= pkt->targetCacheLevel_ &&
             cacheLevel_ < pkt->srcCacheLevel_ &&
             pkt->caches_.find(this) == pkt->caches_.end();
     
     if (needLevelUpPrefProcess) {
+        /// 如果我们发现Packet是一个提升级别的预取
+        /// 那么会获取Pakcet里面存放着的额外MSHR
         mshr = pkt->mshr_;
     } else {
         // we have dealt with any (uncacheable) writes above, from here on
@@ -517,7 +520,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     }
 
     // Initial target is used just for stats
-    MSHR::Target *initial_tgt = mshr->getTarget();
+    MSHR::Target *initial_tgt = &(mshr->targets.front());
     int stats_cmd_idx = initial_tgt->pkt->cmdToIndex();
     Tick miss_latency = curTick() - initial_tgt->recvTime;
 
@@ -547,7 +550,6 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         DPRINTF(Cache, "Block for addr %#llx being updated in Cache\n",
                 pkt->getAddr());
         
-        // 判断是不是在Fill的时候才进行allocate分配Block
         const bool allocate = (writeAllocator && mshr->wasWholeLineWrite) ?
             writeAllocator->allocate() : mshr->allocOnFill();
         blk = handleFill(pkt, blk, writebacks, allocate);
@@ -573,6 +575,27 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         // were deferred as we couldn't guarrantee a writable copy
         mshr->promoteWritable();
     }
+    
+    /// 这里会进行PendingPref覆盖情况的后后续处理
+    if (is_fill && !is_error && mshr->needPostProcess_ &&
+            mshr->prefTarget_->pkt->packetType_ == prefetch_filter::Pref) {
+        PacketPtr targetPkt = mshr->targets.back().pkt;
+        panic_if(!(targetPkt->packetType_ == prefetch_filter::Dmd ||
+                (targetPkt->packetType_ == prefetch_filter::Pref &&
+                targetPkt->srcCacheLevel_ < cacheLevel_ &&
+                targetPkt->targetCacheLevel_ < cacheLevel_)),
+                "Found unexpected MSHR target status when doing"
+                " post process");
+        if (prefetchFilter_ && blk) {
+            /// 处理PendingPref被Demand/Pref覆盖的情况
+            Addr hitAddr = pkt->getAddr();
+            prefetch_filter::DataTypeInfo infoPair;
+            infoPair.target = prefetch_filter::Pref;
+            infoPair.source = targetPkt->packetType_;
+            prefetchFilter_->notifyCacheHit(this, targetPkt, hitAddr,
+                    infoPair);
+        }
+    }
 
     serviceMSHRTargets(mshr, pkt, blk);
 
@@ -589,7 +612,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
             /// 针对提升等级的预取，并且是目标层级，会删除mshr
             delete mshr;
             pkt->mshr_ = nullptr;
-        } else {
+        } else if (!needLevelUpPrefProcess) {
             // while we deallocate an mshr from the queue we still have to
             // check the isFull condition before and after as we might
             // have been using the reserved entries already
@@ -812,7 +835,6 @@ BaseCache::getNextQueueEntry()
     // note that null does not mean there is no request, it could
     // simply be that it is not ready
     MSHR *miss_mshr  = mshrQueue.getNext();
-    /// 判断处理的MSHR是否是一个
     WriteQueueEntry *wq_entry = writeBuffer.getNext();
 
     // If we got a write buffer request ready, first priority is a
@@ -1395,17 +1417,22 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
             prefetch_filter::DataTypeInfo infoPair;
             
             infoPair.source = pkt->packetType_;
-            infoPair.target = blk->wasPrefetched() ? prefetch_filter::Pref :
-                    prefetch_filter::Dmd;
-            infoPair.target = blk->wasInvalid_ ? prefetch_filter::NullType :
-                    infoPair.target;
-            Addr evictedAddr = blk->wasInvalid_ ? 0 : regenerateBlkAddr(blk);
+            infoPair.target = blk->usedToBePrefetched_ ?
+                    prefetch_filter::Pref : prefetch_filter::Dmd;
+            infoPair.target = blk->wasValid_ ? infoPair.target :
+                    prefetch_filter::NullType;
+            Addr evictedAddr = blk->wasValid_ ? blk->oldAddr_ : 0;
             prefetchFilter_->notifyCacheFill(this, pkt, evictedAddr, infoPair);
-            blk->wasInvalid_ = false;
         }
         
         pkt->writeDataToBlock(blk->data, blkSize);
+        /// 清除对应Block的关键数据，避免出现错误
     }
+    
+    blk->wasValid_ = false;
+    blk->usedToBePrefetched_ = false;
+    blk->oldAddr_ = 0;
+    
     // The block will be ready when the payload arrives and the fill is done
     blk->setWhenReady(clockEdge(fillLatency) + pkt->headerDelay +
                       pkt->payloadDelay);
@@ -1439,9 +1466,10 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
     for (const auto& blk : evict_blks) {
         if (blk->isValid()) {
             Addr repl_addr = regenerateBlkAddr(blk);
-            DEBUG_MEM("%s Fill @0x%lx replace valid Block @0x%lx",
+            blk->oldAddr_ = repl_addr;
+            DEBUG_MEM("%s Fill @0x%lx replace valid block[%p] @0x%lx",
                     BaseCache::levelName_[cacheLevel_].c_str(),
-                    pkt->getAddr(), repl_addr);
+                    pkt->getAddr(), blk, repl_addr);
             MSHR *repl_mshr = mshrQueue.findMatch(repl_addr, blk->isSecure());
             if (repl_mshr) {
                 // must be an outstanding upgrade or clean request
@@ -1453,8 +1481,9 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
                 // allocation failed, block not inserted
                 return nullptr;
             }
-        } else if (blk == victim) {
-            blk->wasInvalid_ = true;
+            if (blk == victim) {
+                blk->wasValid_ = true;
+            }
         }
     }
 
@@ -1474,6 +1503,7 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
     for (const auto& blk : evict_blks) {
         if (blk->isValid()) {
             if (blk->wasPrefetched()) {
+                blk->usedToBePrefetched_ = true;
                 unusedPrefetches++;
             }
 
@@ -1490,11 +1520,14 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
 void
 BaseCache::invalidateBlock(CacheBlk *blk)
 {
+    DEBUG_MEM("%s invlidate cache block @0x%lx",
+            BaseCache::levelName_[cacheLevel_].c_str(),
+            regenerateBlkAddr(blk));
     // If handling a block present in the Tags, let it do its invalidation
     // process, which will update stats and invalidate the block itself
     if (blk != tempBlock) {
-        /// 添加无效化预取的相关通知
-        if (prefetchFilter_ && blk->wasPrefetched()) {
+        /// 添加无效化预取的相关通知（如果是因为Fill导致的Invalidate不会通知）
+        if (prefetchFilter_ && blk->wasPrefetched() && !blk->wasValid_) {
             prefetchFilter_->invalidatePrefetch(this, regenerateBlkAddr(blk));
         }
         tags->invalidate(blk);
@@ -1532,9 +1565,9 @@ BaseCache::writebackBlk(CacheBlk *blk)
     PacketPtr pkt =
         new Packet(req, blk->isDirty() ?
                    MemCmd::WritebackDirty : MemCmd::WritebackClean);
-    /// 初始化信息
-    pkt->recentCache_ = this;
-    pkt->caches_.insert(this);
+    /// 初始化信息（对于这类操作添加Demand属性）
+    pkt->addSrcCache(this);
+    pkt->packetType_ = prefetch_filter::Dmd;
 
     DPRINTF(Cache, "Create Writeback %s writable: %d, dirty: %d\n",
             pkt->print(), blk->isWritable(), blk->isDirty());
@@ -1569,9 +1602,9 @@ BaseCache::writecleanBlk(CacheBlk *blk, Request::Flags dest, PacketId id)
     req->taskId(blk->task_id);
 
     PacketPtr pkt = new Packet(req, MemCmd::WriteClean, blkSize, id);
-    /// 初始化信息
-    pkt->recentCache_ = this;
-    pkt->caches_.insert(this);
+    /// 初始化信息（对于这类写回操作，设置Demand属性）
+    pkt->addSrcCache(this);
+    pkt->packetType_ = prefetch_filter::Dmd;
 
     if (dest) {
         req->setFlags(dest);
@@ -1684,11 +1717,6 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
 
     // use request from 1st target
     PacketPtr tgt_pkt = mshr->getTarget()->pkt;
-    
-    /// 如果是一个预取相关MSHR，则会选择合并后的Packet
-    if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
-        tgt_pkt = mshr->getPrefTarget()->pkt;
-    }
 
     DPRINTF(Cache, "%s: MSHR %s\n", __func__, tgt_pkt->print());
 
@@ -1730,6 +1758,7 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
         // copy for response handling
         /// 设置最近处理Packet的Cache指针
         pkt = new Packet(tgt_pkt, false, true);
+        // 由于是一个Forward，不会添加为源Cache
         pkt->recentCache_ = this;
         
         assert(!pkt->isWrite());
@@ -1741,6 +1770,8 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
             pkt->srcCacheLevel_ > pkt->targetCacheLevel_) {
         assert(pkt->targetCacheLevel_ != 255);
         pkt->mshr_ = new MSHR(*mshr);
+        /// 更新prefTraget
+        pkt->mshr_->initLevelUpPrefMSHR();
         pkt->mshr_->getTarget()->source = MSHR::Target::FromCPU;
         DEBUG_MEM("%s push uplevel mshr %p for prefetch @0x%lx [%s -> %s]",
                 BaseCache::levelName_[cacheLevel_].c_str(),
@@ -2646,30 +2677,28 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
             MSHR* mshr = dynamic_cast<MSHR*>(entry);
             PacketPtr tgt_pkt = mshr->getTarget()->pkt;
             if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
-                tgt_pkt = mshr->getPrefTarget()->pkt;
                 DEBUG_MEM("%s packet @0x%lx [%s -> %s] sent",
                         BaseCache::levelName_[cache.cacheLevel_].c_str(),
                         tgt_pkt->getAddr(),
                         BaseCache::levelName_[tgt_pkt->srcCacheLevel_].c_str(),
                         BaseCache::levelName_[tgt_pkt->targetCacheLevel_].c_str());
-                if (cache.cacheLevel_ < tgt_pkt->targetCacheLevel_ &&
-                        cache.cacheLevel_ >= tgt_pkt->srcCacheLevel_) {
+                if (cache.cacheLevel_ < tgt_pkt->targetCacheLevel_) {
+                    /// 如果目标的MSHR是一个降级别预取，发送之后立即清空MSHR
                     DEBUG_MEM("%s deallocate low level MSHR[%p] @0x%lx",
                             BaseCache::levelName_[cache.cacheLevel_].c_str(),
                             mshr, tgt_pkt->getAddr());
-                    /// 如果目标的MSHR是一个降级别预取，发送之后立即清空MSHR
-                    tgt_pkt = mshr->getTarget()->pkt;
-                    mshr->extractServiceableTargets(tgt_pkt);
+                    MSHR::TargetList targets =
+                            mshr->extractServiceableTargets(tgt_pkt);
+                    for (auto target : targets) {
+                        // 删除所有降级别的预取操作
+                        delete target.pkt;
+                    }
                     cache.mshrQueue.deallocate(mshr);
-                    // TODO 确定该操作的正确性
-                    delete tgt_pkt;
-                } else if (cache.cacheLevel_ == tgt_pkt->srcCacheLevel_ &&
-                        tgt_pkt->targetCacheLevel_ < tgt_pkt->srcCacheLevel_) {
-                    /// 如果是一个提升级别的预取，
-                    /// 将对应MSHR的Target属性设置为CPU
+                } else if (cache.cacheLevel_ >= tgt_pkt->targetCacheLevel_) {
+                    /// 如果合并为一个提级/平级预取，
+                    DEBUG_MEM("MSHR changed for none low level prefetch "
+                            "@0x%lx", tgt_pkt->getAddr());
                     mshr->getTarget()->source = MSHR::Target::FromCPU;
-                    DEBUG_MEM("MSHR changed for level-up prefetch @0x%lx",
-                            tgt_pkt->getAddr());
                 }
             }
         }

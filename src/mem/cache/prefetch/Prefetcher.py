@@ -132,7 +132,7 @@ class StridePrefetcher(QueuedPrefetcher):
     table_assoc = Param.Int(4, "Associativity of PC lookup table")
     use_master_id = Param.Bool(True, "Use master id based history")
 
-    degree = Param.Int(4, "Number of prefetches to generate")
+    degree = Param.Int(16, "Number of prefetches to generate")
 
     # Get replacement policy
     replacement_policy = Param.BaseReplacementPolicy(RandomRP(),

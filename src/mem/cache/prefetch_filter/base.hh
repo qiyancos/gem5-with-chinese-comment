@@ -146,6 +146,10 @@ public:
     // 预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
     std::vector<Stats::Vector*> shadowedPrefCount_;
     
+    // 预取器中因为合并了Prefetch MSHR导致被删除的预取请求个数
+    // 区分不同核心和缓存等级
+    std::vector<Stats::Vector*> squeezedPrefCount_;
+    
     // 预取器发出预取的有益分数和，第一维度对应缓存等级，第二维度对应单多核
     // 第二维度0表示单核心，1表示多核心
     std::vector<std::vector<Stats::Vector*>> prefTotalUsefulValue_;
@@ -204,7 +208,7 @@ private:
     uint64_t timingStatsPeriodCount_ = 0;
 
     // 是否开启统计操作，如果不做统计，则所有统计函数将会无效
-    const bool enableStats_ = 0;
+    const bool enableStats_ = false;
     
 protected:
     // 全局唯一的实例指针
@@ -220,7 +224,10 @@ protected:
     static bool regFlag_;
 
     // 是否开启过滤器，如果不开启，则所有预取都不会改变
-    const bool enableFilter_ = 0;
+    const bool enableFilter_ = false;
+    
+    // 是否使用被替换的预取之前替换的地址作为新的预取替换的Victim地址
+    const bool enableRecursiveReplace_ = false;
     
     // 用于记录预取有害信息的结构，每一级缓存都会有一个
     std::map<BaseCache*, IdealPrefetchUsefulTable> usefulTable_;
