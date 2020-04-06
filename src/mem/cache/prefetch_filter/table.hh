@@ -79,13 +79,16 @@ public:
     // 写入一个地址对应的数据，0表示命中并写入，1表示未命中且未替换，
     // 2表示未命中但是发生了替换，-1表示出现错误
     int write(const uint64_t& addr, const T& data,
-            uint64_t* replacedAddr = nullptr, T* replacedData = nullptr);
+            uint64_t* replacedAddr = nullptr, T* oldData = nullptr);
     
     // 无效化一个地址对应的表项，0表示不存在，1表示成功，-1表示出现错误
     int invalidate(const uint64_t& addr);
 
     // 该函数会对所有的单元进行批量写操作
     int writeAll(const T& data, const bool valid = true);
+
+    // 用于内存检查
+    void memCheck();
 
 public:
     // 表格的大小
@@ -232,6 +235,13 @@ public:
 
     // 设置当前Valid信息
     int setValidBit(const bool valid);
+
+    // 该函数用于内存检查
+    void memCheck();
+
+    // 该函数用于检查所有Info的正确性并返回错漏的失效信息
+    static int findCorrection(
+            std::map<BaseCache*, std::set<uint64_t>>* correctionList);
 
 private:
     // 下面是基本数据结构

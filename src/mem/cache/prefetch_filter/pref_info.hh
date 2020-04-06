@@ -45,6 +45,9 @@ namespace prefetch_filter {
 
 typedef Packet *PacketPtr;
 
+// 该变量用于进行预取校正（防止特殊的预取不能得到释放）
+extern Tick maxResponseGap_;
+
 // 依据一组Cache指针生成对应的CPUID位向量
 uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches);
 
@@ -151,7 +154,7 @@ int addNewPrefUsefulType(const std::string& name,
         std::function<bool(const uint64_t&, const uint64_t&, const uint64_t&,
         const uint64_t&)> judgeFunc);
 
-#define TOTAL_DEGREE 4
+#define TOTAL_DEGREE 5
 #define PREF_DEGREE_1 4
 #define PREF_DEGREE_2 8
 #define PREF_DEGREE_3 12
@@ -173,6 +176,9 @@ public:
 
     // 添加当前预取在某一个Cache中的替换地址
     int addReplacedAddr(BaseCache* cache, const uint64_t& replacedAddr);
+
+    // 重新设置当前预取在某一个Cache中的替换地址
+    int resetReplacedAddr(BaseCache* cache, const uint64_t& replacedAddr);
 
     // 删除一个预取在某一个Cache中的替换地址，并返回可能相关的需要无效化Cache
     int rmReplacedAddr(BaseCache* cache,
@@ -229,6 +235,12 @@ public:
 
     // 对应预取的地址
     const uint64_t addr_ = 0;
+
+    // 该预取是不是一个降级预取（用于预取校正）
+    bool isLevelDown_ = false;
+
+    // 该预取的注册时间（用于预取校正）
+    Tick regTime_ = 0;
 
 private:
     // 当前预取对应的替换数据地址，考虑到预取的贯穿效应，

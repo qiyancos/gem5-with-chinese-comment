@@ -71,15 +71,21 @@ class Queue : public Drainable
   protected:
     /** Local label (for functional print requests) */
     const std::string label;
-
+  
+  public:
     /**
      * The total number of entries in this queue. This number is set
      * as the number of entries requested plus any reserve. This
      * allows for the same number of effective entries while still
      * maintaining an overflow reserve.
      */
+    /// 修改属性以便用于检查
     const int numEntries;
 
+    /// 该变量记录了表项中用于Demand的个数
+    int numWaitingDemands_ = 0;
+
+  protected:
     /**
      * The number of entries to hold as a temporary overflow
      * space. This is used to allow temporary overflow of the number
@@ -112,13 +118,14 @@ class Queue : public Drainable
         panic("Failed to add to ready list.");
     }
 
+  public:
     /** The number of entries that are in service. */
+    /// 修改属性以便进行检查
     int _numInService;
 
     /** The number of currently allocated entries. */
+    /// 修改属性以便进行检查
     int allocated;
-
-  public:
 
     /**
      * Create a queue with a given number of entries.
@@ -177,6 +184,24 @@ class Queue : public Drainable
         return nullptr;
     }
 
+    /// 该函数只能用来进行预取校正
+    bool haveMatch(Addr blk_addr, bool ignore_uncacheable = true) const
+    {
+        for (const auto& entry : allocatedList) {
+            // we ignore any entries allocated for uncacheable
+            // accesses and simply ignore them when matching, in the
+            // cache we never check for matches when adding new
+            // uncacheable entries, and we do not want normal
+            // cacheable accesses being added to an WriteQueueEntry
+            // serving an uncacheable access
+            if (!(ignore_uncacheable && entry->isUncacheable()) &&
+                entry->blkAddr == blk_addr) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     bool trySatisfyFunctional(PacketPtr pkt, Addr blk_addr)
     {
         pkt->pushLabel(label);

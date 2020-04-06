@@ -30,9 +30,14 @@
 
 #include "mem/cache/base.hh"
 #include "mem/cache/cache.hh"
+#include "mem/cache/prefetch_filter/base.hh"
 #include "mem/cache/prefetch_filter/debug_flag.hh"
 
 namespace prefetch_filter {
+
+Tick debugStartTick_ = 1000000000000LLU;
+Tick maxResponseGap_ = 1000000000LLU;
+Tick tickNow_ = 0;
 
 uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches) {
     std::set<uint8_t> cpuIds;
@@ -54,6 +59,7 @@ uint64_t generatePrefIndex(const PacketPtr pkt) {
     CHECK_ARGS_EXIT(pkt->prefIndex_ == 0,
             "Only generate index for newly generated prefetch");
     return pkt->getAddr() ^
+            ((pkt->req->time() / BasePrefetchFilter::clockPeriod_) << 32) ^
             (uint64_t((*pkt->caches_.begin())->prefetcherId_) << 48) ^
             (uint64_t(pkt->targetCacheLevel_) << 56);
 }
@@ -227,7 +233,7 @@ int SingleCoreHarmful = addNewPrefUsefulType("single_core_harmful",
         const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
                 return (singleCoreUseful < singleCoreHarm) &&
-                (crossCoreUseful < crossCoreHarm) &&
+                (crossCoreUseful <= crossCoreHarm) &&
                 (singleCoreHarm - singleCoreUseful) >
                 (crossCoreHarm - crossCoreUseful);
         });
@@ -237,7 +243,7 @@ int CrossCoreHarmful = addNewPrefUsefulType("cross_core_harmful",
         [] (const uint64_t& singleCoreUseful, const uint64_t& singleCoreHarm,
         const uint64_t& crossCoreUseful, const uint64_t& crossCoreHarm)
         -> bool {
-                return (singleCoreUseful < singleCoreHarm) &&
+                return (singleCoreUseful <= singleCoreHarm) &&
                 (crossCoreUseful < crossCoreHarm) &&
                 (singleCoreHarm - singleCoreUseful) <=
                 (crossCoreHarm - crossCoreUseful);
@@ -272,6 +278,15 @@ int PrefetchUsefulInfo::addReplacedAddr(BaseCache* cache,
     CHECK_ARGS(replacedAddress_.find(cache) == replacedAddress_.end(),
             "Replaced address already exists before add one");
     replacedAddress_[cache] = replacedAddr;
+    return 0;
+}
+
+int PrefetchUsefulInfo::resetReplacedAddr(BaseCache* cache,
+        const uint64_t& replacedAddr) {
+    auto replacedIter = replacedAddress_.find(cache);
+    CHECK_ARGS(replacedIter != replacedAddress_.end(),
+            "Replaced address which does not exist can not be reset");
+    replacedIter->second = replacedAddr;
     return 0;
 }
 

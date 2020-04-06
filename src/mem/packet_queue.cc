@@ -197,6 +197,8 @@ PacketQueue::sendDeferredPacket()
 
     DeferredPacket dp = transmitList.front();
 
+    DPRINTF(PacketQueue, "Trying to send pakcet[%p : %s] @0x%lx\n",
+            dp.pkt, dp.pkt->cmdString().c_str(), dp.pkt->getAddr());
     // take the packet of the list before sending it, as sending of
     // the packet in some cases causes a new packet to be enqueued
     // (most notaly when responding to the timing CPU, leading to a
@@ -207,12 +209,16 @@ PacketQueue::sendDeferredPacket()
     // use the appropriate implementation of sendTiming based on the
     // type of queue
     waitingOnRetry = !sendTiming(dp.pkt);
-
+    
     // if we succeeded and are not waiting for a retry, schedule the
     // next send
     if (!waitingOnRetry) {
+        DPRINTF(PacketQueue, "Send pakcet[%p] @0x%lx successfully\n",
+                dp.pkt, dp.pkt->getAddr());
         schedSendEvent(deferredPacketReadyTime());
     } else {
+        DPRINTF(PacketQueue, "Send pakcet[%p] @0x%lx failed & "
+                "waiting for retry\n", dp.pkt, dp.pkt->getAddr());
         // put the packet back at the front of the list
         transmitList.emplace_front(dp);
     }

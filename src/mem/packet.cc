@@ -230,6 +230,13 @@ MemCmd::commandInfo[] =
       InvalidCmd, "InvalidateResp" }
 };
 
+/// 迁移到CC文件以便可以随意更改
+Addr
+Packet::getAddr() const {
+    // assert(flags.isSet(VALID_ADDR));
+    return flags.isSet(VALID_ADDR) ? addr : 0;
+}
+
 /// 迁移到cc以避免头文件互相包含问题
 void Packet::initPref(BaseCache* srcCache, const uint8_t targetCacheLevel,
         const std::list<uint64_t>& recentBranchPC) {

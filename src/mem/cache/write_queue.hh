@@ -85,6 +85,9 @@ class WriteQueue : public Queue<WriteQueueEntry>
      */
     WriteQueueEntry *allocate(Addr blk_addr, unsigned blk_size,
                               PacketPtr pkt, Tick when_ready, Counter order);
+    
+    /// 重写该函数以便进行计数更新
+    void deallocate(WriteQueueEntry *wq_entry);
 
     /**
      * Mark the given entry as in service. This removes the entry from

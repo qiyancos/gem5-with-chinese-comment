@@ -91,10 +91,14 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
     calculatePrefetch(pfi, addresses);
 
     /// 依据是否产生了预取来判断是否将该触发预取PC更新
-    bool havePrefetch = false;
+    int sentPrefetches = 0;
 
     // Queue up generated prefetches
     for (AddrPriority& addr_prio : addresses) {
+        /// 进行预取节流
+        if (sentPrefetches >= throttlingDegree_) {
+            break;
+        }
 
         // Block align prefetch address
         addr_prio.first = blockAddress(addr_prio.first);
@@ -140,20 +144,30 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                                     addrPair.first == addr_prio.first &&
                                     addrPair.second <= targetCacheLevel);
                         }
-                        /// 针对降级颠簸的记录更新
-                        if (!alreadySent) {
-                            recentLevelDownPref_.pop_front();
-                            recentLevelDownPref_.push_back(
-                                    std::pair<Addr, uint8_t>(addr_prio.first,
-                                    targetCacheLevel));
-                        }
                     }
                     /// 只有不属于降级预取颠簸才会正确处理
                     if (!alreadySent) {
                         // Create and insert the request
                         insert(pkt, new_pfi, addr_prio.second,
                                 targetCacheLevel);
-                        havePrefetch = true;
+                        /// 针对降级颠簸的记录更新
+                        std::pair<Addr, uint8_t> oldPrefRecord =
+                                recentLevelDownPref_.front();
+                        DEBUG_MEM("queued.cc: Update pref @0x%lx "
+                                "[%s -> %s] and remove pref @0x%lx [%s -> %s]",
+                                addr_prio.first,
+                                BaseCache::levelName_[cache->cacheLevel_].c_str(),
+                                BaseCache::levelName_[targetCacheLevel].c_str(),
+                                oldPrefRecord.first,
+                                BaseCache::levelName_[cache->cacheLevel_].c_str(),
+                                BaseCache::levelName_[oldPrefRecord.second].c_str());
+                        recentLevelDownPref_.pop_front();
+                        recentLevelDownPref_.push_back(
+                                std::pair<Addr, uint8_t>(addr_prio.first,
+                                targetCacheLevel));
+                        panic_if(recentLevelDownPref_.size() > (originDegree_ << 1),
+                                "Unexpected growth of level-down pref record");
+                        sentPrefetches++;
                     } else {
                         DEBUG_MEM("Level-down prefetch @0x%lx dismissed",
                                 addr_prio.first);
@@ -161,7 +175,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                 }
             } else {
                 insert(pkt, new_pfi, addr_prio.second, 255);
-                havePrefetch = true;
+                sentPrefetches++;
             }
         } else {
             // Record the number of page crossing prefetches generate
@@ -170,7 +184,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
         }
     }
     /// 如果生成的预取，则会更新触发预取的PC
-    if (havePrefetch) {
+    if (sentPrefetches) {
         recentTriggerPC_[1] = recentTriggerPC_[0];
         recentTriggerPC_[0] = pkt->req->getPC();
     }
@@ -220,8 +234,8 @@ void
 QueuedPrefetcher::regStats()
 {
     /// 依据预取度初始化
-    assert(degree_ != 0);
-    recentLevelDownPref_.resize(degree_, std::pair<Addr, uint8_t>(0, 0));
+    assert(originDegree_ != 0);
+    recentLevelDownPref_.resize(originDegree_ << 1, std::pair<Addr, uint8_t>(0, 0));
 
     BasePrefetcher::regStats();
 

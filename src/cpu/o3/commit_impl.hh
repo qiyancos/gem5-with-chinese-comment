@@ -1403,6 +1403,8 @@ DefaultCommit<Impl>::updateComInstStats(const DynInstPtr &inst)
         /// 追踪最近三次的分支PC
         recentBranchPC_.pop_back();
         recentBranchPC_.push_front(inst->pcState().pc());
+        panic_if(recentBranchPC_.size() > 3,
+                "Unexpected big size for branch pc record");
     }
 
     //

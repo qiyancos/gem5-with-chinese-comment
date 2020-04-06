@@ -50,6 +50,8 @@
 #include <cassert>
 
 #include "mem/cache/mshr.hh"
+#include "mem/cache/prefetch_filter/pref_info.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 MSHRQueue::MSHRQueue(const std::string &_label,
                      int num_entries, int reserve, int demand_reserve)
@@ -71,7 +73,27 @@ MSHRQueue::allocate(Addr blk_addr, unsigned blk_size, PacketPtr pkt,
     mshr->readyIter = addToReadyList(mshr);
     
     allocated += 1;
+    /// 更新处于等待状态的Demand MSHR数量
+    numWaitingDemands_ += pkt->packetType_ == prefetch_filter::Dmd;
+    panic_if(numWaitingDemands_ > allocated,
+            "Unexpected number of waiting demand mshr");
     return mshr;
+}
+
+void
+MSHRQueue::deallocate(MSHR *mshr) {
+    Queue::deallocate(mshr);
+    /// 更新处于等待状态的Demand MSHR数量
+    numWaitingDemands_ = 0;
+    for (auto singleMSHR : allocatedList) {
+        if (!singleMSHR->inService && singleMSHR->getTarget()->pkt &&
+                singleMSHR->getTarget()->pkt->packetType_ ==
+                prefetch_filter::Dmd) {
+            numWaitingDemands_++;
+        }
+    }
+    panic_if(numWaitingDemands_ > allocated,
+            "Unexpected number of waiting demand mshr");
 }
 
 void
@@ -101,6 +123,17 @@ MSHRQueue::markInService(MSHR *mshr, bool pending_modified_resp)
     mshr->markInService(pending_modified_resp);
     readyList.erase(mshr->readyIter);
     _numInService += 1;
+    /// 更新处于等待状态的Demand MSHR数量
+    numWaitingDemands_ = 0;
+    for (auto singleMSHR : allocatedList) {
+        if (!singleMSHR->inService && singleMSHR->getTarget()->pkt &&
+                singleMSHR->getTarget()->pkt->packetType_ ==
+                prefetch_filter::Dmd) {
+            numWaitingDemands_++;
+        }
+    }
+    panic_if(numWaitingDemands_ > allocated,
+            "Unexpected number of waiting demand mshr");
 }
 
 void
@@ -109,6 +142,17 @@ MSHRQueue::markPending(MSHR *mshr)
     assert(mshr->inService);
     mshr->inService = false;
     --_numInService;
+    /// 更新处于等待状态的Demand MSHR数量
+    numWaitingDemands_ = 0;
+    for (auto singleMSHR : allocatedList) {
+        if (!singleMSHR->inService && singleMSHR->getTarget()->pkt &&
+                singleMSHR->getTarget()->pkt->packetType_ ==
+                prefetch_filter::Dmd) {
+            numWaitingDemands_++;
+        }
+    }
+    panic_if(numWaitingDemands_ > allocated,
+            "Unexpected number of waiting demand mshr");
     /**
      * @ todo might want to add rerequests to front of pending list for
      * performance.

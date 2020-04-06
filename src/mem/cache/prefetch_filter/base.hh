@@ -73,9 +73,13 @@ public:
     // 创建全局唯一实例
     static BasePrefetchFilter* create(const BasePrefetchFilterParams *p);
     
-    // 获取给定Cache连接的CPU侧连接的接口ID
+    // 获取给定Cache连接的CPU侧连接的接口ID，用于发送提级预取
     static int getCpuSideConnectedPortId(PacketPtr pkt,
             std::vector<int16_t>* portIds);
+
+    // 获取给定Cache连接的CPU侧对应的Cache，用于处理提级预取
+    static int getCpuSideConnectedCache(PacketPtr pkt,
+            std::set<BaseCache*>* caches);
 
     // 添加一个Cache到Filter中来
     int addCache(BaseCache* newCache);
@@ -99,6 +103,12 @@ public:
     // 对一个预取到的数据进行Invalid的时候需要执行
     virtual int invalidatePrefetch(BaseCache* cache, const uint64_t& prefAddr);
     
+    // 通知一个Cache发生了因为下层Block无法发送请求
+    // 并设置预取激进度的调整数值
+    virtual int notifyCacheReqSentFailed(BaseCache* cache,
+            const int totalEntries, const int waitingDemands,
+            const uint8_t originalDegree, uint8_t* newDegree);
+
     // 默认的初始化函数
     void init() override;
 
@@ -109,9 +119,16 @@ protected:
     // 用于生成当前类型实例的hash数值
     static int genHash(const std::string& name);
    
+    // 该函数被用于内存泄漏检查
+    virtual void memCheck();
+
     // 该函数被用于处理子类的预取无效化操作，减轻子类压力
     virtual int helpInvalidatePref(BaseCache* cache,
             const std::set<uint64_t>& addrs);
+
+    // 该函数被用于矫正数据后对子类的更新
+    virtual int helpCorrectPref(
+            const std::map<BaseCache*, std::set<uint64_t>>& correctionList);
 
     // 删除和某一个预取相关的记录
     int removePrefetch(BaseCache* cache, const uint64_t& prefAddr,
@@ -121,11 +138,11 @@ private:
     // 进行基本结构的初始化
     int initThis();
 
-    // 该函数会执行和时序相关的更新
-    int checkUpdateTiming();
+    // 该函数会执行和时序相关的更新（在最开始执行）
+    int checkUpdateTimingAhead();
 
-    // 该函数会对时间维度信息进行统计和打印
-    int checkUpdateTimingStats();
+    // 该函数会执行和时序相关的更新（在处理的最后执行）
+    int checkUpdateTimingPost();
 
 public:
     // 用于处理未启用的统计变量
@@ -162,6 +179,9 @@ public:
     // 不同分类的预取个数
     std::vector<std::vector<Stats::Vector*>> prefUsefulType_;
 
+    // 因为阻塞无法上传的提级预取
+    static std::vector<Stats::Vector*> dismissedLevelUpPref_;
+
     // 时间维度的统计计数数据结构
     class TimingStats {
     public:
@@ -194,10 +214,27 @@ public:
     // 缓存行内偏移地址对应的Bits
     static uint8_t cacheLineOffsetBits_;
     
+    // 当前单个Cycle对应的Tick大小
+    static Tick clockPeriod_;
+
+    // 当前Filter负责监视的所有Cache指针
+    static std::vector<std::vector<BaseCache*>> caches_;
+    
     // 当前系统下的最高缓存等级
     uint8_t maxCacheLevel_ = 0;
 
+    typedef std::pair<BaseCache*, std::pair<uint64_t, uint64_t>> DoublePref;
+
+    // 该变量存放着当前处理的信息，以便避免被预取校正错误的处理
+    static DoublePref skipCorrectPref_;
+
 private:
+    // 矫正数据的周期
+    const Tick correctionPeriod_ = 5000000000LLU;
+
+    // 下一个矫正周期执行的Tick位置
+    Tick nextCorrectionTick_ = 0;
+    
     // 基于时间维度的统计
     const Tick statsPeriod_;
 
@@ -231,9 +268,6 @@ protected:
     
     // 用于记录预取有害信息的结构，每一级缓存都会有一个
     std::map<BaseCache*, IdealPrefetchUsefulTable> usefulTable_;
-    
-    // 当前Filter负责监视的所有Cache指针
-    static std::vector<std::vector<BaseCache*>> caches_;
     
     // 当前某一级缓存是否开启了预取
     std::vector<bool> usePref_;

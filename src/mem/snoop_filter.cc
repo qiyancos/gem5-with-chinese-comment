@@ -96,13 +96,6 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port,
     reqLookupResult = cachedLocations.find(line_addr);
     bool is_hit = (reqLookupResult != cachedLocations.end());
 
-    // If the snoop filter has no entry, and we should not allocate,
-    // do not create a new snoop filter entry, simply return a NULL
-    // portlist.
-    if (!is_hit && !allocate) {
-        return snoopDown(lookupLatency);
-    }
-
     // If no hit in snoop filter create a new element and update iterator
     if (!is_hit) {
         if (isLevelUpPref) {
@@ -114,11 +107,15 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port,
         reqLookupResult = cachedLocations.emplace(line_addr, SnoopItem()).first;
     } else {
         if (reqLookupResult->second.isLevelUpPref_) {
+            panic_if(isLevelUpPref,
+                    "Should not add entry for level-up prefetch twice");
             /// 如果发现已经存在一个提级预取的记录，那么会删除旧记录
+            /// 替换为新的Demand记录
             DEBUG_MEM("SnoopFilter[%p] add new demand entry and replace "
                     "level-up prefetch @0x%lx ", this, line_addr);
             reqLookupResult = cachedLocations.emplace(line_addr,
                     SnoopItem()).first;
+            is_hit = false;
         } else {
             if (isLevelUpPref) {
                 DEBUG_MEM("SnoopFilter[%p] cancle adding new entry for "
@@ -132,6 +129,14 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port,
                     this, line_addr);
         }
     }
+    
+    // If the snoop filter has no entry, and we should not allocate,
+    // do not create a new snoop filter entry, simply return a NULL
+    // portlist.
+    if (!is_hit && !allocate) {
+        return snoopDown(lookupLatency);
+    }
+
     SnoopItem& sf_item = reqLookupResult->second;
     /// 如果是一个提升等级的预取调用该操作，那么设置标志
     sf_item.isLevelUpPref_ = isLevelUpPref;

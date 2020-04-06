@@ -97,6 +97,28 @@ BaseTags::findBlock(Addr addr, bool is_secure) const
     return nullptr;
 }
 
+CacheBlk*
+BaseTags::findBlock(Addr addr) const
+{
+    // Extract block tag
+    Addr tag = extractTag(addr);
+
+    // Find possible entries that may contain the given address
+    const std::vector<ReplaceableEntry*> entries =
+        indexingPolicy->getPossibleEntries(addr);
+
+    // Search for block
+    for (const auto& location : entries) {
+        CacheBlk* blk = static_cast<CacheBlk*>(location);
+        if ((blk->tag == tag) && blk->isValid()) {
+            return blk;
+        }
+    }
+
+    // Did not find block
+    return nullptr;
+}
+
 void
 BaseTags::insertBlock(const PacketPtr pkt, CacheBlk *blk)
 {

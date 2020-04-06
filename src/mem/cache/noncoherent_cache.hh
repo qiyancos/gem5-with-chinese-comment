@@ -72,7 +72,10 @@ class NoncoherentCache : public BaseCache
 {
   protected:
     bool access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                PacketList &writebacks) override;
+                PacketList &writebacks,
+                bool* notifyHit = nullptr,
+                bool* notifyMiss = nullptr,
+                bool* notifyFill = nullptr) override;
 
     void handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
                              Tick forward_time,

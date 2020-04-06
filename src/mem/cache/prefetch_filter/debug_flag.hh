@@ -45,6 +45,16 @@
 
 #include <stdio.h>
 
+#include "base/types.hh"
+
+namespace prefetch_filter {
+
+extern Tick debugStartTick_;
+
+extern Tick tickNow_;
+
+} // namespace prefetch_filter
+
 // 可以在这里控制总开关，也可以在各自文件中添加
 #define USE_CHECK 1
 #define DEBUG_FILTER 1
@@ -112,19 +122,29 @@
 #ifdef DEBUG_FILTER
 
 #define DEBUG_PF(indentation, info, ...) { \
-    fprintf(stderr, "[Debug] "); \
-    for (int i = 0; i < indentation; i++) { \
-        fprintf(stderr, "    "); \
+    if (prefetch_filter::tickNow_ > prefetch_filter::debugStartTick_) { \
+        fprintf(stderr, "[Debug] "); \
+        for (int i = 0; i < indentation; i++) { \
+            fprintf(stderr, "    "); \
+        } \
+        fprintf(stderr, (std::string(">> ") + info + \
+                " In [%s:%d].\n").c_str(), ##__VA_ARGS__, \
+                __func__, __LINE__); \
+        fflush(stderr); \
     } \
-    fprintf(stderr, (std::string(">> ") + info + \
-            " In [%s:%d].\n").c_str(), ##__VA_ARGS__, \
-            __func__, __LINE__); \
-    fflush(stderr); \
+}
+
+
+#define DEBUG_PF_PLINE() { \
+    if (prefetch_filter::tickNow_ > prefetch_filter::debugStartTick_) { \
+        fprintf(stderr, "\n"); \
+    } \
 }
 
 #else
 
 #define DEBUG_PF(indentation, info, ...) {}
+#define DEBUG_PF_PLINE() {}
 
 #endif
 
@@ -132,8 +152,10 @@
 #ifdef DEBUG_CACHE
 
 #define DEBUG_MEM(info, ...) { \
-    fprintf(stderr, (std::string("[Debug] -- ") + info + \
-            "\n").c_str(), ##__VA_ARGS__); \
+    if (prefetch_filter::tickNow_ > prefetch_filter::debugStartTick_) { \
+        fprintf(stderr, (std::string("[Debug] -- ") + info + \
+                "\n").c_str(), ##__VA_ARGS__); \
+    } \
 }
 
 #else
@@ -146,8 +168,10 @@
 #ifdef DEBUG_TEMP
 
 #define DEBUG_LINE() { \
-    fprintf(stderr, (std::string("[Debug] == Breakpoint in") + \
-            " %s:%d.\n").c_str(), __func__, __LINE__); \
+    if (prefetch_filter::tickNow_ > prefetch_filter::debugStartTick_) { \
+        fprintf(stderr, (std::string("[Debug] == Breakpoint in") + \
+                " %s:%d.\n").c_str(), __func__, __LINE__); \
+    } \
 }
 
 #define DEBUG_EXIT(expr) { \

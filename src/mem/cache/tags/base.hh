@@ -95,9 +95,12 @@ class BaseTags : public ClockedObject
     /** Marked true when the cache is warmed up. */
     bool warmedUp;
 
+  public:
+    /// 修改该变量属性以便使用
     /** the number of blocks in the cache */
     const unsigned numBlocks;
 
+  protected:
     /** The data blocks, 1 per cache block. */
     std::unique_ptr<uint8_t[]> dataBlks;
 
@@ -200,6 +203,9 @@ class BaseTags : public ClockedObject
      */
     virtual CacheBlk *findBlock(Addr addr, bool is_secure) const;
 
+    /// 新增该函数用于查找Block校正数据
+    virtual CacheBlk *findBlock(Addr addr) const;
+    
     /**
      * Find a block given set and way.
      *

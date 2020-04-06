@@ -87,11 +87,17 @@ class Cache : public BaseCache
      */
     void promoteWholeLineWrites(PacketPtr pkt);
 
+    /// 新增额外的变量表示是否需要通知Hit/Miss或者其他操作
     bool access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                PacketList &writebacks) override;
+                PacketList &writebacks,
+                bool* notifyHit = nullptr,
+                bool* notifyMiss = nullptr,
+                bool* notifyFill = nullptr) override;
 
+    /// 额外添加一个变量表示是否需要通知Hit
     void handleTimingReqHit(PacketPtr pkt, CacheBlk *blk,
-                            Tick request_time) override;
+                            Tick request_time,
+                            const bool notifyHit = true) override;
 
     void handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
                              Tick forward_time,

@@ -94,29 +94,35 @@ struct BaseCacheParams;
  */
 class BaseCache : public MemObject
 {
-    public:
-        /// 记录了初始化Cache的个数，用于获得CacheID
-        static uint8_t initPrefetcherCount_;
+  public:
+    /// 记录了初始化Cache的个数，用于获得CacheID
+    static uint8_t initPrefetcherCount_;
 
-        /// 当前Prefetcher的唯一ID
-        uint8_t prefetcherId_;
+    /// 当前Prefetcher的唯一ID
+    uint8_t prefetcherId_;
 
-        /// 和当前级别Cache连接的所有CPUID
-        const std::set<uint8_t> cpuIds_;
+    /// 和当前级别Cache连接的所有CPUID
+    const std::set<uint8_t> cpuIds_;
 
-        /// 存放了当前Cache对应的等级
-        const uint8_t cacheLevel_;
-        
-        /// Prefetch Filter 
-        BasePrefetchFilter *prefetchFilter_;
-        
-        /// 是否开启记录预取有害性的表格
-        const bool enableHarmTable_;
+    /// 存放了当前Cache对应的等级
+    const uint8_t cacheLevel_;
+    
+    /// Prefetch Filter 
+    BasePrefetchFilter *prefetchFilter_;
+    
+    /// 是否开启记录预取有害性的表格
+    const bool enableHarmTable_;
 
-        /// 存放了每一个缓存等级和的
-        static std::vector<std::string> levelName_;
-        
-    protected:
+    /// 存放了每一个缓存等级和的
+    static std::vector<std::string> levelName_;
+    
+    /// 该函数用于获取带CPUID的Cache名称
+    std::string getName();
+
+    /// 该函数用于判断是否有可供提级预取处理的WriteBuffer
+    bool hasWriteBufferForPref();
+
+  protected:
     /**
      * Indexes to enumerate the MSHR queues.
      */
@@ -340,17 +346,19 @@ class BaseCache : public MemObject
     // 修改为public主要是用于filter判定预取器的设置情况
     BasePrefetcher *prefetcher;
 
-  protected:
-
     /** Miss status registers */
+    /// 修改为public以便进行预取校正
     MSHRQueue mshrQueue;
 
     /** Write/writeback buffer */
+    /// 修改该变量属性以便进行访问
     WriteQueue writeBuffer;
 
+    /// 修改该变量属性以便进行访问
     /** Tag and data Storage */
     BaseTags *tags;
 
+  protected:
     /** To probe when a cache hit occurs */
     ProbePointArg<PacketPtr> *ppHit;
 
@@ -477,8 +485,12 @@ class BaseCache : public MemObject
      * @param writebacks List for any writebacks that need to be performed.
      * @return Boolean indicating whether the request was satisfied.
      */
+    /// 新增额外的变量表示是否需要通知Hit/Miss或者其他操作
     virtual bool access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
-                        PacketList &writebacks);
+                        PacketList &writebacks,
+                        bool* notifyHit = nullptr,
+                        bool* notifyMiss = nullptr,
+                        bool* notifyFill = nullptr);
 
     /*
      * Handle a timing request that hit in the cache
@@ -487,8 +499,10 @@ class BaseCache : public MemObject
      * @param blk The referenced block
      * @param request_time The tick at which the block lookup is compete
      */
+    /// 额外添加一个变量表示是否允许通知Hit
     virtual void handleTimingReqHit(PacketPtr pkt, CacheBlk *blk,
-                                    Tick request_time);
+                                    Tick request_time,
+                                    const bool notifyHit = true);
 
     /*
      * Handle a timing request that missed in the cache
@@ -722,7 +736,6 @@ class BaseCache : public MemObject
      * @param allocate Whether to allocate a block or use the temp block
      * @return Pointer to the new cache block.
      */
-    /// 我们额外添加了一个对应的MSHR指针信息
     CacheBlk *handleFill(PacketPtr pkt, CacheBlk *blk,
                          PacketList &writebacks, bool allocate);
 
@@ -1075,46 +1088,9 @@ class BaseCache : public MemObject
 
     const AddrRangeList &getAddrRanges() const { return addrRanges; }
 
-    MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool sched_send = true)
-    {
-        MSHR *mshr = mshrQueue.allocate(pkt->getBlockAddr(blkSize), blkSize,
-                                        pkt, time, order++,
-                                        allocOnFill(pkt->cmd));
+    MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool sched_send = true);
 
-        if (mshrQueue.isFull()) {
-            setBlocked((BlockedCause)MSHRQueue_MSHRs);
-        }
-
-        if (sched_send) {
-            // schedule the send
-            schedMemSideSendEvent(time);
-        }
-
-        return mshr;
-    }
-
-    void allocateWriteBuffer(PacketPtr pkt, Tick time)
-    {
-        // should only see writes or clean evicts here
-        assert(pkt->isWrite() || pkt->cmd == MemCmd::CleanEvict);
-
-        Addr blk_addr = pkt->getBlockAddr(blkSize);
-
-        WriteQueueEntry *wq_entry =
-            writeBuffer.findMatch(blk_addr, pkt->isSecure());
-        if (wq_entry && !wq_entry->inService) {
-            DPRINTF(Cache, "Potential to merge writeback %s", pkt->print());
-        }
-
-        writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);
-
-        if (writeBuffer.isFull()) {
-            setBlocked((BlockedCause)MSHRQueue_WriteBuffer);
-        }
-
-        // schedule the send
-        schedMemSideSendEvent(time);
-    }
+    void allocateWriteBuffer(PacketPtr pkt, Tick time);
 
     /**
      * Returns true if the cache is blocked for accesses.
@@ -1133,12 +1109,16 @@ class BaseCache : public MemObject
     {
         uint8_t flag = 1 << cause;
         if (blocked == 0) {
+            DPRINTF(Cache,"Start blocking for cause %d, mask=%d\n",
+                    cause, blocked);
             blocked_causes[cause]++;
             blockedCycle = curCycle();
             cpuSidePort.setBlocked();
+        } else {
+            DPRINTF(Cache,"Keep blocking for cause %d, mask=%d\n",
+                    cause, blocked);
         }
         blocked |= flag;
-        DPRINTF(Cache,"Blocking for cause %d, mask=%d\n", cause, blocked);
     }
 
     /**

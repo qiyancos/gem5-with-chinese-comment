@@ -397,7 +397,7 @@ DRAMCtrl::decodeAddr(PacketPtr pkt, Addr dramPktAddr, unsigned size,
     assert(row < rowsPerBank);
     assert(row < Bank::NO_ROW);
 
-    DPRINTF(DRAM, "Address: %lld Rank %d Bank %d Row %d\n",
+    DPRINTF(DRAM, "Address: %lx Rank %d Bank %d Row %d\n",
             dramPktAddr, rank, bank, row);
 
     // create the corresponding DRAM packet with the entry time and
@@ -451,7 +451,7 @@ DRAMCtrl::addToReadQueue(PacketPtr pkt, unsigned int pktCount)
                         servicedByWrQ++;
                         pktsServicedByWrQ++;
                         DPRINTF(DRAM,
-                                "Read to addr %lld with size %d serviced by "
+                                "Read to addr %lx with size %d serviced by "
                                 "write queue\n",
                                 addr, size);
                         bytesReadWrQ += burstSize;
@@ -467,7 +467,7 @@ DRAMCtrl::addToReadQueue(PacketPtr pkt, unsigned int pktCount)
 
             // Make the burst helper for split packets
             if (pktCount > 1 && burst_helper == NULL) {
-                DPRINTF(DRAM, "Read to addr %lld translates to %d "
+                DPRINTF(DRAM, "Read to addr %lx translates to %d "
                         "dram requests\n", pkt->getAddr(), pktCount);
                 burst_helper = new BurstHelper(pktCount);
             }
@@ -616,7 +616,7 @@ bool
 DRAMCtrl::recvTimingReq(PacketPtr pkt)
 {
     // This is where we enter from the outside world
-    DPRINTF(DRAM, "recvTimingReq: request %s addr %lld size %d\n",
+    DPRINTF(DRAM, "recvTimingReq: request %s addr %lx size %d\n",
             pkt->cmdString(), pkt->getAddr(), pkt->getSize());
 
     panic_if(pkt->cacheResponding(), "Should not see packets where cache "
@@ -916,7 +916,7 @@ DRAMCtrl::chooseNextFRFCFS(DRAMPacketQueue& queue, Tick extra_col_delay)
 void
 DRAMCtrl::accessAndRespond(PacketPtr pkt, Tick static_latency)
 {
-    DPRINTF(DRAM, "Responding to Address %lld.. ",pkt->getAddr());
+    DPRINTF(DRAM, "Responding to Address %lx..\n",pkt->getAddr());
 
     bool needsResponse = pkt->needsResponse();
     // do the actual memory access which also turns the packet into a
@@ -1102,7 +1102,7 @@ DRAMCtrl::prechargeBank(Rank& rank_ref, Bank& bank, Tick pre_at, bool trace)
 void
 DRAMCtrl::doDRAMAccess(DRAMPacket* dram_pkt)
 {
-    DPRINTF(DRAM, "Timing access to addr %lld, rank/bank/row %d %d %d\n",
+    DPRINTF(DRAM, "Timing access to addr %lx, rank/bank/row %d %d %d\n",
             dram_pkt->addr, dram_pkt->rank, dram_pkt->bank, dram_pkt->row);
 
     // get the rank
@@ -1275,7 +1275,7 @@ DRAMCtrl::doDRAMAccess(DRAMPacket* dram_pkt)
     // Update bus state to reflect when previous command was issued
     nextBurstAt = cmd_at + tBURST;
 
-    DPRINTF(DRAM, "Access to %lld, ready at %lld next burst at %lld.\n",
+    DPRINTF(DRAM, "Access to %lx, ready at %lld next burst at %lld.\n",
             dram_pkt->addr, dram_pkt->readyTime, nextBurstAt);
 
     dram_pkt->rankRef.cmdList.push_back(Command(command, dram_pkt->bank,

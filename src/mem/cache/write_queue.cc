@@ -51,6 +51,7 @@
 #include <cassert>
 
 #include "mem/cache/write_queue_entry.hh"
+#include "mem/cache/prefetch_filter/debug_flag.hh"
 
 WriteQueue::WriteQueue(const std::string &_label,
                        int num_entries, int reserve)
@@ -71,7 +72,21 @@ WriteQueue::allocate(Addr blk_addr, unsigned blk_size, PacketPtr pkt,
     entry->readyIter = addToReadyList(entry);
 
     allocated += 1;
+    numWaitingDemands_++;
+    panic_if(numWaitingDemands_ != allocated,
+            "Unexpected number of demands in write buffer");
+    DEBUG_MEM("After allocating write buffer: total %d, allocated %d, "
+            "reserved %d, free %d", numEntries, allocated, numReserve,
+            freeList.size());
     return entry;
+}
+
+void
+WriteQueue::deallocate(WriteQueueEntry *wq_entry) {
+    Queue::deallocate(wq_entry);
+    numWaitingDemands_--;
+    panic_if(numWaitingDemands_ != allocated,
+            "Unexpected number of demands in write buffer");
 }
 
 void

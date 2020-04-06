@@ -72,6 +72,12 @@ class BasePrefetcher : public ClockedObject
     /// 当前结构下的Page页表偏移的位数
     uint8_t pageOffsetBits_;
 
+    /// 当前预取器的原始Degree
+    uint8_t originDegree_;
+
+    /// 用于预取节流的Degre设置
+    uint8_t throttlingDegree_;
+
   private:
     class PrefetchListener : public ProbeListenerArgBase<PacketPtr>
     {

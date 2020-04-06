@@ -81,6 +81,9 @@ class MSHRQueue : public Queue<MSHR>
     MSHRQueue(const std::string &_label, int num_entries, int reserve,
               int demand_reserve);
 
+    /// 重写该函数以便进行计数更新
+    void deallocate(MSHR *mshr);
+
     /**
      * Allocates a new MSHR for the request and size. This places the request
      * as the first target in the MSHR.

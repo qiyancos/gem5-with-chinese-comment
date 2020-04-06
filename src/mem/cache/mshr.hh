@@ -500,11 +500,8 @@ class MSHR : public QueueEntry, public Printable
     /**
      * Pop first target.
      */
-    void popTarget()
-    {
-        targets.pop_front();
-    }
-
+    void popTarget();
+    
     bool promoteDeferredTargets();
 
     /**

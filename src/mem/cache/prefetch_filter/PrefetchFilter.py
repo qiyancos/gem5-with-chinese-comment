@@ -53,6 +53,10 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     type = 'PerceptronPrefetchFilter'
     cxx_header = "mem/cache/prefetch_filter/ppf.hh"
 
+    # Prefetcher degree controller setting
+    degree_update_period = Param.UInt64(5000000, "Gap between two degree "
+            "update checking for prefetcher")
+
     # Structure Setting
     cpu_shared_table = Param.Bool(False, "Whether to share table across "
             "differenct cores")
@@ -84,9 +88,12 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
             "feature")
     feature_weight_init = VectorParam.UInt8([14, 10, 6], "Initiated value "
             "for weight in differenct cache")
+    # Used to deal with death valley for prefetch training
+    feature_weight_reset_times = Param.UInt32(4096, "The number of rejected "
+            "prefetches we see when weight table need to be reset")
 
     # 0-L1ICache, 1-L1DCache, 2-L2Cache...n-LnCache
-    prefetch_threshold = VectorParam.UInt16([12, 8, 4],
+    prefetch_threshold = VectorParam.UInt16([12, 8, 2],
             "Thresholds for prefetch to different caches")
     
     # Feature: "key1 key2 key3 x n" means to extract n bits start from

@@ -98,6 +98,9 @@ public:
     // 将给定的预取无效化
     int invalidatePref(const uint64_t& addr, uint8_t* counterPtr);
 
+    // 用于作内存检查
+    void memCheck();
+
 private:
     // 该函数负责完全删除一个预取的记录
     int deletePref(const uint64_t& addr, uint8_t* counterPtr);
@@ -229,6 +232,12 @@ public:
     // 删除一个被无效化的预取
     int invalidatePrefetch(BaseCache* cache, const uint64_t& prefAddr);
     
+    // 通知一个Cache发生了因为下层Block无法发送请求
+    // 并设置新的预取器激进度数值
+    int notifyCacheReqSentFailed(BaseCache* cache, const int totalEntries,
+            const int waitingDemands, const uint8_t originalDegree,
+            uint8_t* newDegree) override;
+
     // 默认初始化函数
     void init() override;
 
@@ -237,7 +246,7 @@ public:
 
 private:
     // 针对不同类型预取的训练方法对应的enum类型
-    enum TrainType {GoodPref, BadPref, UselessPref};
+    enum TrainType {DemandMiss, GoodPref, BadPref, UselessPref};
     
     // 获取训练类型的字符串表示，用于Debug
     std::string getTrainTypeStr(const TrainType type);
@@ -299,6 +308,19 @@ private:
     };
 
 private:
+    // 用于内存检查
+    void memCheck() override;
+    
+    // 该函数被用于接收并处里来自父类的预取无效化操作
+    int helpInvalidatePref(BaseCache* cache, const std::set<uint64_t>& addrs)
+            override;
+
+    // 该函数被用于接收并处里来自父类的预取校正删除操作
+    int helpCorrectPref(
+            const std::map<BaseCache*, std::set<uint64_t>>& correctionList)
+            override;
+
+private:
     // 用于初始化数据的函数
     int initThis();
 
@@ -307,10 +329,6 @@ private:
 
     // 依据给定的信息确定处理的目标表格
     Tables& getTable(BaseCache* cache);
-
-    // 该函数被用于接收并处里来自父类的预取无效化操作
-    int helpInvalidatePref(BaseCache* cache,
-            const std::set<uint64_t>& addrs);
 
     // 对一个给定的预取进行奖励或者惩罚，处理成功返回1，失败返回0，错误返回-1
     int train(Tables& workTable, const uint64_t& prefAddr,
@@ -349,6 +367,9 @@ public:
     // 因为表格不足，没有进行训练的预取个数
     std::vector<Stats::Vector*> prefNotTrained_;
 
+    // 因为表格不足，没有进行训练的DemandMiss个数
+    std::vector<Stats::Vector*> dmdNotTrained_;
+
     // 最终被处理成预取至L1的请求个数，第一个维度表示源头Cache等级，
     // 第二个维度表示目标的Cache等级
     std::vector<std::vector<Stats::Vector*>> prefTarget_;
@@ -356,6 +377,16 @@ public:
     // 不同Feature不同权重的数值出现次数，用于计算Pearson相关因子
     // 第一维度对应Workable， 第二维度表示Feature编号，第三维度表示Weight大小
     std::vector<std::vector<Stats::Vector*>> featureWeightFrequency_;
+
+private:
+    // 自适应预取器激进度调整的周期间隔
+    const Tick degreeUpdatePeriod_;
+
+    // 下一次进行预取激进度调整的
+    Tick lastDegreeUpdateTime_;
+
+    // 该结构记录了相关的统计数据
+    std::map<BaseCache*, uint64_t> blockingHarm_;
 
 private:
     // 初始化成功与否的标志

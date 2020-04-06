@@ -342,13 +342,17 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
             "Should not have more than one prefetch from local cache");
     
     /// 是否设置最新的Target为预取主要Target
-    bool useNewTarget = true;
+    bool useNewTarget = false;
+    /// 是否将顶部的Target删除
+    bool popFrontTarget = false;
     /// 如果不使用新的Target，新的Target是否要处理（针对Pending的情况）
-    bool markDemand = true;
+    bool deleteNewTarget = false;
 
     /// 合并不会修改recentBrnachPC_，以最早的Target为准
     /// （影响触发预取的指令训练）
-    if (targets.back().pkt->packetType_ == prefetch_filter::Pref) {
+    if (targets.front().pkt->packetType_ == prefetch_filter::Pref) {
+        panic_if(targets.size() > 1 || prefTarget_ != &(targets.front()),
+                "Only one prefetch target can be available");
         PacketPtr validPkt = prefTarget_->pkt;
         if (inService) {
             /// 合并Pending的MSHR，有效的Target要么是一个本地非降级预取
@@ -359,19 +363,17 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
                     "Pending prefetch MSHR where to allocate new target "
                     "must be with expected type");
             /// PendingMSHR不会改变prefTraget
-            useNewTarget = false;
             if (pkt->packetType_ == prefetch_filter::Dmd) {
                 /// PendingMSHR合并Demand，不会对新的Demand做任何处理
                 prefTarget_->source = Target::FromPrefetcher;
                 needPostProcess_ = true;
-                markDemand = false;
             } else {
-                if (pkt->targetCacheLevel_  > cacheLevel) {
+                if (pkt->targetCacheLevel_  < cacheLevel) {
                     /// 合并一个提级预取，不会删除其属性，以便保证可以回复
                     needPostProcess_ = true;
-                    markDemand = false;
                 } else {
                     /// 合并一个降级预取，删除预取
+                    deleteNewTarget = true;
                 }
             }
         } else {
@@ -382,26 +384,28 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
                     "Can not combine new prefetch into prefetch targetting "
                     "high-level cache");
             if (pkt->packetType_ == prefetch_filter::Dmd) {
-                useNewTarget = false;
                 /// 这里合并的请求是Demand合并到Prefetch
-                prefTarget_->pkt->packetType_ = prefetch_filter::Dmd;
-                prefTarget_->source = Target::FromPrefetcher;
-                /// 重置Demand相关的Cache信息
-                targets.front().pkt->caches_.clear();
-                targets.front().pkt->addCaches(pkt->caches_);
+                popFrontTarget = true;
+                isSecure = pkt->isSecure();
+                readyTime = whenReady;
+                order = _order;
+                _isUncacheable = pkt->req->isUncacheable();
             } else {
                 /// 对于预取合并预取的情况，取最高等级的最新决策作为实际的目标
                 if (pkt->srcCacheLevel_ <= validPkt->srcCacheLevel_) {
-                    prefTarget_->pkt->packetType_ = prefetch_filter::Dmd;
-                    prefTarget_->source = Target::FromPrefetcher;
+                    popFrontTarget = true;
+                    isSecure = pkt->isSecure();
+                    readyTime = whenReady;
+                    order = _order;
+                    _isUncacheable = pkt->req->isUncacheable();
+                    
+                    useNewTarget = true;
                 } else {
-                    useNewTarget = false;
+                    deleteNewTarget = true;
                 }
             }
         }
     } else {
-        useNewTarget = false;
-        markDemand = false;
         targets.front().pkt->addCaches(pkt->caches_);
     }
     
@@ -424,13 +428,8 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
     //   getting a writable block back or we have already snooped
     //   another read request that will downgrade our writable block
     //   to non-writable (Shared or Owned)
-    PacketPtr tgt_pkt;
-    if (prefTarget_ && prefTarget_->pkt->packetType_ ==
-            prefetch_filter::Pref) {
-        tgt_pkt = prefTarget_->pkt;
-    } else {
-        tgt_pkt = targets.front().pkt;
-    }
+    PacketPtr tgt_pkt = targets.front().pkt;
+
     bool toDeferredList = false;
     if (pkt->req->isCacheMaintenance() ||
         tgt_pkt->req->isCacheMaintenance() ||
@@ -453,19 +452,25 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
         targets.add(pkt, whenReady, _order, Target::FromCPU, !inService,
                     alloc_on_fill);
     }
+    if (popFrontTarget) {
+        panic_if(inService || toDeferredList, "Should never pop prefetch "
+                "target when mshr is still pending");
+        delete prefTarget_->pkt;
+        targets.pop_front();
+        prefTarget_ = nullptr;
+    }
+
     if (useNewTarget) {
         panic_if(inService || toDeferredList, "Should never update prefetch "
                 "target when mshr is still pending");
         /// Target实体指向最后/最新一个Target
         prefTarget_ = &(targets.back());
-    } else if (markDemand && !toDeferredList) {
+    } else if (deleteNewTarget && !toDeferredList) {
         /// 将新的Target标记为无效
-        targets.back().pkt->packetType_ = prefetch_filter::Dmd;
-        targets.back().source = Target::FromPrefetcher;
-    } else if (markDemand && toDeferredList) {
+        targets.pop_back();
+    } else if (deleteNewTarget && toDeferredList) {
         /// 将新的Target标记为无效
-        deferredTargets.back().pkt->packetType_ = prefetch_filter::Dmd;
-        deferredTargets.back().source = Target::FromPrefetcher;
+        deferredTargets.pop_back();
     }
 }
 
@@ -628,6 +633,17 @@ MSHR::extractServiceableTargets(PacketPtr pkt)
     return ready_targets;
 }
 
+/// 针对PrefTarget进行修改
+void
+MSHR::popTarget() {
+    if (prefTarget_) {
+        panic_if(prefTarget_ != &(targets.front()),
+                "Pref Target should always point to the front of targets");
+        prefTarget_ = nullptr;
+    }
+    targets.pop_front();
+}
+
 /// 查存函数自动支持合并的预取MSHR
 MSHR::Target*
 MSHR::getTarget() {
@@ -642,7 +658,8 @@ MSHR::getTarget() {
 
 void
 MSHR::initLevelUpPrefMSHR() {
-    inService = true;
+    /// 调用原生函数设置状态
+    markInService(false);
     if (!prefTarget_) {
         return;
     }

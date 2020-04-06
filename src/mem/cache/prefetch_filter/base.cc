@@ -44,7 +44,10 @@ bool BasePrefetchFilter::initFlag_ = false;
 bool BasePrefetchFilter::regFlag_ = false;
 uint64_t BasePrefetchFilter::cacheLineAddrMask_ = 0;
 uint8_t BasePrefetchFilter::cacheLineOffsetBits_ = 0;
+std::vector<Stats::Vector*> BasePrefetchFilter::dismissedLevelUpPref_;
+Tick BasePrefetchFilter::clockPeriod_ = 0;
 std::vector<std::vector<BaseCache*>> BasePrefetchFilter::caches_;
+BasePrefetchFilter::DoublePref BasePrefetchFilter::skipCorrectPref_;
 
 using namespace prefetch_filter;
 using namespace Stats;
@@ -56,11 +59,13 @@ BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
         enableStats_(p->enable_stats),
         enableFilter_(p->enable_filter),
         enableRecursiveReplace_(p->enable_recursive_replace) {
+    nextCorrectionTick_ = correctionPeriod_;
     cacheLineAddrMask_ = ~(p->block_size - 1);
     int blockSize = p->block_size;
     cacheLineOffsetBits_ = 0;
     while (blockSize >> ++cacheLineOffsetBits_) {}
     cacheLineOffsetBits_--;
+    clockPeriod_ = clockPeriod();
 }
 
 BasePrefetchFilter* BasePrefetchFilter::create(
@@ -73,6 +78,21 @@ BasePrefetchFilter* BasePrefetchFilter::create(
 
 int BasePrefetchFilter::getCpuSideConnectedPortId(PacketPtr pkt,
         std::vector<int16_t>* portIds) {
+    portIds->clear();
+    std::set<BaseCache*> connectedCaches;
+    CHECK_RET_EXIT(getCpuSideConnectedCache(pkt, &connectedCaches),
+            "Failed to get cpu-side connected caches");
+    CHECK_ARGS_EXIT(connectedCaches.size() == 1,
+            "Too many or no connected cpu-side caches found");
+    for (auto upLevelCache : connectedCaches) {
+       portIds->push_back(upLevelCache->memSidePort._baseSlavePort->id);
+    }
+    return 0;
+}
+
+int BasePrefetchFilter::getCpuSideConnectedCache(PacketPtr pkt,
+        std::set<BaseCache*>* caches) {
+    caches->clear();
     BaseCache* cache = pkt->recentCache_;
     CHECK_ARGS_EXIT(cache, "No recent processing cache provided");
     uint8_t cacheLevel = cache->cacheLevel_;
@@ -86,12 +106,11 @@ int BasePrefetchFilter::getCpuSideConnectedPortId(PacketPtr pkt,
         uint64_t coreIDMap = generateCoreIDMap(
                 std::set<BaseCache*> {upLevelCache});
         if ((coreIDMap & cacheCoreIDMap) == coreIDMap) {
+            // 我们现在不支持对共享Cache的向上查询
             CHECK_ARGS_EXIT(connectedCache == nullptr,
                     "Not supportted for shared cache");
             connectedCache = upLevelCache;
-            portIds->clear();
-            portIds->push_back(connectedCache->memSidePort._baseSlavePort->id);
-            break;
+            caches->insert(connectedCache);
         }
     }
     return 0;
@@ -112,17 +131,15 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
     // 时间维度的更新
     CHECK_ARGS_EXIT(info.source != NullType && info.target != NullType,
             "Unexpected source data type");
-    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
 
     const uint64_t hitBlkAddr = hitAddr & cacheLineAddrMask_; 
     if (info.source == Dmd) {
-        for (BaseCache* srcCache : pkt->caches_) {
-            uint8_t cacheLevel = srcCache->cacheLevel_;
-            for (const uint8_t cpuId : srcCache->cpuIds_) {
-                timingStats_[cpuId].demandHit_[cacheLevel]++;
-                (*demandReqHitCount_[cacheLevel])[cpuId]++;
-                (*demandReqHitTotal_)[cpuId]++;
-            }
+        uint8_t cacheLevel = cache->cacheLevel_;
+        for (const uint8_t cpuId : cache->cpuIds_) {
+            timingStats_[cpuId].demandHit_[cacheLevel]++;
+            (*demandReqHitCount_[cacheLevel])[cpuId]++;
+            (*demandReqHitTotal_)[cpuId]++;
         }
     }
     
@@ -190,11 +207,23 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
                             ->forwardLatency * clockPeriod();
                 }
             }
+        } else if (info.target == Dmd) {
+            // 如果一个降级预取正好命中了目标等级的Cache，则删除该预取记录
+            if (pkt->targetCacheLevel_ > pkt->srcCacheLevel_ &&
+                    pkt->targetCacheLevel_ == cache->cacheLevel_) {
+                CHECK_RET_EXIT(usefulTable_[*(pkt->caches_.begin())].
+                        deletePref(pkt),
+                        "Failed to delete prefetch when a level-down "
+                        "prefetch just hit target cache level");
+            }
         }
     }
 
+    skipCorrectPref_ = DoublePref(cache,
+            std::pair<uint64_t, uint64_t>(info.source == Pref ?
+            hitBlkAddr : 0, 0));
     // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingStats(),
+    CHECK_RET_EXIT(checkUpdateTimingPost(),
             "Failed check & update timing stats information");
     return 0;
 }
@@ -211,15 +240,13 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
             combinedPkt ? combinedPkt->prefIndex_ : 0, info.target, true),
             "Data type not match with the record in BPF");
     
-    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
     
     if (info.source == Dmd) {
-        for (BaseCache* srcCache : pkt->caches_) {
-            uint8_t cacheLevel = srcCache->cacheLevel_;
-            for (const uint8_t cpuId : srcCache->cpuIds_) {
-                timingStats_[cpuId].demandMiss_[cacheLevel]++;
-                (*demandReqMissCount_[cacheLevel])[cpuId]++;
-            }
+        uint8_t cacheLevel = cache->cacheLevel_;
+        for (const uint8_t cpuId : cache->cpuIds_) {
+            timingStats_[cpuId].demandMiss_[cacheLevel]++;
+            (*demandReqMissCount_[cacheLevel])[cpuId]++;
         }
     }
     
@@ -239,7 +266,8 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
                 }
             }
             // 当一个Demand合并了一个Prefetch，则会导致预取失效
-            CHECK_RET_EXIT(usefulTable_[cache].deletePref(combinedPkt),
+            CHECK_RET_EXIT(usefulTable_[*(combinedPkt->caches_.begin())].
+                    deletePref(combinedPkt),
                     "Failed to delete prefetch info after being shadowed");
         } else if (info.target == PendingPref) {
             // Demand合并PendingPref无须处理，会在PostProcess触发
@@ -262,13 +290,15 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
                 (*squeezedPrefCount_[srcCache->cacheLevel_])[cpuId]++;
             }
         }
-        CHECK_RET_EXIT(usefulTable_[cache].deletePref(deletedPkt),
-            "Failed to delete prefetch info after being squeezed");
+        CHECK_RET_EXIT(usefulTable_[*(deletedPkt->caches_.begin())].
+                deletePref(deletedPkt),
+                "Failed to delete prefetch info after being squeezed");
     } else if (info.target == PendingPref) {
         // 如果新的Packet是一个降级预取，则会被删除
-        if (pkt->targetCacheLevel_ <= cache->cacheLevel_) {
-            CHECK_RET_EXIT(usefulTable_[cache].deletePref(pkt),
-                "Failed to delete prefetch info after being squeezed");
+        if (pkt->targetCacheLevel_ >= cache->cacheLevel_) {
+            CHECK_RET_EXIT(usefulTable_[*(pkt->caches_.begin())].
+                    deletePref(pkt),
+                    "Failed to delete prefetch info after being squeezed");
             CHECK_ARGS(pkt->caches_.size() == 1,
                     "Prefetch pakcet should have only one source cache");
             for (BaseCache* srcCache : pkt->caches_) {
@@ -283,8 +313,11 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
                 "Failed to add new prefetch info to useful table");
     }
     
+    skipCorrectPref_ = DoublePref(cache,
+            std::pair<uint64_t, uint64_t>(info.source == Pref ?
+            pkt->getAddr() & cacheLineAddrMask_ : 0, 0));
     // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingStats(),
+    CHECK_RET_EXIT(checkUpdateTimingPost(),
             "Failed check & update timing stats information");
     return 0;
 }
@@ -300,7 +333,7 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
     CHECK_RET_EXIT(usefulTable_[cache].checkDataType(evictedBlkAddr, 0,
             info.target, false),
             "Data type not match with the record in BPF");
-    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
     
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
@@ -320,7 +353,7 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                 // 如果被替换的预取被Demand Request覆盖，那么它将会被看作是
                 // 一个Demand Request，成为一个有害情况的备选项
                 CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt, evictedBlkAddr,
-                        Pref), "Failed to add pref replacing %s",
+                        Dmd), "Failed to add pref replacing %s",
                         "used pref in the table");
             } else {
                 // 如果一个预取替换了一个没有被Demand Request命中过的无用预取
@@ -349,8 +382,12 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
         }
     }
     
+    skipCorrectPref_ = DoublePref(cache,
+            std::pair<uint64_t, uint64_t>(
+            info.source == Pref ? pkt->getAddr() & cacheLineAddrMask_ : 0,
+            info.target == Pref ? evictedBlkAddr : 0));
     // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingStats(),
+    CHECK_RET_EXIT(checkUpdateTimingPost(),
             "Failed check & update timing stats information");
     return 0;
 }
@@ -358,8 +395,11 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
 int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
         const uint64_t& prefAddr, const PrefetchInfo& info) {
     // 时间维度的更新
-    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
     
+    // 时间维度的检查与更新
+    CHECK_RET_EXIT(checkUpdateTimingPost(),
+            "Failed check & update timing stats information");
     // 默认的过滤器没有实现，因此不会改变预取数据的存放位置
     return cache->cacheLevel_;
 }
@@ -367,12 +407,33 @@ int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
 int BasePrefetchFilter::invalidatePrefetch(BaseCache* cache,
         const uint64_t& prefAddr){
     // 时间维度的更新
-    CHECK_RET_EXIT(checkUpdateTiming(), "Failed update timing processes");
+    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
     
     const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
     // 删除被替换掉的预取
     CHECK_RET_EXIT(removePrefetch(cache, prefBlkAddr, false),
             "Failed to remove prefetch record when invalidated");
+    
+    skipCorrectPref_ = DoublePref(cache,
+            std::pair<uint64_t, uint64_t>(prefAddr, 0));
+    // 时间维度的检查与更新
+    CHECK_RET_EXIT(checkUpdateTimingPost(),
+            "Failed check & update timing stats information");
+    return 0;
+}
+
+int BasePrefetchFilter::notifyCacheReqSentFailed(BaseCache* cache,
+        const int totalEntries, const int waitingDemands,
+        const uint8_t originalDegree, uint8_t* newDegree) {
+    // 时间维度的更新
+    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
+   
+    // 默认的过滤取不对预取器的预取深度进行调节
+    *newDegree = originalDegree;
+    
+    // 时间维度的检查与更新
+    CHECK_RET_EXIT(checkUpdateTimingPost(),
+            "Failed check & update timing stats information");
     return 0;
 }
 
@@ -397,6 +458,20 @@ int BasePrefetchFilter::helpInvalidatePref(BaseCache* cache,
     return 0;
 }
 
+int BasePrefetchFilter::helpCorrectPref(
+        const std::map<BaseCache*, std::set<uint64_t>>& correctionList) {
+    std::set<BaseCache*> correlatedCaches;
+    for (auto& correction : correctionList) {
+        BaseCache* cache = correction.first;
+        for (auto addr : correction.second) {
+            CHECK_RET(usefulTable_[cache].evictPref(addr, &correlatedCaches),
+                    "Failed to remove prefetch from useful table when doing"
+                    " correction");
+        }
+    }
+    return 0;
+}
+
 int BasePrefetchFilter::removePrefetch(BaseCache* cache,
         const uint64_t& prefAddr, const bool isHit){
     const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
@@ -408,7 +483,7 @@ int BasePrefetchFilter::removePrefetch(BaseCache* cache,
     // 对无效化传递进行设置
     if (isHit) {
         uint8_t cacheLevel = cache->cacheLevel_ ? cache->cacheLevel_ : 1;
-        Tick completedTick = curTick() + cache->forwardLatency * clockPeriod();
+        Tick completedTick = curTick() + cache->forwardLatency * clockPeriod_;
         while (++cacheLevel <= maxCacheLevel_) {
             for (auto otherCache : correlatedCaches) {
                 if (otherCache->cacheLevel_ == cacheLevel) {
@@ -418,10 +493,51 @@ int BasePrefetchFilter::removePrefetch(BaseCache* cache,
                 }
             }
             completedTick += caches_[cacheLevel].front()->forwardLatency *
-                    clockPeriod();
+                    clockPeriod_;
         }
     }
     return 0;
+}
+
+void BasePrefetchFilter::memCheck() {
+    DEBUG_PF(0, "BPF memory check:");
+    DEBUG_PF(1, "Size: %lu", demandReqHitCount_.size());
+    DEBUG_PF(1, "Size: %lu", demandReqMissCount_.size());
+    for (auto& vec : prefHitCount_) {
+        DEBUG_PF(1, "Size: %lu", vec.size());
+    }
+    DEBUG_PF(1, "Size: %lu", shadowedPrefCount_.size());
+    DEBUG_PF(1, "Size: %lu", dismissedLevelUpPref_.size());
+    DEBUG_PF(1, "Size: %lu", squeezedPrefCount_.size());
+    for (auto& vec : prefTotalUsefulValue_) {
+        DEBUG_PF(1, "Size: %lu", vec.size());
+    }
+    for (auto& vec : prefUsefulDegree_) {
+        for (auto& vec2 : vec) {
+            DEBUG_PF(1, "Size: %lu", vec2.size());
+        }
+    }
+    for (auto& vec : prefUsefulType_) {
+        DEBUG_PF(1, "Size: %lu", vec.size());
+    }
+    for (auto& item : timingStats_) {
+        DEBUG_PF(1, "Size: %lu", item.demandHit_.size());
+        DEBUG_PF(1, "Size: %lu", item.demandMiss_.size());
+        for (auto& vec : item.prefDegreeCount_) {
+            for (auto& vec2 : vec) {
+                DEBUG_PF(1, "Size: %lu", vec2.size());
+            }
+        }
+    }
+    DEBUG_PF(1, "Size: %lu", timingDegree_.size());
+    for (auto& vec : caches_) {
+        DEBUG_PF(1, "Size: %lu", vec.size());
+    }
+    for (auto& iter : usefulTable_) {
+        iter.second.memCheck();
+    }
+    DEBUG_PF(1, "Size: %lu", usePref_.size());
+    DEBUG_PF(1, "Size: %lu", havePref_.size());
 }
 
 int BasePrefetchFilter::initThis() {   
@@ -477,7 +593,8 @@ int BasePrefetchFilter::initThis() {
     demandReqMissCount_.resize(cacheCount);
     shadowedPrefCount_.resize(cacheCount);
     squeezedPrefCount_.resize(cacheCount);
-    
+    dismissedLevelUpPref_.resize(cacheCount);
+
     // 初始化时间维度的统计变量
     TimingStats sample;
     sample.demandHit_.resize(cacheCount);
@@ -491,23 +608,42 @@ int BasePrefetchFilter::initThis() {
     return 0;
 }
 
-int BasePrefetchFilter::checkUpdateTiming() {
+int BasePrefetchFilter::checkUpdateTimingAhead() {
+    Tick tickNow = curTick();
+    // 更新全局Tick数，用于Debug
+    prefetch_filter::tickNow_ = tickNow;
+    
+    // 尝试更新无效化和预取合并下传
     for (auto& tablePair : usefulTable_) {
         std::set<uint64_t> invalidatedPref;
-        CHECK_RET(tablePair.second.updateInvalidation(curTick(),
+        CHECK_RET(tablePair.second.updateInvalidation(tickNow,
                 &invalidatedPref),
                 "Failed to update invalidation for a cache");
         if (!invalidatedPref.empty()) {
             CHECK_RET(helpInvalidatePref(tablePair.first, invalidatedPref),
                     "Failed to forward invalidation info to child class");
         }
-        CHECK_RET(tablePair.second.updateCombination(curTick()),
+        CHECK_RET(tablePair.second.updateCombination(tickNow),
                 "Failed to update combination for a cache");
     }
     return 0;
 }
 
-int BasePrefetchFilter::checkUpdateTimingStats() {
+int BasePrefetchFilter::checkUpdateTimingPost() {
+    // 如果到达了校正位置，进行全局数据校正
+    if (prefetch_filter::tickNow_ > nextCorrectionTick_) {
+        std::map<BaseCache*, std::set<uint64_t>> correctionList;
+        CHECK_RET(IdealPrefetchUsefulTable::findCorrection(&correctionList),
+                "Failed to correct prefetch record timingly");
+        nextCorrectionTick_ += correctionPeriod_;
+        if (correctionList.size()) {
+            CHECK_RET(helpCorrectPref(correctionList),
+                    "Failed to forward correction to child class");
+        }
+        // 调用内存检查
+        // memCheck();
+    }
+    
     if (enableStats_ && curTick() > nextPeriodTick_) {
         timingStatsPeriodCount_++;
 
@@ -606,7 +742,7 @@ void BasePrefetchFilter::regStats() {
     if (enableStats_) {
         demandReqHitTotal_ = new Stats::Vector();
         demandReqHitTotal_->init(numCpus_)
-                .name(name() + ".total_demand_requests_hit")
+                .name(name() + ".demand_total_hit")
                 .desc("Number of demand requests")
                 .flags(total);
         for (j = 0; j < numCpus_; j++) {
@@ -633,22 +769,29 @@ void BasePrefetchFilter::regStats() {
             if (usePref_[i]) {
                 shadowedPrefCount_[i] = new Stats::Vector();
                 shadowedPrefCount_[i]->init(numCpus_)
-                        .name(name() + "." + srcCacheName +
-                                "_shadowed_prefetches")
+                        .name(name() + ".prefetch_shadowed_" + srcCacheName)
                         .desc(std::string("Number of prefetches shadowed by "
                                 "demand requests from ") + srcCacheName)
                         .flags(total);
                 
                 squeezedPrefCount_[i] = new Stats::Vector();
                 squeezedPrefCount_[i]->init(numCpus_)
-                        .name(name() + "." + srcCacheName +
-                                "_squeezed_prefetches")
+                        .name(name() + ".prefetch_squeezed_" + srcCacheName)
                         .desc(std::string("Number of prefetches squeezed by "
                                 "prefetch requests from ") + srcCacheName)
+                        .flags(total);
+                
+                dismissedLevelUpPref_[i] = new Stats::Vector();
+                dismissedLevelUpPref_[i]->init(numCpus_)
+                        .name(name() + ".prefetch_dismissed_level_up_" +
+                                srcCacheName)
+                        .desc(std::string("Number of level-up prefetches "
+                                "dismissed from ") + srcCacheName)
                         .flags(total);
             } else {
                 shadowedPrefCount_[i] = emptyStatsVar_;
                 squeezedPrefCount_[i] = emptyStatsVar_;
+                dismissedLevelUpPref_[i] = emptyStatsVar_;
             }
 
             for (j = 0; j < prefHitCount_[i].size(); j++) {
@@ -656,8 +799,8 @@ void BasePrefetchFilter::regStats() {
                         j + i + 1 : j + 2];
                 prefHitCount_[i][j] = new Stats::Vector();
                 prefHitCount_[i][j]->init(numCpus_)
-                        .name(name() + "." + srcCacheName +
-                                "_prefetch_requests_hit_" + tgtCacheName)
+                        .name(name() + ".prefetch_from_" + srcCacheName +
+                                "_hit_" + tgtCacheName)
                         .desc(std::string("Number of prefetches request from ")
                                 + srcCacheName + " hit in " + tgtCacheName)
                         .flags(total);
@@ -668,9 +811,8 @@ void BasePrefetchFilter::regStats() {
                 usefulTypeStr = j ? "cross_core" : "single_core";
                 prefTotalUsefulValue_[i][j] = new Stats::Vector();
                 prefTotalUsefulValue_[i][j]->init(numCpus_)
-                        .name(name() + "." + srcCacheName +
-                                "_prefetch_" + usefulTypeStr +
-                                "_useful_value")
+                        .name(name() + ".prefetch_total_useful_value_from_" +
+                                srcCacheName +"_type_" + usefulTypeStr)
                         .desc(std::string("Total") + usefulTypeStr +
                                 "useful value for of prefetches from" +
                                 srcCacheName)
@@ -683,9 +825,9 @@ void BasePrefetchFilter::regStats() {
                     std::string degreeStr = std::to_string(k);
                     prefUsefulDegree_[i][j][k] = new Stats::Vector();
                     prefUsefulDegree_[i][j][k]->init(numCpus_)
-                            .name(name() + "." + srcCacheName +
-                                    "_prefetch_" + usefulTypeStr +
-                                    "_useful_degree_" + degreeStr)
+                            .name(name() + ".prefetch_useful_degree_from_" +
+                                    srcCacheName + "_type_" + usefulTypeStr +
+                                    "_degree_" + degreeStr)
                             .desc(std::string("Number of prefetches with ") +
                                     usefulTypeStr + " useful degree " +
                                     degreeStr + " from " + srcCacheName)
@@ -697,8 +839,8 @@ void BasePrefetchFilter::regStats() {
                 const PrefUsefulType& type = PrefUsefulTypeList[j];
                 prefUsefulType_[i][j] = new Stats::Vector();
                 prefUsefulType_[i][j]->init(numCpus_)
-                        .name(name() + "." + srcCacheName +
-                                + "_" + type.name_ + "_prefetches")
+                        .name(name() + ".prefetch_useful_type_from_" +
+                                srcCacheName + "_" + type.name_)
                         .desc(std::string("Number of ") + type.name_ +
                                 " prefetches from" + srcCacheName)
                         .flags(total);
@@ -713,6 +855,8 @@ void BasePrefetchFilter::regStats() {
                     shadowedPrefCount_[i]->subname(k, std::string("cpu") +
                             cpuId);
                     squeezedPrefCount_[i]->subname(k, std::string("cpu") +
+                            cpuId);
+                    dismissedLevelUpPref_[i]->subname(k, std::string("cpu") +
                             cpuId);
                 }
                 for (j = 0; j < prefTotalUsefulValue_[i].size(); j++) {
@@ -742,6 +886,7 @@ void BasePrefetchFilter::regStats() {
             demandReqMissCount_[i] = emptyStatsVar_;
             shadowedPrefCount_[i] = emptyStatsVar_;
             squeezedPrefCount_[i] = emptyStatsVar_;
+            dismissedLevelUpPref_[i] = emptyStatsVar_;
             for (j = 0; j < prefHitCount_[j].size(); j++) {
                 prefHitCount_[i][j] = emptyStatsVar_;
             }

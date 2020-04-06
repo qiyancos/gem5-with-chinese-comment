@@ -146,14 +146,16 @@ CoherentXBar::init()
 bool
 CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
 {
-    DEBUG_MEM("Xbar[%p] recv req packet[%p : %s] @0x%lx",
-            this, pkt, pkt->cmd.toString().c_str(), pkt->getAddr());
+    DEBUG_MEM("Xbar[%p] recv req packet[%p : %s] @0x%lx from %s",
+            this, pkt, pkt->cmd.toString().c_str(), pkt->getAddr(),
+            pkt->recentCache_ ?
+            pkt->recentCache_->getName().c_str() : "Unknown");
     if (pkt->packetType_ == prefetch_filter::Pref) {
         DEBUG_MEM("Xbar[%p] recv prefetch req @0x%lx [%s -> %s] from %s",
                 this, pkt->getAddr(),
                 BaseCache::levelName_[pkt->srcCacheLevel_].c_str(),
                 BaseCache::levelName_[pkt->targetCacheLevel_].c_str(),
-                BaseCache::levelName_[pkt->recentCache_->cacheLevel_].c_str());
+                pkt->recentCache_->getName().c_str());
     }
     
     /// 该标志决定了当前处理的是不是一个降级预取
@@ -185,6 +187,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
     if (!is_express_snoop && !reqLayers[master_port_id]->tryTiming(src_port)) {
         DPRINTF(CoherentXBar, "%s: src %s packet %s BUSY\n", __func__,
                 src_port->name(), pkt->print());
+        DEBUG_MEM("Test packet[%p : %s] sent failed", pkt,
+                pkt->cmdString().c_str());
         return false;
     }
 
@@ -230,6 +234,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
                 // update the layer state and schedule an idle event
                 reqLayers[master_port_id]->failedTiming(src_port,
                                                         clockEdge(Cycles(1)));
+                DEBUG_MEM("Test packet[%p : %s] sent failed", pkt,
+                        pkt->cmdString().c_str());
                 return false;
             }
         }
@@ -460,6 +466,13 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
         slavePorts[rsp_port_id]->schedTimingResp(rsp_pkt, response_time);
     }
 
+    if (success) {
+        DEBUG_MEM("Test packet[%p : %s] sent successfully", pkt,
+                pkt->cmdString().c_str());
+    } else {
+        DEBUG_MEM("Test packet[%p : %s] sent failed", pkt,
+                pkt->cmdString().c_str());
+    }
     return success;
 }
 
@@ -471,14 +484,16 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
 
     const auto route_lookup = routeTo.find(pkt->req);
     PortID slave_port_id = InvalidPortID;
-    DEBUG_MEM("Xbar[%p] recv resp packet[%p : %s] @0x%lx",
-            this, pkt, pkt->cmd.toString().c_str(), pkt->getAddr());
+    DEBUG_MEM("Xbar[%p] recv resp packet[%p : %s] @0x%lx from %s",
+            this, pkt, pkt->cmd.toString().c_str(), pkt->getAddr(),
+            pkt->recentCache_ ?
+            pkt->recentCache_->getName().c_str() : "Unknown");
     if (pkt->packetType_ == prefetch_filter::Pref) {
         DEBUG_MEM("Xbar[%p] recv prefetch resp @0x%lx [%s -> %s] from %s",
                 this, pkt->getAddr(),
                 BaseCache::levelName_[pkt->srcCacheLevel_].c_str(),
                 BaseCache::levelName_[pkt->targetCacheLevel_].c_str(),
-                BaseCache::levelName_[pkt->recentCache_->cacheLevel_].c_str());
+                pkt->recentCache_->getName().c_str());
     }
 
     if (pkt->packetType_ == prefetch_filter::Pref &&
@@ -487,7 +502,8 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
         /// 因此需要使用专门的函数获取相应的port id
         std::vector<PortID> portIds;
         BasePrefetchFilter::getCpuSideConnectedPortId(pkt, &portIds);
-        assert(portIds.size() == 1);
+        panic_if(portIds.size() != 1,
+                "Too many or no cpu-side connected port ids");
         slave_port_id = portIds.front();
     } else {
         // determine the destination
@@ -508,6 +524,27 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
 
     if (pkt->packetType_ == prefetch_filter::Pref &&
             pkt->recentCache_->cacheLevel_ <= pkt->srcCacheLevel_) {
+        /// 首先应该检查上一级的Cache是否有WriteBuffer处理上传预取
+        /// 替换产生的写清求
+        std::set<BaseCache*> upperCaches;
+        BasePrefetchFilter::getCpuSideConnectedCache(pkt, &upperCaches);
+        panic_if(upperCaches.size() != 1,
+                "Too many or no cpu-side connected caches found");
+        if ((*(upperCaches.begin()))->hasWriteBufferForPref()) {
+            /// 对于因为上层Cache的WriteBuffer完全填满的时候
+            /// 会直接删除提级Packet，不进行提级操作
+            assert(pkt->caches_.size() == 1);
+            uint8_t cacheLevel = pkt->srcCacheLevel_;
+            for (auto cpuId : (*pkt->caches_.begin())->cpuIds_) {
+                (*BasePrefetchFilter::dismissedLevelUpPref_[
+                        cacheLevel])[cpuId]++;
+            }
+            delete pkt;
+            Tick packetFinishTime = clockEdge(Cycles(1)) +
+                    pkt->payloadDelay;
+            respLayers[slave_port_id]->succeededTiming(packetFinishTime);
+            return true;
+        }
         SlavePort *slave_port = slavePorts[slave_port_id];
         const bool snoop_caches = !system->bypassCaches() &&
                 pkt->cmd != MemCmd::WriteClean;
@@ -516,13 +553,25 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
             bool success;
             // check with the snoop filter where to forward this packet
             snoopFilter->lookupRequest(pkt, *slave_port, &success);
-            /// 如果遇到提级Entry冲突，那么直接删除提级Packet，
-            /// 不进行提级操作
+            /// 如果遇到提级Entry冲突，即已经存在一个Demand请求记录
+            /// 那么直接删除提级Packet，不进行提级操作
             if (!success) {
+                /*
+                // 使用SharedPtr处理，无须主动删除
                 if (pkt->mshr_) {
                     delete pkt->mshr_;
                 }
+                */
+                assert(pkt->caches_.size() == 1);
+                uint8_t cacheLevel = pkt->srcCacheLevel_;
+                for (auto cpuId : (*pkt->caches_.begin())->cpuIds_) {
+                    (*BasePrefetchFilter::dismissedLevelUpPref_[
+                            cacheLevel])[cpuId]++;
+                }
                 delete pkt;
+                Tick packetFinishTime = clockEdge(Cycles(1)) +
+                        pkt->payloadDelay;
+                respLayers[slave_port_id]->succeededTiming(packetFinishTime);
                 return true;
             }
             // Let the snoop filter know about the success of

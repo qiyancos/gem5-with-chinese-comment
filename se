@@ -141,10 +141,10 @@ setGem5(){
         numCpuPerGroup=2
 
     enableDebug="No" # [Yes/No]
-        debugOutputDir="$gem5Dir"
-        debugFlags="Commit" #
+        debugOutputDir="$gem5Dir/debug_temp"
+        debugFlags="XBar,CoherentXBar,PacketQueue,Cache,CachePort,CacheRepl,CacheVerbose" #
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
-        debugStartTick=""
+        debugStartTick="8000000000"
         debugEndTick=""
 
     enableCheckPoint="No" # [Yes/No]

@@ -261,7 +261,7 @@ class Packet : public Printable
 {
   public:
     /// 该结构用于记录提升级别操作的MSHR数据
-    MSHR* mshr_ = nullptr;
+    std::shared_ptr<MSHR> mshr_ = nullptr;
 
     /// 用于记录最近处理该Packet的Cache指针
     BaseCache* recentCache_ = nullptr;
@@ -785,7 +785,8 @@ class Packet : public Printable
 
     void copyError(Packet *pkt) { assert(pkt->isError()); cmd = pkt->cmd; }
 
-    Addr getAddr() const { assert(flags.isSet(VALID_ADDR)); return addr; }
+    Addr getAddr() const;
+    
     /**
      * Update the address of this packet mid-transaction. This is used
      * by the address mapper to change an already set address to a new
