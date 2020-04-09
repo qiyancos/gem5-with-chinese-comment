@@ -169,7 +169,7 @@ genL3PrefTypeTest() {
 }
 
 genL2PrefSimpleTest() {
-    echo ">> Generating test scripts for L3PrefSimpleTest..."
+    echo ">> Generating test scripts for L2PrefSimpleTest..."
     targetDir=$root/test_script/l2_pref_simple_test
     rm -rf $targetDir
     mkdir -p $targetDir
@@ -190,6 +190,27 @@ genL2PrefSimpleTest() {
         
     done
 }
+
+genL2PrefBestDegreeTest() {
+    echo ">> Generating test scripts for L2PrefBestDegreeTest..."
+    targetDir=$root/test_script/l2_pref_best_degree_test
+    rm -rf $targetDir
+    mkdir -p $targetDir
+    pref="StridePrefetcher"
+    for taskNum in 1 2 4 6 8 10 12 14 16 # $TaskCountList
+    do
+        conf=4
+        for degree in 0 4 8 12 16 20 24 28 32
+        do
+            sed -e "s/L2prefetcher=\"/L2prefetcher=\"$pref/" \
+                    -e "s/stridePrefDegree=4/stridePrefDegree=$degree/" \
+                    $root/script/se > \
+                    $targetDir/task${taskNum}_${pref}_${conf}_${degree}
+            chmod +x $targetDir/task${taskNum}_${pref}_${conf}_${degree}
+        done
+    done
+}
+
 genL1SizeTest
 genL2SizeTest
 genL3SizeTest
@@ -200,3 +221,4 @@ genL1PrefTypeTest
 genL2PrefTypeTest
 genL3PrefTypeTest
 genL2PrefSimpleTest
+genL2PrefBestDegreeTest

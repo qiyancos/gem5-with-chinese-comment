@@ -6,13 +6,12 @@ root=$PWD
 
 cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
 cpuNum=$[cpuNum * 7 / 10]
-testList=`$root/script/se -l`
-# testList=`$root/script/se -l | sed 's/\./ /g' | awk '{print $1}'`
-testTarget="l2_pref_agressive_test"
+testList="400.perlbench 401.bzip2 403.gcc 435.gromacs 445.gobmk 447.dealII 450.soplex 456.hmmer 458.sjeng 459.GemsFDTD 462.libquantum 464.h264ref 470.lbm 473.astar 481.wrf 482.sphinx3"
+#"459.GemsFDTD 447.dealII 473.astar" #`$root/script/se -l`
+testTarget="l2_pref_best_degree_test"
 # testTarget="l1_agressive_test  l1_size_test l2_preftype_test  l3_agressive_test  l3_size_test l1_preftype_test l2_agressive_test l2_size_test l3_preftype_test"
 testFolder=std_test
-testTaskNums="8"
-newTaskGap="75"
+newTaskGap="30"
 
 ##############################################################################
 
@@ -29,7 +28,7 @@ runTask() {
     realTestDir=${realTestDir:1:$[${#realTestDir} - 1]}
     echo "-- Running Command: $root/test_script/$file -p $realTestName"
     set +e
-    $root/test_script/$file -p $realTestName
+    $root/test_script/$file -p $realTestName 2>&1 | tee $taskDir/running_log
     set -e
     if [ $taskNum = 1 ]
     then realTestDir=$testName
@@ -167,8 +166,12 @@ runAllTask() {
             atomicChange "Over" "$[taskCount + 1]"
             atomicChange $idleThreadID "idle"
         } &
-        waitTime=0
         while [ "x`find $taskDir -name "m5out"`" = x ]
+        do
+            sleep 4
+        done
+        waitTime=0
+        while [ 1 ]
         do
             sleep 4
             waitTime=$[waitTime + 4]

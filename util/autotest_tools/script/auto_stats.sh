@@ -5,12 +5,15 @@ cd $root/..
 root=$PWD
 
 cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
-testList=`$root/script/se -l`
-# testFile=`ls $root/test_script`
+eval "$(grep "^testList=" $root/script/auto_run_single_mix.sh)"
 eval "$(grep "^testTarget=" $root/script/auto_run_single_mix.sh)"
 eval "$(grep "^testFolder=" $root/script/auto_run_single_mix.sh)"
 coreNum="16"
 statsTitle="TestName, Task Number, Test Subset"
+statsList="IPC" #"L1D_Miss_Rate L1D_Demand_Miss_Rate
+        #L2_Miss_Rate L2_Demand_Miss_Rate L3_Miss_Rate L3_Demand_Miss_Rate"
+
+################################################################
 
 singleStatsList=("L3_Miss_Rate"
         "L3_Demand_Miss_Rate")
@@ -53,9 +56,6 @@ multiStatsString=("ipc_total"
         "l2.prefetcher.pfInCache"
         "l2.prefetcher.pfRemovedFull"
         "l2.prefetcher.pfSpanPage")
-
-statsList="IPC L1D_Miss_Rate L1D_Demand_Miss_Rate
-        L2_Miss_Rate L2_Demand_Miss_Rate L3_Miss_Rate L3_Demand_Miss_Rate"
 
 ################################################################
 
@@ -167,9 +167,7 @@ do
             taskNum=`basename $file | sed 's/task\([0-9]*\).*/\1/g'`
             statsFile $targetFile
             echo "   $testName Done."
-            break
         done
-        break
     done
 done
 sed -i "1i\\$statsTitle" $targetFile
