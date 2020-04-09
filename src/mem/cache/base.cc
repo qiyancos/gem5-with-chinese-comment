@@ -998,7 +998,10 @@ BaseCache::getNextQueueEntry()
                 // (hwpf_mshr_misses)
                 assert(pkt->req->masterId() < system->maxMasters());
                 mshr_misses[pkt->cmdToIndex()][pkt->req->masterId()]++;
-
+                
+                /// 在分配MSHR的时候设置时间戳
+                pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 1,
+                        Packet::WhenRecv, curTick());
                 /// 通知为Prefetch分配MSHR的事件（会对预取添加Index）
                 if (prefetchFilter_) {
                     prefetch_filter::DataTypeInfo infoPair;

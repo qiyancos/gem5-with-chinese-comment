@@ -341,7 +341,8 @@ void Packet::initPref(BaseCache* srcCache, const uint8_t targetCacheLevel,
     packetType_ = prefetch_filter::Pref;
     recentBranchPC_ = recentBranchPC;
     addSrcCache(srcCache);
-    setTimeStamp(srcCacheLevel_, WhenRecv, req->time());
+    // 对于预取的发送时间改为预取分配MSHR的时候
+    // setTimeStamp(srcCacheLevel_, WhenRecv, req->time());
 }
 
 /// 迁移到cc以避免头文件互相包含问题

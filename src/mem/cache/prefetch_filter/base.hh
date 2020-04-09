@@ -170,6 +170,15 @@ public:
     // 计算一个预取请求在某一个层级Cache中的平均处理时间（l1, l2, l3, dram）
     std::vector<std::vector<Stats::Formula*>> prefAvgProcessCycles_;
 
+    // 在某一级Cache中发射的预取数量
+    std::vector<Stats::Vector*> prefIssuedCount_;
+
+    // 计算一个预取请求在队列中的总等待时间
+    std::vector<Stats::Vector*> prefWaitingCycles_;
+
+    // 计算一个预取请求Cache中预取请求队列中的平均等待时间
+    std::vector<Stats::Formula*> prefAvgWaitingCycles_;
+
     // 预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
     std::vector<Stats::Vector*> shadowedPrefCount_;
     

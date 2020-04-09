@@ -214,7 +214,8 @@ class DataWrap : public InfoAccess
   protected:
     Derived &self() { return *static_cast<Derived *>(this); }
 
-  protected:
+  /// 修改该属性以自定义是否显示Stats
+  public:
     Info *
     info()
     {

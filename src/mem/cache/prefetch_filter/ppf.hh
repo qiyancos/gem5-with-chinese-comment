@@ -246,7 +246,8 @@ public:
 
 private:
     // 针对不同类型预取的训练方法对应的enum类型
-    enum TrainType {DemandMiss, GoodPref, BadPref, UselessPref};
+    enum TrainType {DemandMiss, GoodPref, BadPref,
+            UselessPref, TrainTypeCount};
     
     // 获取训练类型的字符串表示，用于Debug
     std::string getTrainTypeStr(const TrainType type);
@@ -263,20 +264,10 @@ private:
             PrefInfoEntry() {}
 
             // 带数值的初始化函数
-            PrefInfoEntry(const std::set<BaseCache*>& caches,
-                    const uint8_t timesPT = 0, const uint8_t timesRT = 0) :
-                    caches_(caches), timesPT_(timesPT), timesRT_(timesRT) {}
-            
-            // 添加新的Cache信息
-            int addCache(BaseCache* newCache) {
-                caches_.insert(newCache);
-                return 0;
-            }
+            PrefInfoEntry(const uint8_t timesPT, const uint8_t timesRT) :
+                    timesPT_(timesPT), timesRT_(timesRT) {}
 
         public:
-            // 和当前Prefetch有关的缓存
-            std::set<BaseCache*> caches_;
-
             // Prefetch Table中的出现次数
             uint8_t timesPT_ = 0;
 
@@ -297,14 +288,14 @@ private:
         // 存放所有在Prefetch Table和Reject Table中预取的信息，只用于统计
         std::map<uint64_t, PrefInfoEntry> localPrefTable_;
         
-        // 存放所有最近被剔除的预取信息
-        prefetch_filter::CacheTable<PrefInfoEntry> oldPrefTable_;
-        
         // 表格相关结构的名称
         std::string name_;
         
         // 对应着相应统计数据的索引
-        int statsIndex_;
+        int statsLevel_;
+        
+        // 对应着相关的CPUID
+        std::set<uint8_t> cpuIds_;
     };
 
 private:
@@ -355,6 +346,10 @@ private:
     int updateWorkTableStats(Tables& workTable, const uint64_t& prefAddr);
 
 public:
+    // 最终被处理成预取至L1的请求个数，第一个维度表示源头Cache等级，
+    // 第二个维度表示目标的Cache等级
+    std::vector<std::vector<Stats::Vector*>> prefTarget_;
+
     // 一直都未被过滤的预取请求个数，区分核心，编号区分缓存
     std::vector<Stats::Vector*> prefAccepted_;
     
@@ -370,13 +365,13 @@ public:
     // 因为表格不足，没有进行训练的DemandMiss个数
     std::vector<Stats::Vector*> dmdNotTrained_;
 
-    // 最终被处理成预取至L1的请求个数，第一个维度表示源头Cache等级，
-    // 第二个维度表示目标的Cache等级
-    std::vector<std::vector<Stats::Vector*>> prefTarget_;
+    // 用于记录不同类型训练的个数
+    std::vector<std::vector<Stats::Vector*>> prefTrainingType_;
 
     // 不同Feature不同权重的数值出现次数，用于计算Pearson相关因子
     // 第一维度对应Workable， 第二维度表示Feature编号，第三维度表示Weight大小
-    std::vector<std::vector<Stats::Vector*>> featureWeightFrequency_;
+    std::vector<std::vector<std::vector<Stats::Vector*>>>
+            featureWeightFrequency_;
 
 private:
     // 自适应预取器激进度调整的周期间隔

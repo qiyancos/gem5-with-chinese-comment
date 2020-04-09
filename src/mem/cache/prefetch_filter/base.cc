@@ -333,6 +333,17 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
             }
         }
     } else if (info.target == NullType && *(pkt->caches_.begin()) == cache) {
+        // 更新相关计数
+        uint8_t level = cache->cacheLevel_;
+        for (auto cpuId : cache->cpuIds_) {
+            (*prefIssuedCount_[level])[cpuId]++;
+            Tick waitingTime = pkt->getTimeStamp(level, Packet::WhenRecv);
+            CHECK_ARGS_EXIT(pkt->req->time() <= waitingTime,
+                    "It seems that a prefetch is generated later than sent");
+            waitingTime -= pkt->req->time();
+            (*prefWaitingCycles_[level])[cpuId] += (waitingTime + 20) /
+                    clockPeriod_;
+        }
         // 一个新生成的没有合并的预取，需要添加对应信息进行追踪
         CHECK_RET_EXIT(usefulTable_[cache].newPref(pkt),
                 "Failed to add new prefetch info to useful table");
@@ -568,6 +579,9 @@ void BasePrefetchFilter::memCheck() {
     for (auto& vec : prefAvgProcessCycles_) {
         DEBUG_PF(1, "Size: %lu", vec.size());
     }
+    DEBUG_PF(1, "Size: %lu", prefIssuedCount_.size());
+    DEBUG_PF(1, "Size: %lu", prefWaitingCycles_.size());
+    DEBUG_PF(1, "Size: %lu", prefAvgWaitingCycles_.size());
     DEBUG_PF(1, "Size: %lu", shadowedPrefCount_.size());
     DEBUG_PF(1, "Size: %lu", totalStatsPref_.size());
     DEBUG_PF(1, "Size: %lu", dismissedLevelUpPrefNoWB_.size());
@@ -665,6 +679,9 @@ int BasePrefetchFilter::initThis() {
     uint8_t cacheCount = caches_.size();
     demandReqHitCount_.resize(cacheCount);
     demandReqMissCount_.resize(cacheCount);
+    prefIssuedCount_.resize(cacheCount);
+    prefWaitingCycles_.resize(cacheCount);
+    prefAvgWaitingCycles_.resize(cacheCount);
     shadowedPrefCount_.resize(cacheCount);
     squeezedPrefCount_.resize(cacheCount);
     totalStatsPref_.resize(cacheCount);
@@ -813,8 +830,9 @@ void BasePrefetchFilter::regStats() {
     emptyStatsVar_ = new Stats::Vector();
     emptyStatsVar_->init(numCpus_)
             .name(name() + ".empty_stats")
-            .desc("Empty stats variable for deleted stats")
-            .flags(total);
+            .desc("Empty stats variable for deleted stats");
+    emptyStatsVar_->info()->flags.clear(display);
+
     for (j = 0; j < numCpus_; j++) {
         emptyStatsVar_->subname(j, std::string("cpu") +
                 std::to_string(j));
@@ -848,6 +866,28 @@ void BasePrefetchFilter::regStats() {
                     .flags(total);
         
             if (usePref_[i]) {
+                prefIssuedCount_[i] = new Stats::Vector();
+                prefIssuedCount_[i]->init(numCpus_)
+                        .name(name() + ".prefetch_issued_from_" + srcCacheName)
+                        .desc(std::string("Number of prefetches issued from ")
+                                + srcCacheName);
+                prefIssuedCount_[i]->info()->flags.clear(display);
+                
+                prefWaitingCycles_[i] = new Stats::Vector();
+                prefWaitingCycles_[i]->init(numCpus_)
+                        .name(name() + ".prefetch_total_waiting_cycles_from_" +
+                                srcCacheName)
+                        .desc(std::string("Total waiting cycles of prefetches "
+                                "issued from ") + srcCacheName);
+                prefWaitingCycles_[i]->info()->flags.clear(display);
+                
+                prefAvgWaitingCycles_[i] = new Stats::Formula();
+                prefAvgWaitingCycles_[i]
+                        ->name(name() + ".prefetch_avg_waiting_cycle_from_" +
+                                srcCacheName)
+                        .desc(std::string("Average waiting cycles for "
+                                "prefetches from ") + srcCacheName);
+                
                 shadowedPrefCount_[i] = new Stats::Vector();
                 shadowedPrefCount_[i]->init(numCpus_)
                         .name(name() + ".prefetch_shadowed_" + srcCacheName)
@@ -897,6 +937,8 @@ void BasePrefetchFilter::regStats() {
                                 " to  prevent level-down threshing")
                         .flags(total);
             } else {
+                prefIssuedCount_[i] = emptyStatsVar_;
+                prefWaitingCycles_[i] = emptyStatsVar_;
                 shadowedPrefCount_[i] = emptyStatsVar_;
                 squeezedPrefCount_[i] = emptyStatsVar_;
                 totalStatsPref_[i] = emptyStatsVar_;
@@ -918,7 +960,8 @@ void BasePrefetchFilter::regStats() {
             }
             
             for (j = 0; j < prefFillCount_[i].size(); j++) {
-                std::string tgtCacheName = BaseCache::levelName_[j + 1];
+                std::string tgtCacheName = j ?
+                        BaseCache::levelName_[j] : "cpu";
                 prefFillCount_[i][j] = new Stats::Vector();
                 prefFillCount_[i][j]->init(numCpus_)
                         .name(name() + ".prefetch_from_" + srcCacheName +
@@ -926,22 +969,26 @@ void BasePrefetchFilter::regStats() {
                         .desc(std::string("Number of prefetches request from ")
                                 + srcCacheName + " filled in " + tgtCacheName)
                         .flags(total);
+                if (j == 0) {
+                    prefFillCount_[i][j]->info()->flags.clear(total);
+                    prefFillCount_[i][j]->info()->flags.clear(display);
+                }
             }
             
             for (j = 0; j < prefProcessCycles_[i].size(); j++) {
-                std::string tgtCacheName = BaseCache::levelName_[j + 2];
+                std::string tgtCacheName = BaseCache::levelName_[j + 1];
                 prefProcessCycles_[i][j] = new Stats::Vector();
                 prefProcessCycles_[i][j]->init(numCpus_)
                         .name(name() + ".prefetch_total_process_cycle_from_" +
                                 srcCacheName + "_in_" + tgtCacheName)
                         .desc(std::string("Cycles of process for prefetches "
                                 "request from ") + srcCacheName +
-                                " in " + tgtCacheName)
-                        .flags(total);
+                                " in " + tgtCacheName);
+                prefProcessCycles_[i][j]->info()->flags.clear(display);
             }
             
             for (j = 0; j < prefAvgProcessCycles_[i].size(); j++) {
-                std::string tgtCacheName = BaseCache::levelName_[j + 2];
+                std::string tgtCacheName = BaseCache::levelName_[j + 1];
                 prefAvgProcessCycles_[i][j] = new Stats::Formula();
                 prefAvgProcessCycles_[i][j]
                         ->name(name() + ".prefetch_avg_process_cycle_from_" +
@@ -993,42 +1040,38 @@ void BasePrefetchFilter::regStats() {
 
             // 对不同CPU进行初始化
             for (k = 0; k < numCpus_; k++) {
-                std::string cpuId = std::to_string(k);
-                demandReqHitCount_[i]->subname(k, std::string("cpu") + cpuId);
-                demandReqMissCount_[i]->subname(k, std::string("cpu") + cpuId);
+                std::string cpuIdStr = std::string("cpu") + std::to_string(k);
+                demandReqHitCount_[i]->subname(k, cpuIdStr);
+                demandReqMissCount_[i]->subname(k, cpuIdStr);
                 if (usePref_[i]) {
-                    shadowedPrefCount_[i]->subname(k, std::string("cpu") +
-                            cpuId);
-                    squeezedPrefCount_[i]->subname(k, std::string("cpu") +
-                            cpuId);
-                    totalStatsPref_[i]->subname(k, std::string("cpu") +
-                            cpuId);
-                    dismissedLevelUpPrefNoWB_[i]->subname(k,
-                            std::string("cpu") + cpuId);
-                    dismissedLevelUpPrefLate_[i]->subname(k,
-                            std::string("cpu") + cpuId);
-                    dismissedLevelDownPref_[i]->subname(k,
-                            std::string("cpu") + cpuId);
+                    prefIssuedCount_[i]->subname(k, cpuIdStr);
+                    prefWaitingCycles_[i]->subname(k, cpuIdStr);
+                    prefAvgWaitingCycles_[i]->subname(k, cpuIdStr);
+                    if (k == numCpus_ - 1) {
+                        *prefAvgWaitingCycles_[i] = *prefWaitingCycles_[i] /
+                                *prefIssuedCount_[i];
+                    }
+                    shadowedPrefCount_[i]->subname(k, cpuIdStr);
+                    squeezedPrefCount_[i]->subname(k, cpuIdStr);
+                    totalStatsPref_[i]->subname(k, cpuIdStr);
+                    dismissedLevelUpPrefNoWB_[i]->subname(k, cpuIdStr);
+                    dismissedLevelUpPrefLate_[i]->subname(k, cpuIdStr);
+                    dismissedLevelDownPref_[i]->subname(k, cpuIdStr);
                 }
                 for (j = 0; j < prefTotalUsefulValue_[i].size(); j++) {
-                    prefTotalUsefulValue_[i][j]->subname(k,
-                            std::string("cpu") + cpuId);
+                    prefTotalUsefulValue_[i][j]->subname(k, cpuIdStr);
                 }
                 for (j = 0; j < prefHitCount_[i].size(); j++) {
-                    prefHitCount_[i][j]->subname(k,
-                            std::string("cpu") + cpuId);
+                    prefHitCount_[i][j]->subname(k, cpuIdStr);
                 }
                 for (j = 0; j < prefFillCount_[i].size(); j++) {
-                    prefFillCount_[i][j]->subname(k,
-                            std::string("cpu") + cpuId);
+                    prefFillCount_[i][j]->subname(k, cpuIdStr);
                 }
                 for (j = 0; j < prefProcessCycles_[i].size(); j++) {
-                    prefProcessCycles_[i][j]->subname(k,
-                            std::string("cpu") + cpuId);
+                    prefProcessCycles_[i][j]->subname(k, cpuIdStr);
                 }
                 for (j = 0; j < prefAvgProcessCycles_[i].size(); j++) {
-                    prefAvgProcessCycles_[i][j]->subname(k,
-                            std::string("cpu") + cpuId);
+                    prefAvgProcessCycles_[i][j]->subname(k, cpuIdStr);
                     if (k == numCpus_ - 1) {
                         *prefAvgProcessCycles_[i][j] =
                                 *prefProcessCycles_[i][j] /
@@ -1037,13 +1080,11 @@ void BasePrefetchFilter::regStats() {
                 }
                 for (j = 0; j < prefUsefulDegree_[i].size(); j++) {
                     for (int n = 0; n < TOTAL_DEGREE; n++) {
-                        prefUsefulDegree_[i][j][n]->subname(k,
-                                std::string("cpu") + cpuId);
+                        prefUsefulDegree_[i][j][n]->subname(k, cpuIdStr);
                     }
                 }
                 for (j = 0; j < prefUsefulType_[i].size(); j++) {
-                    prefUsefulType_[i][j]->subname(k, std::string("cpu") +
-                            cpuId);
+                    prefUsefulType_[i][j]->subname(k, cpuIdStr);
                 }
             }
         }
@@ -1052,6 +1093,8 @@ void BasePrefetchFilter::regStats() {
         for (i = 0; i < cacheCount; i++) {
             demandReqHitCount_[i] = emptyStatsVar_;
             demandReqMissCount_[i] = emptyStatsVar_;
+            prefIssuedCount_[i] = emptyStatsVar_;
+            prefWaitingCycles_[i] = emptyStatsVar_;
             shadowedPrefCount_[i] = emptyStatsVar_;
             squeezedPrefCount_[i] = emptyStatsVar_;
             totalStatsPref_[i] = emptyStatsVar_;

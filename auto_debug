@@ -1,0 +1,21 @@
+#! /bin/bash
+cd `dirname $0`
+gem5Dir=$PWD
+if [ ${1}x = x ]
+then
+    echo "Nothing to run!"
+    exit
+else
+    if [ ${2}x = x ]
+    then testList=$1
+    else
+        count=0
+        while [ $count -lt $2 ]
+        do
+            testList="$testList $1"
+            count=$[count + 1]
+        done
+    fi
+    echo "Runing: ./se -p $testList 2>&1 | tee ./debug_temp/log"
+    ./se -p $testList 2>&1 | tee ./debug_temp/log
+fi

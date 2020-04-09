@@ -461,10 +461,6 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
         initFailFlag_ |= tempFlag < 0;
     }
     
-    CHECK_WARN((tempFlag = LLCTable.oldPrefTable_.init(p->old_pref_table_size,
-            p->old_pref_table_assoc,
-            BasePrefetchFilter::cacheLineOffsetBits_)) >= 0,
-            "Failed to initiate old prefetch table for init");
     initFailFlag_ |= tempFlag < 0;
     
     // 设置一个空的UsefulTable来存放配置信息
@@ -873,6 +869,10 @@ int PerceptronPrefetchFilter::initThis() {
     prefThreshold_.resize(cacheCount, lastWeightInit);
 
     // 初始化PPF表格
+    std::set<uint8_t> fullCpuIds;
+    for (int i = 0; i < numCpus_; i++) {
+        fullCpuIds.insert(i);
+    }
     if (!allSharedTable_ && maxCacheLevel_ > 1) {
         const Tables sample = workTables_[0][0];
         workTables_.clear();
@@ -886,9 +886,10 @@ int PerceptronPrefetchFilter::initThis() {
                 workTables_.push_back(std::vector<Tables>(cpuSize, sample));
                 for (int i = 0; i < cpuSize; i++) {
                     workTables_[0][i].name_ = cpuSharedTable_ ?
-                            "cpu_cache_shared" :
-                            std::string("cache_shared_cpu_") +
-                            std::to_string(i);
+                            "cpu_cache_shared" : "cache_shared";
+                    workTables_[0][i].cpuIds_ = cpuSharedTable_ ?
+                            fullCpuIds :
+                            std::set<uint8_t> {static_cast<uint8_t>(i)};
                     // 对于部分共享，权重初始化为平均值
                     for (auto& table : workTables_[0][i].featureTable_) {
                         table.writeAll(SaturatedCounter(weightBits_,
@@ -905,10 +906,10 @@ int PerceptronPrefetchFilter::initThis() {
                     workTables_.push_back(std::vector<Tables>(cpuSize,
                             sample));
                     for (int j = 0; j < cpuSize; j++) {
-                        workTables_.back()[j].name_ = cpuSharedTable_ ?
-                                BaseCache::levelName_[i] + "_cpu_shared" :
-                                BaseCache::levelName_[i] + "_cpu_" +
-                                std::to_string(j);
+                        workTables_.back()[j].name_ = BaseCache::levelName_[i];
+                        workTables_.back()[j].cpuIds_ = cpuSharedTable_ ?
+                                fullCpuIds :
+                                std::set<uint8_t> {static_cast<uint8_t>(j)};
                         for (auto& table :
                                 workTables_.back()[j].featureTable_) {
                             table.writeAll(SaturatedCounter(weightBits_,
@@ -925,6 +926,7 @@ int PerceptronPrefetchFilter::initThis() {
             workTables_.push_back(std::vector<Tables>(1, sample));
             workTables_.back()[0].name_ =
                     BaseCache::levelName_[maxCacheLevel_];
+            workTables_.back()[0].cpuIds_ = fullCpuIds;
             for (auto& table : workTables_.back()[0].featureTable_) {
                 table.writeAll(SaturatedCounter(weightBits_,
                         weightInit_[maxCacheLevel_]));
@@ -938,6 +940,7 @@ int PerceptronPrefetchFilter::initThis() {
             workTables_.clear();
         } else {
             workTables_[0][0].name_ = "all_shared";
+            workTables_[0][0].cpuIds_ = fullCpuIds;
             // 全局共享的PPF表格权重会被初始化为中间值
             for (auto& table : workTables_[0][0].featureTable_) {
                 table.writeAll(SaturatedCounter(weightBits_,
@@ -981,11 +984,28 @@ int PerceptronPrefetchFilter::initStats() {
     }
 
     // 初始化部分统计变量
-    prefAccepted_.resize(cacheCount);
-    prefRejected_.resize(cacheCount);
-    prefThreshing_.resize(cacheCount);
-    prefNotTrained_.resize(cacheCount);
-    dmdNotTrained_.resize(cacheCount);
+    uint8_t levelCount = 0;
+    for (auto& tables : workTables_) {
+        for (auto& table : tables) {
+            table.statsLevel_ = levelCount;
+        }
+        levelCount++;
+    }
+    prefAccepted_.resize(levelCount);
+    prefRejected_.resize(levelCount);
+    prefThreshing_.resize(levelCount);
+    prefNotTrained_.resize(levelCount);
+    dmdNotTrained_.resize(levelCount);
+    prefTrainingType_.resize(levelCount, 
+            std::vector<Stats::Vector*>(TrainTypeCount));
+    
+    CHECK_ARGS_EXIT(weightBits_ > 0, "Bit number of the feature weight must%s",
+            " be greater than zero");
+    int weightNum = 1 << weightBits_;
+    featureWeightFrequency_.resize(levelCount,
+            std::vector<std::vector<Stats::Vector*>>(featureList_.size(),
+            std::vector<Stats::Vector*>(weightNum)));
+    
     for (int i = 0; i < cacheCount; i++) {
         prefTarget_.push_back(usePref_[i] ?
                 std::vector<Stats::Vector*>(cacheCount + 1) :
@@ -1077,27 +1097,17 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
     
     // 如果均不存在，则更新相关计数
     if (!(prefIndexPtr || rejectIndexPtr)) {
-        Tables::PrefInfoEntry* prefInfo;
-        int result;
-        CHECK_RET(result = workTable.oldPrefTable_.read(prefAddr, &prefInfo),
-                "Failed to find old prefetch info");
-        if (result) {
-            // 如果找到记录，则更新未训练的统计信息
-            std::vector<Stats::Vector*>* notTrained_ = type == DemandMiss ?
-                    &dmdNotTrained_ : &prefNotTrained_;
-            for (auto cache : prefInfo->caches_) {
-                uint8_t cacheLevel = cache->cacheLevel_;
-                for (auto cpuId : cache->cpuIds_) {
-                    (*(*notTrained_)[cacheLevel])[cpuId]++;
-                }
-            }
-            if (type != DemandMiss) {
-                // 统计之后删除信息
-                CHECK_ARGS(workTable.oldPrefTable_.invalidate(prefAddr) == 1,
-                        "Failed to invalidate prefetch info");
-            }
+        std::vector<Stats::Vector*>* notTrained_ = type == DemandMiss ?
+                &dmdNotTrained_ : &prefNotTrained_;
+        for (auto cpuId : workTable.cpuIds_) {
+            (*(*notTrained_)[workTable.statsLevel_])[cpuId]++;
         }
         return 0;
+    }
+    
+    // 更新训练类型计数
+    for (auto cpuId : workTable.cpuIds_) {
+        (*prefTrainingType_[workTable.statsLevel_][type])[cpuId]++;
     }
 
     CHECK_ARGS((prefIndexPtr != nullptr) ^ (rejectIndexPtr != nullptr),
@@ -1116,6 +1126,7 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
     case GoodPref: step = hitTrainStep_[cacheLevel]; break;
     case BadPref: step = -missTrainStep_[cacheLevel]; break;
     case UselessPref: step = -uselessPrefStep_; break;
+    default: CHECK_ARGS(false, "Unexpected training type");
     }
 
     // 进行权重更新
@@ -1224,12 +1235,10 @@ int PerceptronPrefetchFilter::updateTable(Tables& workTable,
         if (result) {
             auto prefIter = workTable.localPrefTable_.find(prefAddr);
             if (prefIter != workTable.localPrefTable_.end()) {
-                prefIter->second.addCache(srcCache);
                 prefIter->second.timesPT_++;
             } else {
-                std::set<BaseCache*> caches {srcCache};
                 workTable.localPrefTable_[prefAddr] =
-                        Tables::PrefInfoEntry(caches, 1, 0);
+                        Tables::PrefInfoEntry(1, 0);
             }
         }
 
@@ -1256,12 +1265,11 @@ int PerceptronPrefetchFilter::updateTable(Tables& workTable,
         if (result) {
             auto prefIter = workTable.localPrefTable_.find(prefAddr);
             if (prefIter != workTable.localPrefTable_.end()) {
-                prefIter->second.addCache(srcCache);
                 prefIter->second.timesRT_++;
             } else {
                 std::set<BaseCache*> caches {srcCache};
                 workTable.localPrefTable_[prefAddr] =
-                        Tables::PrefInfoEntry(caches, 0, 1);
+                        Tables::PrefInfoEntry(0, 1);
             }
         }
         
@@ -1290,7 +1298,10 @@ int PerceptronPrefetchFilter::updateFreqStats(Tables& workTable,
             CHECK_ARGS(workTable.featureTable_[i].read(
                     indexes[i], &weight) == 1,
                     "Failed to read weight for a feature when updating stats");
-            (*featureWeightFrequency_[workTable.statsIndex_][i])[*weight]++;
+            for (auto cpuId : workTable.cpuIds_) {
+                (*featureWeightFrequency_[workTable.statsLevel_][i][*weight])
+                        [cpuId]++;
+            }
         }
     }
     return 0;
@@ -1305,33 +1316,17 @@ int PerceptronPrefetchFilter::updateWorkTableStats(Tables& workTable,
             "Can not find prefetch record in local prefetch table");
     uint8_t PTTime = prefIter->second.timesPT_;
     uint8_t RTTime = prefIter->second.timesRT_;
-    for (auto cache : prefIter->second.caches_) {
-        uint8_t level = cache->cacheLevel_;
-        for (auto cpuId : cache->cpuIds_) {
-            if (PTTime == 0) {
-                (*prefRejected_[level])[cpuId]++;
-            } else if (RTTime == 0) {
-                (*prefAccepted_[level])[cpuId]++;
-            } else {
-                (*prefThreshing_[level])[cpuId]++;
-            }
+    
+    for (auto cpuId : workTable.cpuIds_) {
+        if (PTTime == 0) {
+            (*prefRejected_[workTable.statsLevel_])[cpuId]++;
+        } else if (RTTime == 0) {
+            (*prefAccepted_[workTable.statsLevel_])[cpuId]++;
+        } else {
+            (*prefThreshing_[workTable.statsLevel_])[cpuId]++;
         }
     }
-    // 将信息转移到被剔除信息表格中
-    int result;
-    CHECK_RET(result = workTable.oldPrefTable_.touch(prefAddr),
-            "Failed to find evicted address in old prefetch table");
-    if (result) {
-        Tables::PrefInfoEntry* oldPrefInfo;
-        CHECK_ARGS(workTable.oldPrefTable_.read(prefAddr, &oldPrefInfo) == 1,
-                "Failed to read old prefetch in the table");
-        oldPrefInfo->caches_.insert(prefIter->second.caches_.begin(),
-                prefIter->second.caches_.end());
-    } else {
-        CHECK_ARGS(workTable.oldPrefTable_.write(
-                prefAddr, prefIter->second) > 0,
-                "Failed to write old prefetch to the table");
-    }
+    
     // 更新完统计计数之后删除表项
     workTable.localPrefTable_.erase(prefIter);
     return 0;
@@ -1344,11 +1339,16 @@ void PerceptronPrefetchFilter::memCheck() {
     DEBUG_PF(1, "Size: %lu", prefThreshing_.size());
     DEBUG_PF(1, "Size: %lu", prefNotTrained_.size());
     DEBUG_PF(1, "Size: %lu", dmdNotTrained_.size());
+    for (auto& vec : prefTrainingType_) {
+        DEBUG_PF(1, "Size: %lu", vec.size());
+    }
     for (auto& vec : prefTarget_) {
         DEBUG_PF(1, "Size: %lu", vec.size());
     }
     for (auto& vec : featureWeightFrequency_) {
-        DEBUG_PF(1, "Size: %lu", vec.size());
+        for (auto& vec2 : vec) {
+            DEBUG_PF(1, "Size: %lu", vec2.size());
+        }
     }
     DEBUG_PF(1, "Size: %lu", weightInit_.size());
     DEBUG_PF(1, "Size: %lu", prefThreshold_.size());
@@ -1366,7 +1366,6 @@ void PerceptronPrefetchFilter::memCheck() {
                 item2.memCheck();
             }
             DEBUG_PF(1, "Size: %lu", item.localPrefTable_.size());
-            item.oldPrefTable_.memCheck();
         }
     }
     BasePrefetchFilter::memCheck();
@@ -1395,42 +1394,6 @@ void PerceptronPrefetchFilter::regStats() {
     for (int i = 0; i < cacheCount; i++) {
         const std::string srcCacheName = BaseCache::levelName_[i];
         if (usePref_[i] && enableFilter_) {
-            prefAccepted_[i] = new Stats::Vector();
-            prefAccepted_[i]->init(numCpus_)
-                    .name(name() + ".ppf_prefetch_accepted_from_" + srcCacheName)
-                    .desc(std::string("Number of prefetch requests from ") +
-                            srcCacheName + " accepted.")
-                    .flags(total);
-            
-            prefRejected_[i] = new Stats::Vector();
-            prefRejected_[i]->init(numCpus_)
-                    .name(name() + ".ppf_prefetch_rejected_from_" + srcCacheName)
-                    .desc(std::string("Number of prefetch requests from ") +
-                            srcCacheName + " rejected.")
-                    .flags(total);
-            
-            prefThreshing_[i] = new Stats::Vector();
-            prefThreshing_[i]->init(numCpus_)
-                    .name(name() + ".ppf_prefetch_threshing_from_" + srcCacheName)
-                    .desc(std::string("Number of threshing prefetch requests "
-                            "from ") + srcCacheName + ".")
-                    .flags(total);
-            
-            prefNotTrained_[i] = new Stats::Vector();
-            prefNotTrained_[i]->init(numCpus_)
-                    .name(name() + ".ppf_prefetch_untrained_from_" + srcCacheName)
-                    .desc(std::string("Number of prefetch requests not trained"
-                            "from ") + srcCacheName + ".")
-                    .flags(total);
-            
-            dmdNotTrained_[i] = new Stats::Vector();
-            dmdNotTrained_[i]->init(numCpus_)
-                    .name(name() + ".ppf_prefetch_untrained_demand_miss_from_"
-                            + srcCacheName)
-                    .desc(std::string("Number of demand misses not trained"
-                            "from ") + srcCacheName + ".")
-                    .flags(total);
-            
             for (int j = 0; j < prefTarget_[i].size(); j++) {
                 const std::string tgtCacheName = BaseCache::levelName_[j];
                 prefTarget_[i][j] = new Stats::Vector();
@@ -1445,14 +1408,107 @@ void PerceptronPrefetchFilter::regStats() {
 
             // 按照CPU初始化
             for (int j = 0; j < numCpus_; j++) {
-                const std::string cpuId = std::to_string(j);
-                prefAccepted_[i]->subname(j, std::string("cpu") + cpuId);
-                prefRejected_[i]->subname(j, std::string("cpu") + cpuId);
-                prefThreshing_[i]->subname(j, std::string("cpu") + cpuId);
-                prefNotTrained_[i]->subname(j, std::string("cpu") + cpuId);
-                dmdNotTrained_[i]->subname(j, std::string("cpu") + cpuId);
-                for (int k = 0; k <= cacheCount; k++) {
-                    prefTarget_[i][k]->subname(j, std::string("cpu") + cpuId);
+                for (int k = 0; k < prefTarget_[i].size(); k++) {
+                    prefTarget_[i][k]->subname(j, std::string("cpu") +
+                            std::to_string(j));
+                }
+            }
+        } else {
+            for (int j = 0; j < prefTarget_[i].size(); j++) {
+                prefTarget_[i][j] = emptyStatsVar_;
+            }
+        }
+    }
+    
+    int weightNum = 1 << weightBits_;
+    // 为不同的WorkTable设置相关统计变量
+    for (auto& tables : workTables_) {
+        if (tables.empty()) {
+            continue;
+        }
+        Tables& workTable = tables.front();
+        int i = workTable.statsLevel_;
+        if (enableFilter_) {
+            prefAccepted_[i] = new Stats::Vector();
+            prefAccepted_[i]->init(numCpus_)
+                    .name(name() + ".ppf_prefetch_accepted_from_" +
+                            workTable.name_)
+                    .desc(std::string("Number of prefetch requests "
+                            "accepted from ") + workTable.name_)
+                    .flags(total);
+        
+            prefRejected_[i] = new Stats::Vector();
+            prefRejected_[i]->init(numCpus_)
+                    .name(name() + ".ppf_prefetch_rejected_from_" +
+                            workTable.name_)
+                    .desc(std::string("Number of prefetch rejected "
+                            "requests from ") + workTable.name_)
+                    .flags(total);
+        
+            prefThreshing_[i] = new Stats::Vector();
+            prefThreshing_[i]->init(numCpus_)
+                    .name(name() + ".ppf_prefetch_threshing_from_" +
+                            workTable.name_)
+                    .desc(std::string("Number of threshing prefetch "
+                            "requests from ") + workTable.name_)
+                    .flags(total);
+            
+            prefNotTrained_[i] = new Stats::Vector();
+            prefNotTrained_[i]->init(numCpus_)
+                    .name(name() + ".ppf_prefetch_untrained_pref_from_" +
+                            workTable.name_)
+                    .desc(std::string("Number of untrained prefetch "
+                            "requests from ") + workTable.name_)
+                    .flags(total);
+            
+            dmdNotTrained_[i] = new Stats::Vector();
+            dmdNotTrained_[i]->init(numCpus_)
+                    .name(name() + ".ppf_prefetch_untrained_dmd_from_" +
+                            workTable.name_)
+                    .desc(std::string("Number of untrained demand "
+                            "requests from ") + workTable.name_)
+                    .flags(total);
+            
+            for (int j = 0; j < TrainTypeCount; j++) {
+                const std::string typeStr = getTrainTypeStr(TrainType(j));
+                prefTrainingType_[i][j] = new Stats::Vector();
+                prefTrainingType_[i][j]->init(numCpus_)
+                        .name(name() + ".ppf_training_type_" + typeStr +
+                                "_from_" + workTable.name_)
+                        .desc(std::string("Times of training with type ") +
+                                typeStr + " from " + workTable.name_)
+                        .flags(total);
+            }
+            
+            for (int j = 0; j < featureList_.size(); j++) {
+                for (int k = 0; k < weightNum; k++) {
+                    featureWeightFrequency_[i][j][k] = new Stats::Vector();
+                    featureWeightFrequency_[i][j][k]->init(numCpus_)
+                            .name(name() + ".feature_" +
+                                    featureList_[j].name_ + 
+                                    "_weight_" + std::to_string(k) +
+                                    "_in_" + workTable.name_)
+                            .desc("Time of appearence of a specific"
+                                    " weight for a feature.")
+                            .flags(total);
+                }
+            }
+
+            for (int n = 0; n < numCpus_; n++) {
+                const std::string cpuIdStr = std::string("cpu") +
+                        std::to_string(n);
+                prefAccepted_[i]->subname(n, cpuIdStr);
+                prefRejected_[i]->subname(n, cpuIdStr);
+                prefThreshing_[i]->subname(n, cpuIdStr);
+                prefNotTrained_[i]->subname(n, cpuIdStr);
+                dmdNotTrained_[i]->subname(n, cpuIdStr);
+                for (int j = 0; j < TrainTypeCount; j++) {
+                    prefTrainingType_[i][j]->subname(n, cpuIdStr);
+                }
+                for (int j = 0; j < featureList_.size(); j++) {
+                    for (int k = 0; k < weightNum; k++) {
+                        featureWeightFrequency_[i][j][k]->subname(n, cpuIdStr);
+                    }
                 }
             }
         } else {
@@ -1461,41 +1517,14 @@ void PerceptronPrefetchFilter::regStats() {
             prefThreshing_[i] = emptyStatsVar_;
             prefNotTrained_[i] = emptyStatsVar_;
             dmdNotTrained_[i] = emptyStatsVar_;
-            for (int j = 0; j < prefTarget_[i].size(); j++) {
-                prefTarget_[i][j] = emptyStatsVar_;
+            for (int j = 0; j < TrainTypeCount; j++) {
+                prefTrainingType_[i][j] = emptyStatsVar_;
             }
-        }
-    }
-    
-    CHECK_ARGS_EXIT(weightBits_ > 0, "Bit number of the feature weight must%s",
-            " be greater than zero");
-    int weightNum = 1 << weightBits_;
-    const std::vector<Stats::Vector*> sample(featureList_.size());
-    // 为LLC设置Stats变量
-    int i = 0;
-    for (auto& cacheTables : workTables_) {
-        for (auto& workTable : cacheTables) {
-            featureWeightFrequency_.push_back(sample);
-            workTable.statsIndex_ = i;
             for (int j = 0; j < featureList_.size(); j++) {
-                if (enableFilter_) {
-                    featureWeightFrequency_[i][j] = new Stats::Vector();
-                    featureWeightFrequency_[i][j]->init(weightNum)
-                            .name(name() + ".feature_" +
-                                    featureList_[j].name_ + 
-                                    "_weight_in_" + workTable.name_)
-                            .desc("Time of appearence of a specific"
-                                    " weight for a feature.")
-                            .flags(total);
-                    for (int k = 0; k < weightNum; k++) {
-                        featureWeightFrequency_[i][j]->subname(k,
-                                std::to_string(k));
-                    }
-                } else {
-                    featureWeightFrequency_[i][j] = emptyStatsVar_;
+                for (int k = 0; k < weightNum; k++) {
+                    featureWeightFrequency_[i][j][k] = emptyStatsVar_;
                 }
             }
-            i++;
         }
     }
 
