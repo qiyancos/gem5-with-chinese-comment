@@ -40,6 +40,8 @@ Source('saturated_counter.cc')
 
 # enable timing stats?
 DebugFlag('PrefetchFilter')
+# Used to record time stamp
+DebugFlag('PrefetchFilterTimer')
 
 # CacheTags is so outrageously verbose, printing the cache's entire tag
 # array on each timing access, that you should probably have to ask for

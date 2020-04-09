@@ -225,19 +225,19 @@ public:
     // 依据给定的时钟周期将到点的预取无效化
     int updateCombination(const Tick& tickNow);
     
-    // 对时间维度的信息进行更新，并重置相关信息项
-    int updatePrefTiming(
-            std::vector<std::vector<Stats::Vector*>>& totalUsefulValue,
-            std::vector<std::vector<std::vector<Stats::Vector*>>>&
-            usefulDegree, std::vector<std::vector<Stats::Vector*>>& usefulType,
-            std::vector<std::vector<std::vector<std::vector<uint32_t>>>*>
-            timingStatus);
-
     // 设置当前Valid信息
     int setValidBit(const bool valid);
 
     // 该函数用于内存检查
     void memCheck();
+
+    // 对时间维度的信息进行更新，并重置相关信息项
+    static int updatePrefTiming(
+            std::vector<std::vector<Stats::Vector*>>& totalUsefulValue,
+            std::vector<std::vector<std::vector<Stats::Vector*>>>&
+            usefulDegree, std::vector<std::vector<Stats::Vector*>>& usefulType,
+            std::vector<std::vector<std::vector<std::vector<uint32_t>>>*>
+            timingStatus);
 
     // 该函数用于检查所有Info的正确性并返回错漏的失效信息
     static int findCorrection(

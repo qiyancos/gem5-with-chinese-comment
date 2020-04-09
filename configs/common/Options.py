@@ -111,18 +111,31 @@ def addNoISAOptions(parser):
                       help="Enable L2 Cache.")
     parser.add_option("--l3cache", action="store_true",
                       help="Enable L3 Cache.")
+    
     parser.add_option("--num-dirs", type="int", default=1)
     parser.add_option("--num-l2caches", type="int", default=1)
     parser.add_option("--num-l3caches", type="int", default=1)
-    parser.add_option("--l1d_size", type="string", default="64kB")
-    parser.add_option("--l1i_size", type="string", default="32kB")
-    parser.add_option("--l2_size", type="string", default="2MB")
-    parser.add_option("--l3_size", type="string", default="16MB")
-    parser.add_option("--l1d_assoc", type="int", default=2)
-    parser.add_option("--l1i_assoc", type="int", default=2)
-    parser.add_option("--l2_assoc", type="int", default=8)
-    parser.add_option("--l3_assoc", type="int", default=16)
-    parser.add_option("--cacheline_size", type="int", default=64)
+
+    parser.add_option("--l1d-size", type="string", default="64kB")
+    parser.add_option("--l1d-assoc", type="int", default=2)
+    parser.add_option("--l1d-mshr", type="int", default=4)
+    parser.add_option("--l1d-writebuffer", type="int", default=8)
+    
+    parser.add_option("--l1i-size", type="string", default="32kB")
+    parser.add_option("--l1i-assoc", type="int", default=2)
+    parser.add_option("--l1i-mshr", type="int", default=4)
+    
+    parser.add_option("--l2-size", type="string", default="2MB")
+    parser.add_option("--l2-assoc", type="int", default=8)
+    parser.add_option("--l2-mshr", type="int", default=20)
+    parser.add_option("--l2-writebuffer", type="int", default=8)
+    
+    parser.add_option("--l3-size", type="string", default="16MB")
+    parser.add_option("--l3-assoc", type="int", default=16)
+    parser.add_option("--l3-mshr", type="int", default=32)
+    parser.add_option("--l3-writebuffer", type="int", default=16)
+    
+    parser.add_option("--cacheline-size", type="int", default=64)
 
     # SW Cache Structure
     parser.add_option("--group-cache", action="store_true",

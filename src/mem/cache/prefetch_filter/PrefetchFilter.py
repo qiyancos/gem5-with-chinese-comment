@@ -54,8 +54,8 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     cxx_header = "mem/cache/prefetch_filter/ppf.hh"
 
     # Prefetcher degree controller setting
-    degree_update_period = Param.UInt64(5000000, "Gap between two degree "
-            "update checking for prefetcher")
+    degree_update_period = Param.UInt64(5000000, "Gap between two prefetcher "
+            "degree update checking")
 
     # Structure Setting
     cpu_shared_table = Param.Bool(False, "Whether to share table across "

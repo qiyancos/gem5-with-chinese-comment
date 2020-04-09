@@ -375,6 +375,7 @@ int IdealPrefetchUsefulTable::deletePref(const PacketPtr& prefPkt) {
     CHECK_ARGS(infoIter != infoList_.end(),
             "Failed to find prefetch info when trying delete prefetch");
     if (infoIter->second.canDelete()) {
+        deletedPref_.push_back(infoIter->second);
         infoList_.erase(infoIter);
         DEBUG_PF(2, "BPF directly delete prefetch @0x%lx Record[0x%lx] in %s",
                 addr, prefPkt->prefIndex_,
@@ -885,12 +886,11 @@ int IdealPrefetchUsefulTable::updatePrefTiming(
         std::vector<std::vector<Stats::Vector*>>& usefulType,
         std::vector<std::vector<std::vector<std::vector<uint32_t>>>*>
         timingDegree) {
-    if (!valid_) {
+    if (deletedPref_.empty()) {
         return 0;
     }
-    DEBUG_PF(2, "BPF update timing for %d prefetches in %s",
-                deletedPref_.size(),
-                BaseCache::levelName_[cache_->cacheLevel_].c_str());
+    DEBUG_PF(2, "BPF update timing for %d prefetches",
+                deletedPref_.size());
     for (auto& info : deletedPref_) {
         // 更新Total Useful Value
         const std::set<uint8_t>& cpuIds = info.srcCache_->cpuIds_;
@@ -950,6 +950,7 @@ int IdealPrefetchUsefulTable::updatePrefTiming(
             (*timingDegree[cpuId])[cacheLevel][0][singleCoreDegree]++;
             (*timingDegree[cpuId])[cacheLevel][1][crossCoreDegree]++;
             (*usefulType[cacheLevel][typeIndex])[cpuId]++;
+            (*BasePrefetchFilter::totalStatsPref_[cacheLevel])[cpuId]++;
         }
     }
     deletedPref_.clear();

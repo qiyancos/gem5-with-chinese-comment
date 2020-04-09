@@ -407,19 +407,19 @@ private:
     // Feature权重的bit数
     const uint8_t weightBits_;
 
-    // Feature权重的初始化数值
-    std::vector<uint8_t> weightInit_;
-
     // 有害表格计数器的初始化数值
     const uint8_t counterInit_;
 
-    // 将预取设置为到L1的可信度阈值
+    // Feature权重的初始化数值(不包含ICache)
+    std::vector<uint8_t> weightInit_;
+
+    // 将预取设置为到L1的可信度阈值（不包含ICache）
     std::vector<uint16_t> prefThreshold_;
 
-    // 不同层级缓存相关反馈对应的训练幅度(Miss)
+    // 不同层级缓存相关反馈对应的训练幅度(Miss，不包含ICache)
     std::vector<uint8_t> missTrainStep_;
 
-    // 不同层级缓存相关反馈对应的训练幅度(Hit)
+    // 不同层级缓存相关反馈对应的训练幅度(Hit，不包含ICache)
     std::vector<uint8_t> hitTrainStep_;
 
     // 对于无用预取的训练Step，为0则表示不处理

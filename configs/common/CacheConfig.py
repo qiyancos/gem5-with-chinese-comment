@@ -112,7 +112,9 @@ def config_cache(options, system):
         # L2 will be set as private and l3 will be set as shared
         system.l3 = l3_cache_class(clk_domain=system.cpu_clk_domain,
                                size=options.l3_size,
-                               assoc=options.l3_assoc)
+                               assoc=options.l3_assoc,
+                               mshrs=options.l3_mshr,
+                               write_buffers=options.l3_writebuffer)
         system.l3.cpu_ids = allCpuIds
 
         if options.l3_hwp_type:
@@ -131,7 +133,10 @@ def config_cache(options, system):
                 last_cpu_with_cache = i
                 system.cpu[i].l2 = l2_cache_class(
                         clk_domain=system.cpu_clk_domain,
-                        size = options.l2_size, assoc = options.l2_assoc)
+                        size = options.l2_size,
+                        assoc = options.l2_assoc,
+                        mshrs=options.l2_mshr,
+                        write_buffers=options.l2_writebuffer)
                 tempCpuIds = [i + x for x in range(options.group_cache_size)]
                 system.cpu[i].l2.cpu_ids = tempCpuIds
                 if options.l2_hwp_type:
@@ -159,7 +164,9 @@ def config_cache(options, system):
         # L2 will be set as private and l3 will be set as shared
         system.l3 = l3_cache_class(clk_domain=system.cpu_clk_domain,
                                size=options.l3_size,
-                               assoc=options.l3_assoc)
+                               assoc=options.l3_assoc,
+                               mshrs=options.l3_mshr,
+                               write_buffers=options.l3_writebuffer)
         system.l3.cpu_ids = allCpuIds
         
         if options.l3_hwp_type:
@@ -174,7 +181,10 @@ def config_cache(options, system):
         
         for i in xrange(options.num_cpus):
             system.cpu[i].l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
-                    size = options.l2_size, assoc = options.l2_assoc)
+                    size = options.l2_size,
+                    assoc = options.l2_assoc,
+                    mshrs=options.l2_mshr,
+                    write_buffers=options.l2_writebuffer)
             system.cpu[i].l2.cpu_ids = [i]
             if options.l2_hwp_type:
                 hwpClass = HWPConfig.get(options.l2_hwp_type)
@@ -197,7 +207,9 @@ def config_cache(options, system):
         # same clock as the CPUs.
         system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
                                    size=options.l2_size,
-                                   assoc=options.l2_assoc)
+                                   assoc=options.l2_assoc,
+                                   mshrs=options.l2_mshr,
+                                   write_buffers=options.l2_writebuffer)
         system.l2.cpu_ids = allCpuIds
 
         system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
@@ -219,10 +231,13 @@ def config_cache(options, system):
     for i in range(options.num_cpus):
         if options.caches:
             icache = icache_class(size=options.l1i_size,
-                                  assoc=options.l1i_assoc)
+                                  assoc=options.l1i_assoc,
+                                  mshrs=options.l1i_mshr)
             icache.cpu_ids = [i]
             dcache = dcache_class(size=options.l1d_size,
-                                  assoc=options.l1d_assoc)
+                                  assoc=options.l1d_assoc,
+                                  mshrs=options.l1d_mshr,
+                                  write_buffers=options.l1d_writebuffer)
             dcache.cpu_ids = [i]
 
             # If we have a walker cache specified, instantiate two

@@ -39,14 +39,18 @@
 class BaseCache;
 
 BasePrefetchFilter* BasePrefetchFilter::onlyInstance_ = nullptr;
-int64_t BasePrefetchFilter::typeHash_ = -1;
+int64_t BasePrefetchFilter::typeHash_ = 0;
 bool BasePrefetchFilter::initFlag_ = false;
 bool BasePrefetchFilter::regFlag_ = false;
 uint64_t BasePrefetchFilter::cacheLineAddrMask_ = 0;
 uint8_t BasePrefetchFilter::cacheLineOffsetBits_ = 0;
-std::vector<Stats::Vector*> BasePrefetchFilter::dismissedLevelUpPref_;
+std::vector<Stats::Vector*> BasePrefetchFilter::totalStatsPref_;
+std::vector<Stats::Vector*> BasePrefetchFilter::dismissedLevelUpPrefNoWB_;
+std::vector<Stats::Vector*> BasePrefetchFilter::dismissedLevelUpPrefLate_;
+std::vector<Stats::Vector*> BasePrefetchFilter::dismissedLevelDownPref_;
 Tick BasePrefetchFilter::clockPeriod_ = 0;
 std::vector<std::vector<BaseCache*>> BasePrefetchFilter::caches_;
+uint8_t BasePrefetchFilter::maxCacheLevel_ = 0;
 BasePrefetchFilter::DoublePref BasePrefetchFilter::skipCorrectPref_;
 
 using namespace prefetch_filter;
@@ -138,8 +142,19 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
         uint8_t cacheLevel = cache->cacheLevel_;
         for (const uint8_t cpuId : cache->cpuIds_) {
             timingStats_[cpuId].demandHit_[cacheLevel]++;
-            (*demandReqHitCount_[cacheLevel])[cpuId]++;
-            (*demandReqHitTotal_)[cpuId]++;
+        }
+        if (cacheLevel == maxCacheLevel_) {
+            CHECK_ARGS_EXIT(pkt->recentCache_,
+                    "Every demand packet snet to llc  must have recent cache");
+            for (const uint8_t cpuId : pkt->recentCache_->cpuIds_) {
+                (*demandReqHitCount_[cacheLevel])[cpuId]++;
+                (*demandReqHitTotal_)[cpuId]++;
+            }
+        } else {
+            for (const uint8_t cpuId : cache->cpuIds_) {
+                (*demandReqHitCount_[cacheLevel])[cpuId]++;
+                (*demandReqHitTotal_)[cpuId]++;
+            }
         }
     }
     
@@ -246,7 +261,17 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
         uint8_t cacheLevel = cache->cacheLevel_;
         for (const uint8_t cpuId : cache->cpuIds_) {
             timingStats_[cpuId].demandMiss_[cacheLevel]++;
-            (*demandReqMissCount_[cacheLevel])[cpuId]++;
+        }
+        if (cacheLevel == maxCacheLevel_) {
+            CHECK_ARGS_EXIT(pkt->recentCache_,
+                    "Every demand packet snet to llc  must have recent cache");
+            for (const uint8_t cpuId : pkt->recentCache_->cpuIds_) {
+                (*demandReqMissCount_[cacheLevel])[cpuId]++;
+            }
+        } else {
+            for (const uint8_t cpuId : cache->cpuIds_) {
+                (*demandReqMissCount_[cacheLevel])[cpuId]++;
+            }
         }
     }
     
@@ -343,6 +368,34 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                     "Failed to remove prefetch record when hit by dmd");
         }
     } else if (info.source == Pref) {
+        // 更新时间戳信息
+        for (auto cpuId : (*pkt->caches_.begin())->cpuIds_) {
+            (*prefFillCount_[pkt->srcCacheLevel_][
+                    cache->cacheLevel_ ? cache->cacheLevel_ : 1])[cpuId]++;
+            Tick processTime = pkt->getProcessTime(cache->cacheLevel_ + 1);
+            // 这里加上20是为了保证不会出现499 / 500 = 0的情况出现
+            (*prefProcessCycles_[pkt->srcCacheLevel_][
+                    cache->cacheLevel_ ? cache->cacheLevel_ : 1])[cpuId] +=
+                    (processTime + 20) / clockPeriod_;
+            DEBUG_PF(2, "Add %s process time %lu for prefetch @0x%lx",
+                    BaseCache::levelName_[cache->cacheLevel_ + 1].c_str(),
+                    processTime, pkt->getAddr());
+            // 如果当前等级恰好是目标等级，则额外更新一个处理时间
+            if (pkt->targetCacheLevel_ == cache->cacheLevel_ &&
+                    pkt->srcCacheLevel_ <= cache->cacheLevel_) {
+                (*prefFillCount_[pkt->srcCacheLevel_][
+                        cache->cacheLevel_ ?
+                        cache->cacheLevel_ - 1 : 0])[cpuId]++;
+                processTime = pkt->getProcessTime(cache->cacheLevel_);
+                (*prefProcessCycles_[pkt->srcCacheLevel_][
+                        cache->cacheLevel_ ?
+                        cache->cacheLevel_ - 1 : 0])[cpuId] +=
+                        (processTime + 20) / clockPeriod_;
+                DEBUG_PF(2, "Add %s process time %lu for prefetch @0x%lx",
+                        BaseCache::levelName_[cache->cacheLevel_].c_str(),
+                        processTime, pkt->getAddr());
+            }
+        }
         // 预取替换了一个Demand Request请求的数据
         // 就需要对相关的替换信息进行记录
         if (info.target == Dmd) {
@@ -444,7 +497,7 @@ int BasePrefetchFilter::genHash(const std::string& name) {
         hash = hash * 131 + name[index++];
     }
     hash = abs(hash);
-    if (typeHash_ == -1) {
+    if (typeHash_ == 0) {
         typeHash_ = hash;
     } else {
         CHECK_RET(typeHash_ == hash,
@@ -506,8 +559,20 @@ void BasePrefetchFilter::memCheck() {
     for (auto& vec : prefHitCount_) {
         DEBUG_PF(1, "Size: %lu", vec.size());
     }
+    for (auto& vec : prefFillCount_) {
+        DEBUG_PF(1, "Size: %lu", vec.size());
+    }
+    for (auto& vec : prefProcessCycles_) {
+        DEBUG_PF(1, "Size: %lu", vec.size());
+    }
+    for (auto& vec : prefAvgProcessCycles_) {
+        DEBUG_PF(1, "Size: %lu", vec.size());
+    }
     DEBUG_PF(1, "Size: %lu", shadowedPrefCount_.size());
-    DEBUG_PF(1, "Size: %lu", dismissedLevelUpPref_.size());
+    DEBUG_PF(1, "Size: %lu", totalStatsPref_.size());
+    DEBUG_PF(1, "Size: %lu", dismissedLevelUpPrefNoWB_.size());
+    DEBUG_PF(1, "Size: %lu", dismissedLevelUpPrefLate_.size());
+    DEBUG_PF(1, "Size: %lu", dismissedLevelDownPref_.size());
     DEBUG_PF(1, "Size: %lu", squeezedPrefCount_.size());
     for (auto& vec : prefTotalUsefulValue_) {
         DEBUG_PF(1, "Size: %lu", vec.size());
@@ -561,8 +626,17 @@ int BasePrefetchFilter::initThis() {
             prefHitCount_.push_back(std::vector<Stats::Vector*>(
                     cacheLevel < 2 ? maxCacheLevel_ - 1 :
                     maxCacheLevel_ - cacheLevel));
+            prefFillCount_.push_back(std::vector<Stats::Vector*>(
+                    maxCacheLevel_ + 1));
+            prefProcessCycles_.push_back(std::vector<Stats::Vector*>(
+                    maxCacheLevel_ + 1));
+            prefAvgProcessCycles_.push_back(std::vector<Stats::Formula*>(
+                    maxCacheLevel_ + 1));
         } else {
             prefHitCount_.push_back(std::vector<Stats::Vector*>());
+            prefFillCount_.push_back(std::vector<Stats::Vector*>());
+            prefProcessCycles_.push_back(std::vector<Stats::Vector*>());
+            prefAvgProcessCycles_.push_back(std::vector<Stats::Formula*>());
         }
         
         if (usePref_[cacheLevel]) {
@@ -593,7 +667,10 @@ int BasePrefetchFilter::initThis() {
     demandReqMissCount_.resize(cacheCount);
     shadowedPrefCount_.resize(cacheCount);
     squeezedPrefCount_.resize(cacheCount);
-    dismissedLevelUpPref_.resize(cacheCount);
+    totalStatsPref_.resize(cacheCount);
+    dismissedLevelUpPrefNoWB_.resize(cacheCount);
+    dismissedLevelUpPrefLate_.resize(cacheCount);
+    dismissedLevelDownPref_.resize(cacheCount);
 
     // 初始化时间维度的统计变量
     TimingStats sample;
@@ -630,6 +707,12 @@ int BasePrefetchFilter::checkUpdateTimingAhead() {
 }
 
 int BasePrefetchFilter::checkUpdateTimingPost() {
+    // 打印Tick位置信息
+    if (prefetch_filter::tickNow_ > nextTimerPrintTick_) {
+        DPRINTF(PrefetchFilterTimer, "BasePrefetchFilter.Timer\n");
+        nextTimerPrintTick_ += prefetch_filter::timerPrintGap_;
+    }
+    
     // 如果到达了校正位置，进行全局数据校正
     if (prefetch_filter::tickNow_ > nextCorrectionTick_) {
         std::map<BaseCache*, std::set<uint64_t>> correctionList;
@@ -648,11 +731,9 @@ int BasePrefetchFilter::checkUpdateTimingPost() {
         timingStatsPeriodCount_++;
 
         // 更新时间维度的统计数据
-        for (auto& mapPair : usefulTable_) {
-            CHECK_RET_EXIT(mapPair.second.updatePrefTiming(
-                    prefTotalUsefulValue_, prefUsefulDegree_, prefUsefulType_,
-                    timingDegree_), "Failed to update stats timingly");
-        }
+        CHECK_RET_EXIT(IdealPrefetchUsefulTable::updatePrefTiming(
+                prefTotalUsefulValue_, prefUsefulDegree_, prefUsefulType_,
+                timingDegree_), "Failed to update stats timingly");
         
         // 打印时间维度的信息
         DPRINTF(PrefetchFilter, "Stats Period Id: %d\n",
@@ -781,17 +862,47 @@ void BasePrefetchFilter::regStats() {
                                 "prefetch requests from ") + srcCacheName)
                         .flags(total);
                 
-                dismissedLevelUpPref_[i] = new Stats::Vector();
-                dismissedLevelUpPref_[i]->init(numCpus_)
-                        .name(name() + ".prefetch_dismissed_level_up_" +
+                totalStatsPref_[i] = new Stats::Vector();
+                totalStatsPref_[i]->init(numCpus_)
+                        .name(name() + ".prefetch_stats_count_from_" +
+                                srcCacheName)
+                        .desc(std::string("Number of prefetches "
+                                "have been counted from ") + srcCacheName)
+                        .flags(total);
+                
+                dismissedLevelUpPrefNoWB_[i] = new Stats::Vector();
+                dismissedLevelUpPrefNoWB_[i]->init(numCpus_)
+                        .name(name() + ".prefetch_dismissed_level_up_nowb_" +
                                 srcCacheName)
                         .desc(std::string("Number of level-up prefetches "
-                                "dismissed from ") + srcCacheName)
+                                "dismissed from ") + srcCacheName +
+                                " due to lack of write buffer")
+                        .flags(total);
+                
+                dismissedLevelUpPrefLate_[i] = new Stats::Vector();
+                dismissedLevelUpPrefLate_[i]->init(numCpus_)
+                        .name(name() + ".prefetch_dismissed_level_up_late_" +
+                                srcCacheName)
+                        .desc(std::string("Number of level-up prefetches "
+                                "dismissed from ") + srcCacheName +
+                                " due to late")
+                        .flags(total);
+                
+                dismissedLevelDownPref_[i] = new Stats::Vector();
+                dismissedLevelDownPref_[i]->init(numCpus_)
+                        .name(name() + ".prefetch_dismissed_level_down_" +
+                                srcCacheName)
+                        .desc(std::string("Number of level-down prefetches "
+                                "dismissed from ") + srcCacheName +
+                                " to  prevent level-down threshing")
                         .flags(total);
             } else {
                 shadowedPrefCount_[i] = emptyStatsVar_;
                 squeezedPrefCount_[i] = emptyStatsVar_;
-                dismissedLevelUpPref_[i] = emptyStatsVar_;
+                totalStatsPref_[i] = emptyStatsVar_;
+                dismissedLevelUpPrefNoWB_[i] = emptyStatsVar_;
+                dismissedLevelUpPrefLate_[i] = emptyStatsVar_;
+                dismissedLevelDownPref_[i] = emptyStatsVar_;
             }
 
             for (j = 0; j < prefHitCount_[i].size(); j++) {
@@ -804,6 +915,40 @@ void BasePrefetchFilter::regStats() {
                         .desc(std::string("Number of prefetches request from ")
                                 + srcCacheName + " hit in " + tgtCacheName)
                         .flags(total);
+            }
+            
+            for (j = 0; j < prefFillCount_[i].size(); j++) {
+                std::string tgtCacheName = BaseCache::levelName_[j + 1];
+                prefFillCount_[i][j] = new Stats::Vector();
+                prefFillCount_[i][j]->init(numCpus_)
+                        .name(name() + ".prefetch_from_" + srcCacheName +
+                                "_fill_in_" + tgtCacheName)
+                        .desc(std::string("Number of prefetches request from ")
+                                + srcCacheName + " filled in " + tgtCacheName)
+                        .flags(total);
+            }
+            
+            for (j = 0; j < prefProcessCycles_[i].size(); j++) {
+                std::string tgtCacheName = BaseCache::levelName_[j + 2];
+                prefProcessCycles_[i][j] = new Stats::Vector();
+                prefProcessCycles_[i][j]->init(numCpus_)
+                        .name(name() + ".prefetch_total_process_cycle_from_" +
+                                srcCacheName + "_in_" + tgtCacheName)
+                        .desc(std::string("Cycles of process for prefetches "
+                                "request from ") + srcCacheName +
+                                " in " + tgtCacheName)
+                        .flags(total);
+            }
+            
+            for (j = 0; j < prefAvgProcessCycles_[i].size(); j++) {
+                std::string tgtCacheName = BaseCache::levelName_[j + 2];
+                prefAvgProcessCycles_[i][j] = new Stats::Formula();
+                prefAvgProcessCycles_[i][j]
+                        ->name(name() + ".prefetch_avg_process_cycle_from_" +
+                                srcCacheName + "_in_" + tgtCacheName)
+                        .desc(std::string("Average cycles of process for "
+                                "prefetches from ") + srcCacheName +
+                                " in " + tgtCacheName);
             }
             
             std::string usefulTypeStr;
@@ -856,16 +1001,39 @@ void BasePrefetchFilter::regStats() {
                             cpuId);
                     squeezedPrefCount_[i]->subname(k, std::string("cpu") +
                             cpuId);
-                    dismissedLevelUpPref_[i]->subname(k, std::string("cpu") +
+                    totalStatsPref_[i]->subname(k, std::string("cpu") +
                             cpuId);
+                    dismissedLevelUpPrefNoWB_[i]->subname(k,
+                            std::string("cpu") + cpuId);
+                    dismissedLevelUpPrefLate_[i]->subname(k,
+                            std::string("cpu") + cpuId);
+                    dismissedLevelDownPref_[i]->subname(k,
+                            std::string("cpu") + cpuId);
                 }
                 for (j = 0; j < prefTotalUsefulValue_[i].size(); j++) {
                     prefTotalUsefulValue_[i][j]->subname(k,
                             std::string("cpu") + cpuId);
                 }
                 for (j = 0; j < prefHitCount_[i].size(); j++) {
-                    prefHitCount_[i][j]->subname(k, std::string("cpu") +
-                            std::to_string(k));
+                    prefHitCount_[i][j]->subname(k,
+                            std::string("cpu") + cpuId);
+                }
+                for (j = 0; j < prefFillCount_[i].size(); j++) {
+                    prefFillCount_[i][j]->subname(k,
+                            std::string("cpu") + cpuId);
+                }
+                for (j = 0; j < prefProcessCycles_[i].size(); j++) {
+                    prefProcessCycles_[i][j]->subname(k,
+                            std::string("cpu") + cpuId);
+                }
+                for (j = 0; j < prefAvgProcessCycles_[i].size(); j++) {
+                    prefAvgProcessCycles_[i][j]->subname(k,
+                            std::string("cpu") + cpuId);
+                    if (k == numCpus_ - 1) {
+                        *prefAvgProcessCycles_[i][j] =
+                                *prefProcessCycles_[i][j] /
+                                *prefFillCount_[i][j];
+                    }
                 }
                 for (j = 0; j < prefUsefulDegree_[i].size(); j++) {
                     for (int n = 0; n < TOTAL_DEGREE; n++) {
@@ -886,9 +1054,18 @@ void BasePrefetchFilter::regStats() {
             demandReqMissCount_[i] = emptyStatsVar_;
             shadowedPrefCount_[i] = emptyStatsVar_;
             squeezedPrefCount_[i] = emptyStatsVar_;
-            dismissedLevelUpPref_[i] = emptyStatsVar_;
+            totalStatsPref_[i] = emptyStatsVar_;
+            dismissedLevelUpPrefNoWB_[i] = emptyStatsVar_;
+            dismissedLevelUpPrefLate_[i] = emptyStatsVar_;
+            dismissedLevelDownPref_[i] = emptyStatsVar_;
             for (j = 0; j < prefHitCount_[j].size(); j++) {
                 prefHitCount_[i][j] = emptyStatsVar_;
+            }
+            for (j = 0; j < prefFillCount_[j].size(); j++) {
+                prefFillCount_[i][j] = emptyStatsVar_;
+            }
+            for (j = 0; j < prefProcessCycles_[j].size(); j++) {
+                prefProcessCycles_[i][j] = emptyStatsVar_;
             }
             for (j = 0; j < prefTotalUsefulValue_[i].size(); j++) {
                 prefTotalUsefulValue_[i][j] = emptyStatsVar_;

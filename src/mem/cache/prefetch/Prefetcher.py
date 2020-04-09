@@ -126,7 +126,7 @@ class StridePrefetcher(QueuedPrefetcher):
     max_conf = Param.Int(7, "Maximum confidence level")
     thresh_conf = Param.Int(4, "Threshold confidence level")
     min_conf = Param.Int(0, "Minimum confidence level")
-    start_conf = Param.Int(4, "Starting confidence for new entries")
+    start_conf = Param.Int(3, "Starting confidence for new entries")
 
     table_sets = Param.Int(16, "Number of sets in PC lookup table")
     table_assoc = Param.Int(4, "Associativity of PC lookup table")

@@ -48,6 +48,9 @@ typedef Packet *PacketPtr;
 // 该变量用于进行预取校正（防止特殊的预取不能得到释放）
 extern Tick maxResponseGap_;
 
+// 用于进行时间计时，方便确认bug位置
+extern Tick timerPrintGap_;
+
 // 依据一组Cache指针生成对应的CPUID位向量
 uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches);
 

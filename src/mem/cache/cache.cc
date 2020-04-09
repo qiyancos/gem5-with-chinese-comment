@@ -901,10 +901,26 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             tgt_pkt->makeTimingResponse();
             /// 更新反馈的处理Cache和临时MSHR
             tgt_pkt->recentCache_ = this;
-            if (pkt->packetType_ == prefetch_filter::Pref &&
-                    pkt->targetCacheLevel_ < cacheLevel_) {
+            if (tgt_pkt->packetType_ == prefetch_filter::Pref &&
+                    tgt_pkt->targetCacheLevel_ < cacheLevel_) {
                 /// 如果是一个提级预取，并且预取还要继续上传，会复制备用MSHR
                 tgt_pkt->mshr_ = pkt->mshr_;
+                /// 同时拷贝关键的时间戳信息
+                if (!mshr->needPostProcess_) {
+                    tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
+                            Packet::WhenSend,
+                            pkt->getTimeStamp(cacheLevel_, Packet::WhenSend));
+                    tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
+                            Packet::WhenFill,
+                            pkt->getTimeStamp(cacheLevel_, Packet::WhenFill));
+                } else {
+                    /// 如果当前的Packet是一个提级合并PendingPref
+                    /// 则直接使用当前的时间作为两个点
+                    tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
+                            Packet::WhenSend, curTick());
+                    tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
+                            Packet::WhenFill, curTick());
+                }
             }
 
             // if this packet is an error copy that to the new packet

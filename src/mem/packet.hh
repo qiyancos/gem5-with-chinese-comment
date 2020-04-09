@@ -260,6 +260,24 @@ class MSHR;
 class Packet : public Printable
 {
   public:
+    /// 下面的结构与Packet在不同Cache中逗留时间计算有关
+    enum TimeStampType {WhenFill, WhenSend, WhenRecv};
+    
+    /// 存放时间戳信息的结构
+    std::vector<std::vector<Tick>> timeStamp_;
+
+    /// 该函数用于设置给定处理的时间点，Level中0代表CPU而非ICache
+    /// 1同时代表ICache和DCache
+    void setTimeStamp(const uint8_t level, const TimeStampType type,
+            const Tick& tick);
+
+    /// 获取一个给定的时间戳
+    Tick getTimeStamp(const uint8_t level, const TimeStampType type);
+
+    /// 获取当前Packet在某一个层级Cache中的时间，这里的Level不允许出现0
+    Tick getProcessTime(const uint8_t level);
+
+  public:
     /// 该结构用于记录提升级别操作的MSHR数据
     std::shared_ptr<MSHR> mshr_ = nullptr;
 
@@ -288,6 +306,8 @@ class Packet : public Printable
     void initDemand(const std::list<uint64_t>& recentBranchPC) {
         packetType_ = prefetch_filter::Dmd;
         recentBranchPC_ = recentBranchPC;
+        /// 要确保初始化Demand只能在CPU中执行
+        setTimeStamp(0, WhenSend, req->time());
     }
 
     /// 初始化一个预取Packet

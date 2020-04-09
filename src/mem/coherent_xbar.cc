@@ -187,8 +187,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
     if (!is_express_snoop && !reqLayers[master_port_id]->tryTiming(src_port)) {
         DPRINTF(CoherentXBar, "%s: src %s packet %s BUSY\n", __func__,
                 src_port->name(), pkt->print());
-        DEBUG_MEM("Test packet[%p : %s] sent failed", pkt,
-                pkt->cmdString().c_str());
+        DEBUG_MEM("XBar[%p] packet[%p : %s] sent failed",
+                this, pkt, pkt->cmdString().c_str());
         return false;
     }
 
@@ -234,8 +234,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
                 // update the layer state and schedule an idle event
                 reqLayers[master_port_id]->failedTiming(src_port,
                                                         clockEdge(Cycles(1)));
-                DEBUG_MEM("Test packet[%p : %s] sent failed", pkt,
-                        pkt->cmdString().c_str());
+                DEBUG_MEM("XBar[%p] packet[%p : %s] sent failed",
+                        this, pkt, pkt->cmdString().c_str());
                 return false;
             }
         }
@@ -467,11 +467,11 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
     }
 
     if (success) {
-        DEBUG_MEM("Test packet[%p : %s] sent successfully", pkt,
-                pkt->cmdString().c_str());
+        DEBUG_MEM("XBar[%p] packet[%p : %s] sent successfully",
+                this, pkt, pkt->cmdString().c_str());
     } else {
-        DEBUG_MEM("Test packet[%p : %s] sent failed", pkt,
-                pkt->cmdString().c_str());
+        DEBUG_MEM("XBar[%p] packet[%p : %s] sent failed",
+                this, pkt, pkt->cmdString().c_str());
     }
     return success;
 }
@@ -530,13 +530,19 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
         BasePrefetchFilter::getCpuSideConnectedCache(pkt, &upperCaches);
         panic_if(upperCaches.size() != 1,
                 "Too many or no cpu-side connected caches found");
-        if ((*(upperCaches.begin()))->hasWriteBufferForPref()) {
+        if (!(*(upperCaches.begin()))->hasWriteBufferForPref()) {
+            DEBUG_MEM("Xbar[%p] prefetch resp @0x%lx [%s -> %s] from %s "
+                    "dismissed as upper level has not enough write buffer",
+                    this, pkt->getAddr(),
+                    BaseCache::levelName_[pkt->srcCacheLevel_].c_str(),
+                    BaseCache::levelName_[pkt->targetCacheLevel_].c_str(),
+                    pkt->recentCache_->getName().c_str());
             /// 对于因为上层Cache的WriteBuffer完全填满的时候
             /// 会直接删除提级Packet，不进行提级操作
             assert(pkt->caches_.size() == 1);
             uint8_t cacheLevel = pkt->srcCacheLevel_;
             for (auto cpuId : (*pkt->caches_.begin())->cpuIds_) {
-                (*BasePrefetchFilter::dismissedLevelUpPref_[
+                (*BasePrefetchFilter::dismissedLevelUpPrefNoWB_[
                         cacheLevel])[cpuId]++;
             }
             delete pkt;
@@ -562,10 +568,16 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
                     delete pkt->mshr_;
                 }
                 */
+                DEBUG_MEM("Xbar[%p] prefetch resp @0x%lx [%s -> %s] from %s "
+                        "dismissed as demand request already reg",
+                        this, pkt->getAddr(),
+                        BaseCache::levelName_[pkt->srcCacheLevel_].c_str(),
+                        BaseCache::levelName_[pkt->targetCacheLevel_].c_str(),
+                        pkt->recentCache_->getName().c_str());
                 assert(pkt->caches_.size() == 1);
                 uint8_t cacheLevel = pkt->srcCacheLevel_;
                 for (auto cpuId : (*pkt->caches_.begin())->cpuIds_) {
-                    (*BasePrefetchFilter::dismissedLevelUpPref_[
+                    (*BasePrefetchFilter::dismissedLevelUpPrefLate_[
                             cacheLevel])[cpuId]++;
                 }
                 delete pkt;

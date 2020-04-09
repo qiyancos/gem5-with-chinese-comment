@@ -52,6 +52,7 @@
 #include "mem/cache/base.hh"
 #include "mem/cache/mshr.hh"
 #include "mem/cache/prefetch_filter/debug_flag.hh"
+#include "mem/cache/prefetch_filter/base.hh"
 
 #include <algorithm>
 #include <cstring>
@@ -230,6 +231,101 @@ MemCmd::commandInfo[] =
       InvalidCmd, "InvalidateResp" }
 };
 
+/// 该函数用于设置给定处理的时间点
+void
+Packet::setTimeStamp(const uint8_t level, const TimeStampType type,
+        const Tick& tick) {
+    panic_if(level > BasePrefetchFilter::maxCacheLevel_,
+            "Unexpected level when setting time stamp");
+    if (packetType_ == prefetch_filter::Pref) {
+        DEBUG_MEM("Set time stamp for prefetch[%p] @0x%lx [%s -> %s] "
+                "with level %u, type %s and tick %lu", this, getAddr(),
+                BaseCache::levelName_[srcCacheLevel_].c_str(),
+                BaseCache::levelName_[targetCacheLevel_].c_str(), level,
+                type == WhenRecv ? "recv" : type == WhenFill ? "fill" : "send",
+                tick);
+    }
+    if (timeStamp_.size() < level + 1) {
+        timeStamp_.resize(level + 1, std::vector<Tick>(WhenRecv, 0));
+    }
+    if (type == WhenRecv) {
+        panic_if(level == 0 || level > BasePrefetchFilter::maxCacheLevel_
+                || timeStamp_[level - 1][WhenSend],
+                "Can not set recv time stamp for the given level");
+        if (level > 1 && timeStamp_[level - 2][WhenSend]) {
+            panic_if(tick < timeStamp_[level - 2][WhenSend],
+                    "Illegal time stamp for send gap");
+        }
+        timeStamp_[level - 1][WhenSend] = tick;
+    } else {
+        if (type == WhenFill && level < BasePrefetchFilter::maxCacheLevel_ &&
+                level < timeStamp_.size() - 1 &&
+                timeStamp_[level + 1][WhenFill]) {
+            panic_if(tick < timeStamp_[level + 1][WhenFill],
+                    "Illegal time stamp for fill gap");
+        } else if (type == WhenFill &&
+                level == BasePrefetchFilter::maxCacheLevel_ &&
+                timeStamp_[level][WhenSend]) {
+            panic_if(tick < timeStamp_[level][WhenSend],
+                    "Illegal time stamp for fill gap");
+        } else if (type == WhenSend && level > 0 &&
+                timeStamp_[level - 1][WhenSend]) {
+            panic_if(tick < timeStamp_[level - 1][WhenSend],
+                    "Illegal time stamp for fill gap");
+        }
+        timeStamp_[level][type] = tick;
+    }
+}
+
+/// 获取一个给定的时间戳
+Tick
+Packet::getTimeStamp(const uint8_t level, const TimeStampType type) {
+    panic_if(level >= timeStamp_.size(),
+            "Unexpected level when trying to get time stamp");
+    if (type == WhenRecv) {
+        panic_if(level == 0, "Unexpected level for recv time stamp");
+        return timeStamp_[level - 1][WhenSend];
+    } else {
+        return timeStamp_[level][type];
+    }
+}
+
+/// 获取当前Packet在某一个层级Cache中的时间，这里的Level不允许出现0
+Tick
+Packet::getProcessTime(const uint8_t level) {
+    panic_if(level > timeStamp_.size() || level == 0,
+            "Can not get process time for the given level");
+    Tick result = 0;
+    if (level == BasePrefetchFilter::maxCacheLevel_ + 1) {
+        /// 获取DRAM的处理时间
+        result = timeStamp_[level - 1][WhenFill] &&
+                timeStamp_[level - 1][WhenSend] ?
+                timeStamp_[level - 1][WhenFill] -
+                timeStamp_[level - 1][WhenSend] : 0;
+    } else {
+        /// 获取其他层级的处理时间
+        Tick sendGap = timeStamp_[level][WhenSend] &&
+                timeStamp_[level][WhenSend] ?
+                (timeStamp_[level][WhenSend] -
+                timeStamp_[level - 1][WhenSend]) : 0;
+        Tick fillGap = timeStamp_[level - 1][WhenFill] &&
+                timeStamp_[level][WhenFill] ?
+                (timeStamp_[level - 1][WhenFill] -
+                timeStamp_[level][WhenFill]) : 0;
+        result = sendGap + fillGap;
+    }
+    /*
+    if (packetType_ == prefetch_filter::Pref) {
+        DEBUG_MEM("Get process time for prefetch[%p] @0x%lx [%s -> %s] "
+                "with level %u and result %lu", this, getAddr(),
+                BaseCache::levelName_[srcCacheLevel_].c_str(),
+                BaseCache::levelName_[targetCacheLevel_].c_str(),
+                level, result);
+    }
+    */
+    return result;
+}
+
 /// 迁移到CC文件以便可以随意更改
 Addr
 Packet::getAddr() const {
@@ -245,6 +341,7 @@ void Packet::initPref(BaseCache* srcCache, const uint8_t targetCacheLevel,
     packetType_ = prefetch_filter::Pref;
     recentBranchPC_ = recentBranchPC;
     addSrcCache(srcCache);
+    setTimeStamp(srcCacheLevel_, WhenRecv, req->time());
 }
 
 /// 迁移到cc以避免头文件互相包含问题

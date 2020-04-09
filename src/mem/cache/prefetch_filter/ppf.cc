@@ -388,21 +388,31 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
         allSharedTable_(p->all_shared_table),
         allowUpgrade_(p->allow_upgrade),
         weightBits_(p->feature_weight_bits),
-        weightInit_(p->feature_weight_init),
         counterInit_(p->counter_init_value),
-        // 初始化预取的阈值设置
+        weightInit_(p->feature_weight_init),
         prefThreshold_(p->prefetch_threshold),
+        missTrainStep_(p->miss_training_step),
+        hitTrainStep_(p->hit_training_step),
         uselessPrefStep_(p->useless_prefetch_training_step) {
     // 初始化预取器激进度调整周期
     lastDegreeUpdateTime_ = 0;
 
-    // 初始化训练幅度
-    hitTrainStep_ = p->hit_training_step;
-    hitTrainStep_.push_back(p->default_training_step);
-
-    missTrainStep_ = p->miss_training_step;
-    missTrainStep_.push_back(p->default_training_step);
+    // L1I和L1D使用相同的参数，实际上可能并不会使用
+    CHECK_ARGS_EXIT(weightInit_.size(), "Init weight must not be empty");
+    weightInit_.insert(weightInit_.begin(), weightInit_.front());
     
+    CHECK_ARGS_EXIT(prefThreshold_.size(),
+            "Prefetch threshold must not be empty");
+    prefThreshold_.insert(prefThreshold_.begin(), prefThreshold_.front());
+    
+    CHECK_ARGS_EXIT(hitTrainStep_.size(),
+            "Train step for hit event must not be empty");
+    hitTrainStep_.insert(hitTrainStep_.begin(), hitTrainStep_.front());
+    
+    CHECK_ARGS_EXIT(missTrainStep_.size(),
+            "Train step for miss event  must not be empty");
+    missTrainStep_.insert(missTrainStep_.begin(), missTrainStep_.front());
+
     initFailFlag_ = false;
     int tempFlag;
     // 初始化Feature
@@ -601,7 +611,13 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
         uselessPkt = pkt;
         errorInfo = "Failed to update training when pref miss "
                 "added to demand miss"; 
+    } else if (info.target == NullType && *(pkt->caches_.begin()) == cache) {
+        // 根据最后的结果更新统计数据
+        for (auto cpuId : cache->cpuIds_) {
+            (*prefTarget_[cacheLevel][pkt->targetCacheLevel_])[cpuId]++;
+        }
     }
+
     if (uselessPkt) {
         CHECK_ARGS(uselessPkt->caches_.size() == 1,
                 "Prefetch packet should have only one source cache");
@@ -688,6 +704,7 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
     if (!enableFilter_) {
         return BasePrefetchFilter::filterPrefetch(cache, prefAddr, info);
     }
+
     const int featureCount = featureList_.size();
     const uint8_t cacheLevel = cache->cacheLevel_;
     // 不会对L1ICache的预取进行处理
@@ -731,19 +748,17 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
     weightSum = std::round(double(weightSum) / validFeatureCount);
     
     // 依据权重加和进行预取更改和过滤
-    uint8_t targetCacheLevel = 1;
+    uint8_t targetCacheLevel = 0;
     for (auto threshold : prefThreshold_) {
         if (weightSum >= threshold) {
             // 不会预取到L1Icache的
-            if (!targetCacheLevel) {
-                targetCacheLevel++;
-                continue;
+            if (targetCacheLevel) {
+                break;
             }
-            break;
         }
         targetCacheLevel++;
     }
-
+    
     // 依据是否允许预取提升等级进行处理
     if (targetCacheLevel < cacheLevel && !allowUpgrade_) {
         targetCacheLevel = cacheLevel;
@@ -753,12 +768,6 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
             BaseCache::levelName_[cache->cacheLevel_].c_str(),
             BaseCache::levelName_[targetCacheLevel].c_str(),
             validFeatureCount, weightSum);
-    // 根据最后的结果更新统计数据
-    if (targetCacheLevel <= maxCacheLevel_) {
-        for (auto cpuId : cache->cpuIds_) {
-            (*prefTarget_[cacheLevel][targetCacheLevel])[cpuId]++;
-        }
-    }
     
     // 依据最后的结果更新Prefetch Table和Reject Table
     CHECK_RET_EXIT(updateTable(workTable, prefAddr & cacheLineAddrMask_,
@@ -783,18 +792,18 @@ int PerceptronPrefetchFilter::invalidatePrefetch(BaseCache* cache,
 int PerceptronPrefetchFilter::notifyCacheReqSentFailed(BaseCache* cache,
         const int totalEntries, const int waitingDemands,
         const uint8_t originalDegree, uint8_t* newDegree) {
-    DEBUG_PF(0, "[Tick: %lu]", curTick());
-    DEBUG_PF(0, "PPF Event Cache Request Sent Failure From %s",
-            BaseCache::levelName_[cache->cacheLevel_].c_str());
-    
-    CHECK_RET_EXIT(BasePrefetchFilter::notifyCacheReqSentFailed(cache,
-            totalEntries, waitingDemands, originalDegree, newDegree),
-            "Failed to deal with cache request sent failure");
     // 没有预取器的层级不做处理
     if (!usePref_[cache->cacheLevel_]) {
         return 0;
     }
     
+    DEBUG_PF(0, "[Tick: %lu]", curTick());
+    DEBUG_PF(0, "PPF Event Cache Request Sent Failure[%d] From %s",
+            waitingDemands, BaseCache::levelName_[cache->cacheLevel_].c_str());
+    
+    CHECK_RET_EXIT(BasePrefetchFilter::notifyCacheReqSentFailed(cache,
+            totalEntries, waitingDemands, originalDegree, newDegree),
+            "Failed to deal with cache request sent failure");
     // 更新计数
     auto statsIter = blockingHarm_.find(cache);
     CHECK_ARGS_EXIT(statsIter != blockingHarm_.end(),
@@ -803,7 +812,7 @@ int PerceptronPrefetchFilter::notifyCacheReqSentFailed(BaseCache* cache,
     statsIter->second += waitingDemands;
 
     // 如果到达统计周期结尾，进行结果总结和预取激进度更新计算
-    if (lastDegreeUpdateTime_ + degreeUpdatePeriod_ >
+    if (lastDegreeUpdateTime_ + degreeUpdatePeriod_ <=
             prefetch_filter::tickNow_) {
         uint64_t avgWaitingDemands = static_cast<double>(statsIter->second) /
                 (prefetch_filter::tickNow_ - lastDegreeUpdateTime_) *
@@ -820,6 +829,9 @@ int PerceptronPrefetchFilter::notifyCacheReqSentFailed(BaseCache* cache,
         }
         CHECK_ARGS_EXIT(*newDegree > 0 && *newDegree <= originalDegree,
                 "Unexpected degree setting");
+        DEBUG_PF(1, "PPF prefetcher new degree[%u/%u] with "
+                "average waiting demands[%lu/%d]",
+                *newDegree, originalDegree, avgWaitingDemands, totalEntries);
         lastDegreeUpdateTime_ = prefetch_filter::tickNow_;
         statsIter->second = 0;
     }
@@ -839,11 +851,11 @@ int PerceptronPrefetchFilter::initThis() {
     }
 
     // 重新初始化训练幅度
-    CHECK_WARN(missTrainStep_.size() - 1 <= cacheCount,
+    CHECK_WARN(missTrainStep_.size() <= cacheCount,
             "Too many train steps are given.");
     missTrainStep_.resize(cacheCount, missTrainStep_.back());
     
-    CHECK_WARN(hitTrainStep_.size() - 1 <= cacheCount,
+    CHECK_WARN(hitTrainStep_.size() <= cacheCount,
             "Too many train steps are given.");
     hitTrainStep_.resize(cacheCount, hitTrainStep_.back());
     
@@ -900,7 +912,7 @@ int PerceptronPrefetchFilter::initThis() {
                         for (auto& table :
                                 workTables_.back()[j].featureTable_) {
                             table.writeAll(SaturatedCounter(weightBits_,
-                                    weightInit_[i - 1]));
+                                    weightInit_[i]));
                         }
                     }
                 } else {
@@ -976,7 +988,7 @@ int PerceptronPrefetchFilter::initStats() {
     dmdNotTrained_.resize(cacheCount);
     for (int i = 0; i < cacheCount; i++) {
         prefTarget_.push_back(usePref_[i] ?
-                std::vector<Stats::Vector*>(cacheCount) :
+                std::vector<Stats::Vector*>(cacheCount + 1) :
                 std::vector<Stats::Vector*>());
     }
     return 0;
@@ -1100,12 +1112,9 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
     
     int8_t step = 0;
     switch (type) {
-    case DemandMiss: step =
-            missTrainStep_[cacheLevel ? cacheLevel - 1 : cacheLevel]; break;
-    case GoodPref: step =
-            hitTrainStep_[cacheLevel ? cacheLevel - 1 : cacheLevel]; break;
-    case BadPref: step =
-            -missTrainStep_[cacheLevel ? cacheLevel - 1 : cacheLevel]; break;
+    case DemandMiss: step = missTrainStep_[cacheLevel]; break;
+    case GoodPref: step = hitTrainStep_[cacheLevel]; break;
+    case BadPref: step = -missTrainStep_[cacheLevel]; break;
     case UselessPref: step = -uselessPrefStep_; break;
     }
 
@@ -1385,7 +1394,7 @@ void PerceptronPrefetchFilter::regStats() {
     uint8_t cacheCount = caches_.size();
     for (int i = 0; i < cacheCount; i++) {
         const std::string srcCacheName = BaseCache::levelName_[i];
-        if (usePref_[i]) {
+        if (usePref_[i] && enableFilter_) {
             prefAccepted_[i] = new Stats::Vector();
             prefAccepted_[i]->init(numCpus_)
                     .name(name() + ".ppf_prefetch_accepted_from_" + srcCacheName)
@@ -1422,14 +1431,14 @@ void PerceptronPrefetchFilter::regStats() {
                             "from ") + srcCacheName + ".")
                     .flags(total);
             
-            for (int j = 0; j < cacheCount; j++) {
+            for (int j = 0; j < prefTarget_[i].size(); j++) {
                 const std::string tgtCacheName = BaseCache::levelName_[j];
                 prefTarget_[i][j] = new Stats::Vector();
                 prefTarget_[i][j]->init(numCpus_)
                         .name(name() + ".ppf_prefetch_sent_from_" +
                                 srcCacheName +"_to_" + tgtCacheName)
                         .desc(std::string(
-                                "Number of prefetch requests sent to")
+                                "Number of prefetch requests sent to ")
                                 + tgtCacheName + " from " + srcCacheName)
                         .flags(total);
             }
@@ -1442,7 +1451,7 @@ void PerceptronPrefetchFilter::regStats() {
                 prefThreshing_[i]->subname(j, std::string("cpu") + cpuId);
                 prefNotTrained_[i]->subname(j, std::string("cpu") + cpuId);
                 dmdNotTrained_[i]->subname(j, std::string("cpu") + cpuId);
-                for (int k = 0; k < cacheCount; k++) {
+                for (int k = 0; k <= cacheCount; k++) {
                     prefTarget_[i][k]->subname(j, std::string("cpu") + cpuId);
                 }
             }
@@ -1452,6 +1461,9 @@ void PerceptronPrefetchFilter::regStats() {
             prefThreshing_[i] = emptyStatsVar_;
             prefNotTrained_[i] = emptyStatsVar_;
             dmdNotTrained_[i] = emptyStatsVar_;
+            for (int j = 0; j < prefTarget_[i].size(); j++) {
+                prefTarget_[i][j] = emptyStatsVar_;
+            }
         }
     }
     
@@ -1466,16 +1478,21 @@ void PerceptronPrefetchFilter::regStats() {
             featureWeightFrequency_.push_back(sample);
             workTable.statsIndex_ = i;
             for (int j = 0; j < featureList_.size(); j++) {
-                featureWeightFrequency_[i][j] = new Stats::Vector();
-                featureWeightFrequency_[i][j]->init(weightNum)
-                        .name(name() + ".feature_" + featureList_[j].name_ + 
-                                "_weight_in_" + workTable.name_)
-                        .desc(std::string("Time of appearence of a specific") +
-                                " weight for a feature.")
-                        .flags(total);
-                for (int k = 0; k < weightNum; k++) {
-                    featureWeightFrequency_[i][j]->subname(k,
-                            std::to_string(k));
+                if (enableFilter_) {
+                    featureWeightFrequency_[i][j] = new Stats::Vector();
+                    featureWeightFrequency_[i][j]->init(weightNum)
+                            .name(name() + ".feature_" +
+                                    featureList_[j].name_ + 
+                                    "_weight_in_" + workTable.name_)
+                            .desc("Time of appearence of a specific"
+                                    " weight for a feature.")
+                            .flags(total);
+                    for (int k = 0; k < weightNum; k++) {
+                        featureWeightFrequency_[i][j]->subname(k,
+                                std::to_string(k));
+                    }
+                } else {
+                    featureWeightFrequency_[i][j] = emptyStatsVar_;
                 }
             }
             i++;
@@ -1491,6 +1508,7 @@ std::string PerceptronPrefetchFilter::getTrainTypeStr(const TrainType type) {
     case GoodPref: return "GoodPref";
     case BadPref: return "BadPref";
     case UselessPref: return "UselessPref";
+    case DemandMiss: return "DemandMiss";
     default: return "Unknown";
     }
 }

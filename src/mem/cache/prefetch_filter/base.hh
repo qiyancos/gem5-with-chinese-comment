@@ -49,6 +49,7 @@
 #include "mem/cache/prefetch_filter/pref_info.hh"
 
 #include "debug/PrefetchFilter.hh"
+#include "debug/PrefetchFilterTimer.hh"
 
 class BaseCache;
 class Packet;
@@ -160,6 +161,15 @@ public:
     // 预取器预取命中不同层级的个数，区分不同核心和命中层级
     std::vector<std::vector<Stats::Vector*>> prefHitCount_;
 
+    // 在某一级Cache中填充的预取总个数（cpu, l1, l2, llc）
+    std::vector<std::vector<Stats::Vector*>> prefFillCount_;
+
+    // 计算一个预取请求在某一个层级Cache中的总处理时间（l1, l2, l3, dram）
+    std::vector<std::vector<Stats::Vector*>> prefProcessCycles_;
+
+    // 计算一个预取请求在某一个层级Cache中的平均处理时间（l1, l2, l3, dram）
+    std::vector<std::vector<Stats::Formula*>> prefAvgProcessCycles_;
+
     // 预取器中被DemandReq覆盖的预取请求个数，区分不同核心和缓存等级
     std::vector<Stats::Vector*> shadowedPrefCount_;
     
@@ -179,8 +189,17 @@ public:
     // 不同分类的预取个数
     std::vector<std::vector<Stats::Vector*>> prefUsefulType_;
 
-    // 因为阻塞无法上传的提级预取
-    static std::vector<Stats::Vector*> dismissedLevelUpPref_;
+    // 总共进行统计的预取个数
+    static std::vector<Stats::Vector*> totalStatsPref_;
+
+    // 因为没有WriteBuffer阻塞无法上传的提级预取
+    static std::vector<Stats::Vector*> dismissedLevelUpPrefNoWB_;
+
+    // 因为预取不及时而被忽略的提级预取
+    static std::vector<Stats::Vector*> dismissedLevelUpPrefLate_;
+
+    // 为了避免造成带宽压力而删除的降级预取
+    static std::vector<Stats::Vector*> dismissedLevelDownPref_;
 
     // 时间维度的统计计数数据结构
     class TimingStats {
@@ -221,7 +240,7 @@ public:
     static std::vector<std::vector<BaseCache*>> caches_;
     
     // 当前系统下的最高缓存等级
-    uint8_t maxCacheLevel_ = 0;
+    static uint8_t maxCacheLevel_;
 
     typedef std::pair<BaseCache*, std::pair<uint64_t, uint64_t>> DoublePref;
 
@@ -240,7 +259,10 @@ private:
 
     // 下一个统计周期开始的Tick位置
     Tick nextPeriodTick_;
-    
+
+    // 下一次打印Tick的时间信息
+    Tick nextTimerPrintTick_ = 0;
+
     // 时间维度统计周期的计数
     uint64_t timingStatsPeriodCount_ = 0;
 

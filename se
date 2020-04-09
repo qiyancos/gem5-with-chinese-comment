@@ -113,6 +113,8 @@ setGem5(){
         cacheLineSize=""
         L1Dsize="32kB"
         L1Dassoc="8"
+        L1DMSHR="4"
+        L1DWriteBuffer="8"
         L1Dprefetcher=""
         # Prefetcher used for L1DCache
         # Following prefetchers are available
@@ -123,28 +125,34 @@ setGem5(){
 	    #  AMPMPrefetcher, StridePrefetcher]
         L1Isize="64kB"
         L1Iassoc="4"
+        L1IMSHR="4"
         L1Iprefetcher=""
 
     enableL2Cache="Yes"
         numL2Caches=""
         L2size="256kB"
         L2assoc="8"
+        L2MSHR="20"
+        L2WriteBuffer="8"
         L2prefetcher="StridePrefetcher"
 
     enableL3Cache="Yes"
         numL3Caches=""
         L3size="16MB"
         L3assoc="16"
+        L3MSHR="32"
+        L3WriteBuffer="16"
         L3prefetcher=""
 
     enableGroupCache="No" # [Yes/No]
         numCpuPerGroup=2
 
-    enableDebug="No" # [Yes/No]
+    enableDebug="Yes" # [Yes/No]
         debugOutputDir="$gem5Dir/debug_temp"
-        debugFlags="XBar,CoherentXBar,PacketQueue,Cache,CachePort,CacheRepl,CacheVerbose" #
+        debugFlags="PrefetchFilterTimer"
+        #"XBar,CoherentXBar,PacketQueue,Cache,CachePort,CacheRepl,CacheVerbose" #
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
-        debugStartTick="8000000000"
+        debugStartTick="" #"80000000000"
         debugEndTick=""
 
     enableCheckPoint="No" # [Yes/No]
@@ -401,9 +409,9 @@ setArgLevel(){
     argListCheckPoint=("loadCheckPointPos" "saveCheckPointPos" "checkPointDir")
     argListMem=("numDirs" "memType" "memChannels" "memRanks" "memSize")
     argListRuby=("rubyTopology" "rubyMeshRows" "rubyNetwork")
-    argListCache=("cacheLineSize" "L1Dsize" "L1Dassoc" "L1Dprefetcher" "L1Isize" "L1Iassoc" "L1Iprefetcher")
-    argListL2Cache=("numL2Caches" "L2size" "L2assoc" "L2prefetcher")
-    argListL3Cache=("numL3Caches" "L3size" "L3assoc" "L3prefetcher")
+    argListCache=("cacheLineSize" "L1Dsize" "L1Dassoc" "L1DMSHR" "L1DWriteCuffer" "L1Dprefetcher" "L1Isize" "L1Iassoc" "L1IMSHR" "L1Iprefetcher")
+    argListL2Cache=("numL2Caches" "L2size" "L2assoc" "L2MSHR" "L2WriteBuffer" "L2prefetcher")
+    argListL3Cache=("numL3Caches" "L3size" "L3assoc" "L3MSHR" "L3WriteBuffer" "L3prefetcher")
     argListGroupCache=("numCpuPerGroup")
 
     # format list for arguments
@@ -411,9 +419,9 @@ setArgLevel(){
     formatListCheckPoint=("--checkpoint-restore" "--take-checkpoints" "--checkpoint-dir")
     formatListMem=("--num-dirs" "--mem-type" "--mem-channels" "--mem-ranks" "--mem-size")
     formatListRuby=("--topology" "--mesh-rows" "--network")
-    formatListCache=("--cacheline_size" "--l1d_size" "--l1d_assoc" "--l1d-hwp-type" "--l1i_size" "--l1i_assoc" "--l1i-hwp-type")
-    formatListL2Cache=("--num-l2caches" "--l2_size" "--l2_assoc" "--l2-hwp-type")
-    formatListL3Cache=("--num-l3caches" "--l3_size" "--l3_assoc" "--l3-hwp-type")
+    formatListCache=("--cacheline-size" "--l1d-size" "--l1d-assoc" "--l1d-mshr" "--l1d-writebuffer" "--l1d-hwp-type" "--l1i-size" "--l1i-assoc" "--l1i-mshr" "--l1i-hwp-type")
+    formatListL2Cache=("--num-l2caches" "--l2-size" "--l2-assoc" "--l2-mshr" "--l2-writebuffer" "--l2-hwp-type")
+    formatListL3Cache=("--num-l3caches" "--l3-size" "--l3-assoc" "--l3-mshr" "--l3-writebuffer" "--l3-hwp-type")
     formatListGroupCache=("--group-cache-size")
 
     buildOption="CPU_MODELS=$cpuModel"

@@ -169,6 +169,13 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                                 "Unexpected growth of level-down pref record");
                         sentPrefetches++;
                     } else {
+                        if (cache->prefetchFilter_) {
+                            uint8_t cacheLevel = cache->cacheLevel_;
+                            for (auto cpuId : cache->cpuIds_) {
+                                (*BasePrefetchFilter::dismissedLevelDownPref_[
+                                        cacheLevel])[cpuId]++;
+                            }
+                        }
                         DEBUG_MEM("Level-down prefetch @0x%lx dismissed",
                                 addr_prio.first);
                     }

@@ -122,7 +122,7 @@ extern Tick tickNow_;
 #ifdef DEBUG_FILTER
 
 #define DEBUG_PF(indentation, info, ...) { \
-    if (prefetch_filter::tickNow_ > prefetch_filter::debugStartTick_) { \
+    if (prefetch_filter::tickNow_ >= prefetch_filter::debugStartTick_) { \
         fprintf(stderr, "[Debug] "); \
         for (int i = 0; i < indentation; i++) { \
             fprintf(stderr, "    "); \
@@ -136,7 +136,7 @@ extern Tick tickNow_;
 
 
 #define DEBUG_PF_PLINE() { \
-    if (prefetch_filter::tickNow_ > prefetch_filter::debugStartTick_) { \
+    if (prefetch_filter::tickNow_ >= prefetch_filter::debugStartTick_) { \
         fprintf(stderr, "\n"); \
     } \
 }
@@ -152,7 +152,7 @@ extern Tick tickNow_;
 #ifdef DEBUG_CACHE
 
 #define DEBUG_MEM(info, ...) { \
-    if (prefetch_filter::tickNow_ > prefetch_filter::debugStartTick_) { \
+    if (prefetch_filter::tickNow_ >= prefetch_filter::debugStartTick_) { \
         fprintf(stderr, (std::string("[Debug] -- ") + info + \
                 "\n").c_str(), ##__VA_ARGS__); \
     } \
@@ -168,7 +168,7 @@ extern Tick tickNow_;
 #ifdef DEBUG_TEMP
 
 #define DEBUG_LINE() { \
-    if (prefetch_filter::tickNow_ > prefetch_filter::debugStartTick_) { \
+    if (prefetch_filter::tickNow_ >= prefetch_filter::debugStartTick_) { \
         fprintf(stderr, (std::string("[Debug] == Breakpoint in") + \
                 " %s:%d.\n").c_str(), __func__, __LINE__); \
     } \

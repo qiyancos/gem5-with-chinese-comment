@@ -187,8 +187,11 @@ BaseCache::getName() {
 
 bool
 BaseCache::hasWriteBufferForPref() {
-    return writeBuffer.numEntries - writeBuffer.allocated -
-            mshrQueue._numInService > 1;
+    int wbForPref = writeBuffer.numEntries - writeBuffer.allocated -
+            mshrQueue._numInService;
+    DEBUG_MEM("%s has %d available write buffer for level-up prefetch",
+            getName().c_str(), wbForPref);
+    return wbForPref > 0;
 }
 
 void
@@ -332,10 +335,16 @@ BaseCache::handleTimingReqHit(PacketPtr pkt, CacheBlk *blk, Tick request_time,
 {
     if (pkt->needsResponse()) {
         /// 如果是一个降级预取命中，没有必要回复
-        if (pkt->packetType_ == prefetch_filter::Pref && 
-                cacheLevel_ <= pkt->targetCacheLevel_) {
-            delete pkt;
-            return;
+        if (pkt->packetType_ == prefetch_filter::Pref) {
+            if (cacheLevel_ <= pkt->targetCacheLevel_) {
+                delete pkt;
+                return;
+            } else {
+                /// 更新时间戳信息
+                uint8_t realCacheLevel = cacheLevel_ ? cacheLevel_ : 1;
+                pkt->setTimeStamp(realCacheLevel, Packet::WhenSend, curTick());
+                pkt->setTimeStamp(realCacheLevel, Packet::WhenFill, curTick());
+            }
         }
         // These delays should have been consumed by now
         assert(pkt->headerDelay == 0);
@@ -587,6 +596,12 @@ BaseCache::recvTimingResp(PacketPtr pkt)
             /// 如果已存在的MSHR，则会直接无效化提升等级预取的响应
             assert(mshr);
             // delete mshr;
+            if (prefetchFilter_) {
+                for (auto cpuId : cpuIds_) {
+                    (*BasePrefetchFilter::dismissedLevelUpPrefLate_[
+                            cacheLevel_])[cpuId]++;
+                }
+            }
             delete pkt;
             return;
         }
@@ -1545,6 +1560,12 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
         // sanity checks
         assert(pkt->hasData());
         assert(pkt->getSize() == blkSize);
+        
+        /// 这里我们会更新预取请求的Fill时间戳
+        if (pkt->packetType_ == prefetch_filter::Pref) {
+            pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 1,
+                    Packet::WhenFill, curTick());
+        }
 
         /// 针对Fill事件进行处理
         if (prefetchFilter_) {
@@ -1882,6 +1903,13 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
     // MSHR request, proceed to get the packet to send downstream
     PacketPtr pkt = createMissPacket(tgt_pkt, blk, mshr->needsWritable(),
                                      mshr->isWholeLineWrite());
+    
+    /// 获取一个额外的时间戳信息
+    if (pkt && tgt_pkt && pkt->packetType_ == prefetch_filter::Pref) {
+        pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ - 1 : 0, Packet::WhenSend,
+                tgt_pkt->getTimeStamp(cacheLevel_ ? cacheLevel_ - 1 : 0,
+                Packet::WhenSend));
+    }
 
     mshr->isForward = (pkt == nullptr);
 
@@ -1935,6 +1963,12 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
         pkt->setSatisfied();
     }
 
+    /// 对于一个发射的预取请求标记时间戳
+    if (pkt->packetType_ == prefetch_filter::Pref) {
+        pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 1,
+                Packet::WhenSend, curTick());
+    }
+    
     if (!memSidePort.sendTimingReq(pkt)) {
         DPRINTF(Cache, "Failed to send packet @0x%lx\n", pkt->getAddr());
 
@@ -1950,7 +1984,6 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
         // it gets retried
         return true;
     } else {
-        
         // As part of the call to sendTimingReq the packet is
         // forwarded to all neighbouring caches (and any caches
         // above them) as a snoop. Thus at this point we know if
@@ -2846,17 +2879,15 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
         DPRINTF(Cache, "%s schedule send event with entry"
                 "[%p, MSHR? %d] failed\n",
                 cache.getName().c_str(), entry, entry ? entry->isMSHR_ : -1);
-        /*
         if (cache.prefetchFilter_ && cache.prefetcher) {
             uint8_t newDegree;
-            cache.prefetchFilter_.notifyCacheReqSentFailed(&cache,
+            cache.prefetchFilter_->notifyCacheReqSentFailed(&cache,
                     cache.writeBuffer.numEntries + cache.mshrQueue.numEntries,
-                    cache.writeBuffer.numWatingDemands +
-                    cache.mshrQueue.numWaitingDemands,
-                    cache.prefetcher.originDegree_, &newDegree);
-            cache.prefetcher.throttlingDegree_ = newDegree;
+                    cache.writeBuffer.numWaitingDemands_ +
+                    cache.mshrQueue.numWaitingDemands_,
+                    cache.prefetcher->originDegree_, &newDegree);
+            // cache.prefetcher->throttlingDegree_ = newDegree;
         }
-        */
     }
 }
 
