@@ -904,7 +904,9 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             if (tgt_pkt->packetType_ == prefetch_filter::Pref &&
                     tgt_pkt->targetCacheLevel_ < cacheLevel_) {
                 /// 如果是一个提级预取，并且预取还要继续上传，会复制备用MSHR
-                tgt_pkt->mshr_ = pkt->mshr_;
+                if (!tgt_pkt->mshr_) {
+                    tgt_pkt->mshr_ = pkt->mshr_;
+                }
                 /// 同时拷贝关键的时间戳信息
                 if (!mshr->needPostProcess_) {
                     tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
@@ -1094,7 +1096,7 @@ Cache::doTimingSupplyResponse(PacketPtr req_pkt, const uint8_t *blk_data,
     pkt->makeTimingResponse();
     /// 标记最近处理的Cache
     pkt->recentCache_ = this;
-    pkt->mshr_ = req_pkt->mshr_;
+    // pkt->mshr_ = req_pkt->mshr_;
 
     if (pkt->isRead()) {
         pkt->setDataFromBlock(blk_data, blkSize);
