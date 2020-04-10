@@ -241,8 +241,8 @@ void
 QueuedPrefetcher::regStats()
 {
     /// 依据预取度初始化
-    assert(originDegree_ != 0);
-    recentLevelDownPref_.resize(originDegree_ << 1, std::pair<Addr, uint8_t>(0, 0));
+    recentLevelDownPref_.resize(originDegree_ << 1,
+            std::pair<Addr, uint8_t>(0, 0));
 
     BasePrefetcher::regStats();
 

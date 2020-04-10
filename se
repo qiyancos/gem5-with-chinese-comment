@@ -152,7 +152,7 @@ setGem5(){
         debugFlags="PrefetchFilterTimer"
         #"XBar,CoherentXBar,PacketQueue,Cache,CachePort,CacheRepl,CacheVerbose" #
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
-        debugStartTick="" #"80000000000"
+        debugStartTick="12100000000"
         debugEndTick=""
 
     enableCheckPoint="No" # [Yes/No]

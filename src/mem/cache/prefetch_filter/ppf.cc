@@ -789,7 +789,7 @@ int PerceptronPrefetchFilter::notifyCacheReqSentFailed(BaseCache* cache,
         const int totalEntries, const int waitingDemands,
         const uint8_t originalDegree, uint8_t* newDegree) {
     // 没有预取器的层级不做处理
-    if (!usePref_[cache->cacheLevel_]) {
+    if (!usePref_[cache->cacheLevel_] || !originalDegree) {
         return 0;
     }
     
