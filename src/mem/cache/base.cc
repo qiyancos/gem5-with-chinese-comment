@@ -591,9 +591,23 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         /// 那么会获取Pakcet里面存放着的额外MSHR
         mshr = pkt->mshr_.get();
         MSHR *oldmshr = mshrQueue.findMatch(pkt->getAddr(), pkt->isSecure());
+        WriteQueueEntry *oldWBEntry = writeBuffer.findPending(
+                pkt->getAddr(), pkt->isSecure());
         /// 如果提升等级发现了已经存在MSHR
         if (oldmshr) {
             /// 如果已存在的MSHR，则会直接无效化提升等级预取的响应
+            assert(mshr);
+            // delete mshr;
+            if (prefetchFilter_) {
+                for (auto cpuId : cpuIds_) {
+                    (*BasePrefetchFilter::dismissedLevelUpPrefLate_[
+                            cacheLevel_])[cpuId]++;
+                }
+            }
+            delete pkt;
+            return;
+        } else if (oldWBEntry) {
+            /// 如果已存在的WriteBuffer，则会直接无效化提升等级预取的响应
             assert(mshr);
             // delete mshr;
             if (prefetchFilter_) {
