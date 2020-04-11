@@ -1,7 +1,9 @@
 #! /bin/bash
 set -e
 root=`dirname $0`
-cd $root/..
+cd $root
+tempDir=$PWD
+cd ..
 root=$PWD
 
 cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
@@ -40,14 +42,28 @@ runTask() {
     else
         echo -n "Error: some errors occurred with test: "
         echo "$file-$testName-$taskNum"
-        echo $task >> /tmp/retry.list
+        echo $task >> $tempDir/retry.list
         failFlag=1
     fi
     # rm -rf $taskDir/spec
 }
 
 initRunTask() {
-    echo "-- Generating task list..."
+    if [ -s $tempDir/over.list ]
+    then
+        echo -n "-- Found unfinished runing record, continue? [Y/N]: "
+        read flag
+        if [[ ${flag}x =~ ^(x|Yx|yx)$ ]]
+        then
+            continueFlag=1
+            echo "-- Regenerating task list..."
+        else
+            rm $tempDir/over.list
+            touch $tempDir/over.list
+            echo "-- Generating task list..."
+        fi
+    fi
+
     cd $root/test_script
     taskCount=0
     for target in `echo $testTarget`
@@ -60,56 +76,71 @@ initRunTask() {
             for testName in $testList
             do
                 echo "    ${file}:${taskNum}:${testName}"
-                runTasks="$runTasks ${file}:${taskNum}:${testName}"
+                newTask="${file}:${taskNum}:${testName}"
+                if [ "`grep $newTask $tempDir/over.list`x" == x ]
+                then runTasks="$runTasks $newTask"
+                fi
                 taskCount=$[taskCount + 1]
             done
         done
     done
 
-    if [ -f /tmp/mp.lock ]
+    if [ -f $tempDir/mp.lock ]
     then
         echo "Error: Multi program is already locked."
         exit -1
     else
         lockID=`date | base64 -i`
-        echo "$lockID" > /tmp/mp.lock
-        echo "0 idle" > /tmp/mp.list
+        echo "$lockID" > $tempDir/mp.lock
+        echo "0 idle" > $tempDir/mp.list
         threadID=1
         while [ $threadID -lt $cpuNum ]
         do
-            echo "$threadID idle" >> /tmp/mp.list
+            echo "$threadID idle" >> $tempDir/mp.list
             threadID=$[threadID + 1]
         done
-        echo "Fail 0" >> /tmp/mp.list
-        echo "Pass 0" >> /tmp/mp.list
-        echo "Over 0" >> /tmp/mp.list
-        echo "Total $taskCount" >> /tmp/mp.list
-        rm -rf /tmp/mp.lock
+        if [ x$continueFlag != x ]
+        then
+            sed -n /Fail/p >> $tempDir/mp.list
+            sed -n /Pass/p >> $tempDir/mp.list
+            sed -n /Over/p >> $tempDir/mp.list
+        else
+            echo "Fail 0" >> $tempDir/mp.list
+            echo "Pass 0" >> $tempDir/mp.list
+            echo "Over 0" >> $tempDir/mp.list
+        fi
+        echo "Total $taskCount" >> $tempDir/mp.list
+        rm -rf $tempDir/mp.lock
     fi
 }
 
-atomicChange() {
+atomicFinish() {
     lockID=`date | base64 -i`
     echo ">> Trying get lock..."
-    while [ -f /tmp/mp.lock ]
+    while [ -f $tempDir/mp.lock ]
     do sleep 0.1
     done
-    while [ ! -f /tmp/mp.lock ]
-    do echo "$lockID" > /tmp/mp.lock
+    while [ ! -f $tempDir/mp.lock ]
+    do echo "$lockID" > $tempDir/mp.lock
     done
     
-    while [ x"`cat /tmp/mp.lock`" != x$lockID ]
+    while [ x"`cat $tempDir/mp.lock`" != x$lockID ]
     do
-        while [ -f /tmp/mp.lock ]
+        while [ -f $tempDir/mp.lock ]
         do sleep 0.1
         done
-        while [ ! -f /tmp/mp.lock ]
-        do echo "$lockID" > /tmp/mp.lock
+        while [ ! -f $tempDir/mp.lock ]
+        do echo "$lockID" > $tempDir/mp.lock
         done
     done
     echo ">> Control file locked."
-    sed -i "/^$1 /c$1 $2" /tmp/mp.list
-    rm -rf /tmp/mp.lock
+    
+    sed -i "/^$1 /c$1 $2" $tempDir/mp.list
+    if [ x$3 != x ]
+    then echo $3 >> $tempDir/over.list
+    fi
+
+    rm -rf $tempDir/mp.lock
     echo ">> Control file unlocked."
 }
 
@@ -125,7 +156,7 @@ runAllTask() {
             threadID=0
             while [ $threadID -lt $cpuNum ]
             do
-                if [ "x`grep "^$threadID idle" /tmp/mp.list`" != x ]
+                if [ "x`grep "^$threadID idle" $tempDir/mp.list`" != x ]
                 then
                     idleThreadID=$threadID
                     break
@@ -145,7 +176,7 @@ runAllTask() {
                 break
             fi
         done
-        atomicChange $idleThreadID "run $task"
+        atomicFinish $idleThreadID "run $task"
         taskArr=(`echo $task | sed 's/:/ /g'`)
         file=${taskArr[0]}
         taskNum=${taskArr[1]}
@@ -155,15 +186,15 @@ runAllTask() {
         mkdir -p $taskDir
         {
             runTask
-            failCount=`awk '/Fail/ {print $2}' /tmp/mp.list`
-            passCount=`awk '/Pass/ {print $2}' /tmp/mp.list`
-            taskCount=`awk '/Over/ {print $2}' /tmp/mp.list`
+            failCount=`awk '/Fail/ {print $2}' $tempDir/mp.list`
+            passCount=`awk '/Pass/ {print $2}' $tempDir/mp.list`
+            taskCount=`awk '/Over/ {print $2}' $tempDir/mp.list`
             if [ $failFlag = 1 ]
-            then atomicChange "Fail" "$[failCount + 1]"
-            else atomicChange "Pass" "$[passCount + 1]"
+            then atomicFinish "Fail" "$[failCount + 1]"
+            else atomicFinish "Pass" "$[passCount + 1]"
             fi
-            atomicChange "Over" "$[taskCount + 1]"
-            atomicChange $idleThreadID "idle"
+            atomicFinish Over "$[taskCount + 1]" $task
+            atomicFinish $idleThreadID "idle"
         } &
         while [ "x`find $taskDir -name "m5out"`" = x ]
         do
@@ -182,7 +213,7 @@ runAllTask() {
 }
 
 retryRunTask() {
-    retryTasks=$(cat /tmp/retry.list)
+    retryTasks=$(cat $tempDir/retry.list)
     if [ "x$retryTasks" != x ]
     then
         echo "-- Following task didn't run properly:"
@@ -198,7 +229,7 @@ retryRunTask() {
 initRunTask
 while [ x$retryFlag = x -o x$retryFlag = x1 ]
 do
-    rm -rf /tmp/retry.list
+    rm -rf $tempDir/retry.list
     echo "-- Start running left tasks."
     runAllTask
     echo "-- Left tasks running over."
