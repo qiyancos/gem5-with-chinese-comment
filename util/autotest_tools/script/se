@@ -40,12 +40,14 @@ setScript(){
 additionalChange() {
     tagPrefDegree=2
     stridePrefConfThresh=4 # 0-7
-    stridePrefDegree=16
+    stridePrefDegree=4
+    useFilter=True
 
     # Change Tagged Prefetcher Degree
     sed -i "146c\    degree = Param.Int($tagPrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
     sed -i "127c\    thresh_conf = Param.Int($stridePrefConfThresh, \"Threshold confidence level\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
     sed -i "135c\    degree = Param.Int($stridePrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "40c\    enable_filter = Param.Bool($useFilter, \"Whether to enable Filter Engine\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
 }
 
 ################# settings for gem5 #################
@@ -134,7 +136,7 @@ setGem5(){
         L2assoc="8"
         L2MSHR="20"
         L2WriteBuffer="8"
-        L2prefetcher="StridePrefetcher"
+        L2prefetcher=""
 
     enableL3Cache="Yes"
         numL3Caches=""
@@ -148,7 +150,7 @@ setGem5(){
         numCpuPerGroup=2
 
     enableDebug="Yes" # [Yes/No]
-        debugOutputDir="$gem5Dir/debug_temp"
+        debugOutputDir=""
         debugFlags="PrefetchFilterTimer"
         #"XBar,CoherentXBar,PacketQueue,Cache,CachePort,CacheRepl,CacheVerbose" #
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 

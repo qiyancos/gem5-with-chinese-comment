@@ -6,10 +6,9 @@ root=$PWD
 
 cpuNum=`lscpu | awk '/^CPU\(s\):/{print $2}'`
 cpuNum=$[cpuNum * 7 / 10]
-testList="400.perlbench 401.bzip2 403.gcc 435.gromacs 445.gobmk 447.dealII 450.soplex 456.hmmer 458.sjeng 459.GemsFDTD 462.libquantum 464.h264ref 470.lbm 473.astar 481.wrf 482.sphinx3"
+testList="400.perlbench 401.bzip2 403.gcc 435.gromacs 437.leslie3d 444.namd 445.gobmk 447.dealII 450.soplex 453.povray 456.hmmer 458.sjeng 459.GemsFDTD 462.libquantum 464.h264ref 470.lbm 471.omnetpp 473.astar 481.wrf 482.sphinx3 483.xalancbmk"
 #"459.GemsFDTD 447.dealII 473.astar" #`$root/script/se -l`
-testTarget="l2_pref_best_degree_test"
-# testTarget="l1_agressive_test  l1_size_test l2_preftype_test  l3_agressive_test  l3_size_test l1_preftype_test l2_agressive_test l2_size_test l3_preftype_test"
+testTarget="l2_ppf_simple_test"
 testFolder=std_test
 newTaskGap="30"
 
@@ -44,7 +43,7 @@ runTask() {
         echo $task >> /tmp/retry.list
         failFlag=1
     fi
-    rm -rf $taskDir/spec
+    # rm -rf $taskDir/spec
 }
 
 initRunTask() {

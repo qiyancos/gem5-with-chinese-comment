@@ -211,9 +211,60 @@ genL2PrefBestDegreeTest() {
     done
 }
 
-genL1SizeTest
-genL2SizeTest
-genL3SizeTest
+genL2PrefDebugTest() {
+    echo ">> Generating test scripts for L2PrefDebugTest..."
+    targetDir=$root/test_script/l2_pref_debug_test
+    rm -rf $targetDir
+    mkdir -p $targetDir
+    pref="StridePrefetcher"
+    for taskNum in 1 16
+    do
+        conf=4
+        for degree in 0
+        do
+            sed -e "s/L2prefetcher=\"/L2prefetcher=\"$pref/" \
+                    -e "s/stridePrefDegree=4/stridePrefDegree=$degree/" \
+                    $root/script/se > \
+                    $targetDir/task${taskNum}_${pref}_${conf}_${degree}
+            chmod +x $targetDir/task${taskNum}_${pref}_${conf}_${degree}
+        done
+    done
+}
+
+genL2PPFSimpleTest() {
+    echo ">> Generating test scripts for L2PPFSimpleTest..."
+    targetDir=$root/test_script/l2_ppf_simple_test
+    rm -rf $targetDir
+    mkdir -p $targetDir
+    pref="StridePrefetcher"
+    for taskNum in 1 2 4 6 8 10 12 14 16
+    do
+        conf=4
+        degree=16
+        for useFilter in True False
+        do
+            if [ $useFilter == True ]
+            then targetFile=$targetDir/task${taskNum}_${pref}_${conf}_${degree}_filter
+            else targetFile=$targetDir/task${taskNum}_${pref}_${conf}_${degree}_nofilter
+            fi
+            sed -e "s/L2prefetcher=\"/L2prefetcher=\"$pref/" \
+                    -e "s/stridePrefDegree=4/stridePrefDegree=$degree/" \
+                    -e "s/useFilter=True/useFilter=$useFilter/" \
+                    $root/script/se > $targetFile
+            chmod +x $targetFile
+        done
+        degree=0
+        sed -e "s/L2prefetcher=\"/L2prefetcher=\"$pref/" \
+                -e "s/stridePrefDegree=4/stridePrefDegree=$degree/" \
+                $root/script/se > \
+                $targetDir/task${taskNum}_${pref}_${conf}_${degree}
+        chmod +x $targetDir/task${taskNum}_${pref}_${conf}_${degree}
+    done
+}
+
+#genL1SizeTest
+#genL2SizeTest
+#genL3SizeTest
 genL1PrefAgressiveTest
 genL2PrefAgressiveTest
 genL3PrefAgressiveTest
@@ -222,3 +273,5 @@ genL2PrefTypeTest
 genL3PrefTypeTest
 genL2PrefSimpleTest
 genL2PrefBestDegreeTest
+genL2PrefDebugTest
+genL2PPFSimpleTest

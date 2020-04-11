@@ -37,7 +37,7 @@ class BasePrefetchFilter(ClockedObject):
     cxx_header = "mem/cache/prefetch_filter/base.hh"
     sys = Param.System(Parent.any, "System this prefetcher belongs to")
 
-    enable_filter = Param.Bool(True, "Whether to enable Filter Engine")
+    enable_filter = Param.Bool(False, "Whether to enable Filter Engine")
     enable_stats = Param.Bool(True, "Whether to enable Stats Engine")
 
     enable_recursive_replace = Param.Bool(True, "Whether to use old replaced"
