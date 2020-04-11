@@ -42,16 +42,19 @@ runTask() {
     else
         echo -n "Error: some errors occurred with test: "
         echo "$file-$testName-$taskNum"
-        echo $task >> $tempDir/retry.list
+        echo $task >> $tempDir/fail.list
         failFlag=1
     fi
     # rm -rf $taskDir/spec
 }
 
 initRunTask() {
+    echo "-- Start running test group [$testTarget]"
     if [ -s $tempDir/over.list ]
     then
-        echo -n "-- Found unfinished runing record, continue? [Y/N]: "
+        echo "-- Found unfinished runing record:"
+        cat $tempDir/over.list
+        echo; echo -n "Continue last-time runing? [Y/N]: "
         read flag
         if [[ ${flag}x =~ ^(x|Yx|yx)$ ]]
         then
@@ -62,6 +65,7 @@ initRunTask() {
             touch $tempDir/over.list
             echo "-- Generating task list..."
         fi
+    else touch $tempDir/over.list
     fi
 
     cd $root/test_script
@@ -75,10 +79,13 @@ initRunTask() {
             taskNum=`basename $file | sed 's/task\([0-9]*\)_.*/\1/g'`
             for testName in $testList
             do
-                echo "    ${file}:${taskNum}:${testName}"
                 newTask="${file}:${taskNum}:${testName}"
                 if [ "`grep $newTask $tempDir/over.list`x" == x ]
-                then runTasks="$runTasks $newTask"
+                then
+                    runTasks="$runTasks $newTask"
+                    echo "    Add task [$newTask]"
+                else
+                    echo "    Ignore finished task [$newTask]"
                 fi
                 taskCount=$[taskCount + 1]
             done
@@ -92,6 +99,7 @@ initRunTask() {
     else
         lockID=`date | base64 -i`
         echo "$lockID" > $tempDir/mp.lock
+        mv $tempDir/mp.list $tempDir/mp.list.bak
         echo "0 idle" > $tempDir/mp.list
         threadID=1
         while [ $threadID -lt $cpuNum ]
@@ -101,15 +109,16 @@ initRunTask() {
         done
         if [ x$continueFlag != x ]
         then
-            sed -n /Fail/p >> $tempDir/mp.list
-            sed -n /Pass/p >> $tempDir/mp.list
-            sed -n /Over/p >> $tempDir/mp.list
+            sed -n /Fail/p $tempDir/mp.list.bak >> $tempDir/mp.list
+            sed -n /Pass/p $tempDir/mp.list.bak >> $tempDir/mp.list
+            sed -n /Over/p $tempDir/mp.list.bak >> $tempDir/mp.list
         else
             echo "Fail 0" >> $tempDir/mp.list
             echo "Pass 0" >> $tempDir/mp.list
             echo "Over 0" >> $tempDir/mp.list
         fi
         echo "Total $taskCount" >> $tempDir/mp.list
+        rm -rf $tempDir/mp.list.bak
         rm -rf $tempDir/mp.lock
     fi
 }
@@ -213,7 +222,7 @@ runAllTask() {
 }
 
 retryRunTask() {
-    retryTasks=$(cat $tempDir/retry.list)
+    retryTasks=$(cat $tempDir/fail.list)
     if [ "x$retryTasks" != x ]
     then
         echo "-- Following task didn't run properly:"
@@ -229,7 +238,7 @@ retryRunTask() {
 initRunTask
 while [ x$retryFlag = x -o x$retryFlag = x1 ]
 do
-    rm -rf $tempDir/retry.list
+    rm -rf $tempDir/fail.list
     echo "-- Start running left tasks."
     runAllTask
     echo "-- Left tasks running over."
