@@ -904,13 +904,13 @@ int IdealPrefetchUsefulTable::updatePrefTiming(
         
         // 计算单核心Useful Degree
         int singleCoreDegree;
-        if (singleCoreCount == 0) {
+        if (singleCoreCount < PREF_DEGREE_HARM) {
             singleCoreDegree = 0;
-        } else if (singleCoreCount < PREF_DEGREE_1) {
+        } else if (singleCoreCount < PREF_DEGREE_USELESS) {
             singleCoreDegree = 1;
-        } else if (singleCoreCount < PREF_DEGREE_2) {
+        } else if (singleCoreCount == PREF_DEGREE_USELESS) {
             singleCoreDegree = 2;
-        } else if (singleCoreCount < PREF_DEGREE_3) {
+        } else if (singleCoreCount < PREF_DEGREE_USEFUL) {
             singleCoreDegree = 3;
         } else {
             singleCoreDegree = 4;
@@ -918,13 +918,13 @@ int IdealPrefetchUsefulTable::updatePrefTiming(
         
         // 更新多核Useful Degree
         int crossCoreDegree;
-        if (crossCoreCount == 0) {
+        if (crossCoreCount < PREF_DEGREE_HARM) {
             crossCoreDegree = 0;
-        } else if (crossCoreCount < PREF_DEGREE_1) {
+        } else if (crossCoreCount < PREF_DEGREE_USELESS) {
             crossCoreDegree = 1;
-        } else if (crossCoreCount < PREF_DEGREE_2) {
+        } else if (crossCoreCount == PREF_DEGREE_USELESS) {
             crossCoreDegree = 2;
-        } else if (crossCoreCount < PREF_DEGREE_3) {
+        } else if (crossCoreCount < PREF_DEGREE_USEFUL) {
             crossCoreDegree = 3;
         } else {
             crossCoreDegree = 4;

@@ -1014,7 +1014,10 @@ void BasePrefetchFilter::regStats() {
             for (j = 0; j < prefUsefulDegree_[i].size(); j++) {
                 usefulTypeStr = j ? "cross_core" : "single_core";
                 for (k = 0; k < TOTAL_DEGREE; k++) {
-                    std::string degreeStr = std::to_string(k);
+                    int realDegree = k - (TOTAL_DEGREE >> 1);
+                    std::string degreeStr = realDegree < 0 ?
+                            std::string("_") + std::to_string(-realDegree) :
+                            std::to_string(realDegree);
                     prefUsefulDegree_[i][j][k] = new Stats::Vector();
                     prefUsefulDegree_[i][j][k]->init(numCpus_)
                             .name(name() + ".prefetch_useful_degree_from_" +

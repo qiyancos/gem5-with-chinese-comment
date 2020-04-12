@@ -158,9 +158,9 @@ int addNewPrefUsefulType(const std::string& name,
         const uint64_t&)> judgeFunc);
 
 #define TOTAL_DEGREE 5
-#define PREF_DEGREE_1 4
-#define PREF_DEGREE_2 8
-#define PREF_DEGREE_3 12
+#define PREF_DEGREE_HARM -4
+#define PREF_DEGREE_USELESS 0
+#define PREF_DEGREE_USEFUL 4
 
 class PrefetchUsefulInfo {
 public:

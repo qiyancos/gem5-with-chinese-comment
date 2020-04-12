@@ -340,11 +340,11 @@ int PrefetchUsefulInfo::getLocatedCaches(std::set<BaseCache*>* caches) {
 int PrefetchUsefulInfo::isUseful() {
     // 只有有用程度达到一定标准才是有用预取
     if (info_.singleCoreUsefulCount_ - info_.singleCoreHarmCount_ >
-            PREF_DEGREE_2 && info_.crossCoreUsefulCount_ >=
+            PREF_DEGREE_USELESS && info_.crossCoreUsefulCount_ >=
             info_.crossCoreHarmCount_) {
         return 1;
     } else if (info_.crossCoreUsefulCount_ - info_.crossCoreHarmCount_ >
-            PREF_DEGREE_2 && info_.singleCoreUsefulCount_ >=
+            PREF_DEGREE_USELESS && info_.singleCoreUsefulCount_ >=
             info_.singleCoreHarmCount_) {
         return 1;
     }

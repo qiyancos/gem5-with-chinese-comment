@@ -149,10 +149,10 @@ setGem5(){
 
     enableDebug="Yes" # [Yes/No]
         debugOutputDir="$gem5Dir/debug_temp"
-        debugFlags="PrefetchFilterTimer,Commit,LSQ,LSQUnit,IEW,Fetch"
+        debugFlags="PrefetchFilterTimer"
         #"XBar,CoherentXBar,PacketQueue,Cache,CachePort,CacheRepl,CacheVerbose" #
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
-        debugStartTick="12300000000"
+        debugStartTick=""
         debugEndTick=""
 
     enableCheckPoint="No" # [Yes/No]
