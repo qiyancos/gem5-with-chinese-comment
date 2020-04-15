@@ -102,7 +102,12 @@ Cache::satisfyRequest(PacketPtr pkt, CacheBlk *blk,
                 // keeps it marked dirty (in the modified state)
                 if (blk->isDirty()) {
                     pkt->setCacheResponding();
-                    blk->status &= ~BlkDirty;
+                    /// 如果目标当前Packet目标等级在本级别以上
+                    /// 才会清除Dirty位
+                    if (!(pkt->packetType_ == prefetch_filter::Pref &&
+                            pkt->targetCacheLevel_ >= cacheLevel_)) {
+                        blk->status &= ~BlkDirty;
+                    }
                 }
             } else if (blk->isWritable() && !pending_downgrade &&
                        !pkt->hasSharers() &&
@@ -139,7 +144,13 @@ Cache::satisfyRequest(PacketPtr pkt, CacheBlk *blk,
                         // the cache hierarchy through a cache,
                         // and first snoop upwards in all other
                         // branches
-                        blk->status &= ~BlkDirty;
+                        
+                        /// 如果目标当前Packet目标等级在本级别以上
+                        /// 才会清除Dirty位
+                        if (!(pkt->packetType_ == prefetch_filter::Pref &&
+                                pkt->targetCacheLevel_ >= cacheLevel_)) {
+                            blk->status &= ~BlkDirty;
+                        }
                     } else {
                         // if we're responding after our own miss,
                         // there's a window where the recipient didn't
