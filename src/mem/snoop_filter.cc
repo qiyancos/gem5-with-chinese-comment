@@ -118,6 +118,8 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port,
             is_hit = false;
         } else {
             if (isLevelUpPref) {
+                panic_if(!cpkt->isResponse(),
+                        "Level-up prefetch does not expect request packet");
                 DEBUG_MEM("SnoopFilter[%p] cancle adding new entry for "
                         "level-up prefetch @0x%lx ", this, line_addr);
                 /// 如果发现已经存在了一个其他记录，当前是一个提级预取

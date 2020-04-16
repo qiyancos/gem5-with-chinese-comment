@@ -1082,8 +1082,9 @@ int PerceptronPrefetchFilter::helpCorrectPref(
 int PerceptronPrefetchFilter::train(Tables& workTable,
         const uint64_t& prefAddr, const uint8_t cacheLevel,
         const TrainType type) {
-    DEBUG_PF(1, "Training prefetch @0x%lx with type %s in %s",
-            prefAddr, getTrainTypeStr(type).c_str(), 
+    DEBUG_PF(1, "Training prefetch @0x%lx for %s with type %s by %s",
+            prefAddr, workTable.getName().c_str(),
+            getTrainTypeStr(type).c_str(), 
             BaseCache::levelName_[cacheLevel].c_str());
     // 查询Prefetch Table
     std::vector<uint16_t>* prefIndexPtr = nullptr;

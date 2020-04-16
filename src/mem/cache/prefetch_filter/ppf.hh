@@ -258,6 +258,15 @@ private:
         // 默认初始化函数
         Tables() {}
 
+        // 获取完整名称
+        std::string getName() {
+            if (cpuIds_.size() > 1) {
+                return name_ + "_shared";
+            } else {
+                return name_ + "_" + std::to_string(*(cpuIds_.begin()));
+            }
+        }
+
         class PrefInfoEntry {
         public:
             // 简单初始化函数
