@@ -392,22 +392,27 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
 
     MSHR *mshr = mshrQueue.findMatch(blk_addr, pkt->isSecure());
     
-    /// 进行发生Miss情况的训练操作（写操作不会合并MSHR）
-    if (prefetchFilter_ && pkt->isRead()) {
+    /// 进行发生Miss情况的训练操作，处理Demand的Miss更新
+    /// dmd->dmd; dmd->null; dmd->pref; dmd->pendingPref; pref->null
+    if (prefetchFilter_ && pkt->isRead() && (!mshr ||
+            pkt->packetType_ == prefetch_filter::Dmd)) {
         PacketPtr combinedPkt = mshr ? mshr->getTarget()->pkt : nullptr;
         prefetch_filter::DataTypeInfo infoPair;
         infoPair.source = pkt->packetType_;
         if (mshr) {
             infoPair.target = mshr->getTarget()->pkt->packetType_;
-            if (infoPair.target == prefetch_filter::Pref && mshr->inService) {
-                infoPair.target = prefetch_filter::PendingPref;
+            if (infoPair.target == prefetch_filter::Pref) {
+                /// dmd->pref会处理成dmd->null只更新计数，不删除预取
+                infoPair.target = mshr->inService ?
+                        prefetch_filter::PendingPref :
+                        prefetch_filter::NullType;
             }
         } else {
             infoPair.target = prefetch_filter::NullType;
         }
         prefetchFilter_->notifyCacheMiss(this, pkt, combinedPkt, infoPair);
     }
-
+    
     // Software prefetch handling:
     // To keep the core from waiting on data it won't look at
     // anyway, send back a response with dummy data. Miss handling
@@ -469,6 +474,7 @@ Cache::recvTimingReq(PacketPtr pkt)
     // 为来自CPU的Packet添加属性
     if (cacheLevel_ < 2 && pkt->packetType_ == prefetch_filter::Dmd) {
         pkt->caches_.insert(this);
+        pkt->recentCache_ = this;
     }
     
     if (pkt->packetType_ == prefetch_filter::Pref) {

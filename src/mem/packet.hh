@@ -293,8 +293,8 @@ class Packet : public Printable
     /// 记录目标的Cache等级，若是非Prefetch，該数值应该是255
     uint8_t targetCacheLevel_ = 255;
 
-    /// 记录当前Packet的全局唯一预取Index
-    uint64_t prefIndex_ = 0;
+    /// 记录当前Packet的全局预取Index
+    std::set<uint64_t> prefIndexes_;
 
     /// 当前Packet的类型，预取/Demand Request
     prefetch_filter::DataType packetType_ = prefetch_filter::NullType;
@@ -313,7 +313,16 @@ class Packet : public Printable
     /// 初始化一个预取Packet
     void initPref(BaseCache* srcCache, const uint8_t targetCacheLevel,
             const std::list<uint64_t>& recentBranchPC);
-    
+
+    /// 用于合并预取Packet的信息
+    void combinePacket(PacketPtr pkt) {
+        caches_.insert(pkt->caches_.begin(), pkt->caches_.end());
+        if (packetType_ != prefetch_filter::Pref) {
+            prefIndexes_.insert(pkt->prefIndexes_.begin(),
+                    pkt->prefIndexes_.end());
+        }
+    }
+
     /// 用于添加一个源Cache，同时他是一个最近处理的Cache
     void addSrcCache(BaseCache* cache) {
         recentCache_ = cache;
@@ -332,7 +341,8 @@ class Packet : public Printable
         caches_.insert(pkt->caches_.begin(), pkt->caches_.end());
         srcCacheLevel_ = pkt->srcCacheLevel_;
         targetCacheLevel_ = pkt->targetCacheLevel_;
-        prefIndex_ = pkt->prefIndex_;
+        prefIndexes_.insert(pkt->prefIndexes_.begin(),
+                pkt->prefIndexes_.end());
         packetType_ = pkt->packetType_;
         recentBranchPC_ = pkt->recentBranchPC_;
     }

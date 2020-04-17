@@ -570,12 +570,8 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
         } else if (info.target == PendingPref) {
             // 如果Demand合并了一个PendingPref，不会进行操作
             // 依赖于PostProcess处理即可
-        } else {
-            // 对于一个Miss的Demand Request需要确定其有害性
-            // 生成新的MSHR或者合并到Prefetch的MSHR都可以
-            CHECK_RET_EXIT(prefUsefulTable_[cache].updateMiss(pkt->getAddr() &
-                    cacheLineAddrMask_),
-                    "Failed to update dmd miss in prefetch useful table");
+        }
+        if (info.target == Dmd || info.target == NullType) {
             if (usePref_[cache->cacheLevel_]) {
                 // 同时尝试训练一个已经被拒绝的预取
                 Tables& workTable = getTable(cache);
@@ -585,28 +581,18 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
                         cacheLevel, DemandMiss),
                         "Failed to update training data for demand miss");
             }
+            // 对于一个Miss的Demand Request需要确定其有害性
+            // 生成新的MSHR或者合并到Prefetch的MSHR都可以
+            CHECK_RET_EXIT(prefUsefulTable_[cache].updateMiss(pkt->getAddr() &
+                    cacheLineAddrMask_),
+                    "Failed to update dmd miss in prefetch useful table");
         }
-        // 对于Demand合并到Prefetch的情况无须处理
-    } else if (info.target == Pref) {
+    } else if (info.target == Pref || info.target == PendingPref) {
         // 如果一个预取Miss被预取覆盖了，则被覆盖的预取是无用的
-        uselessPkt = pkt->srcCacheLevel_ ==
-                combinedPkt->srcCacheLevel_ ? combinedPkt :
-                (pkt->srcCacheLevel_ > combinedPkt->srcCacheLevel_ ?
-                combinedPkt : pkt);
+        uselessPkt = combinedPkt;
+        CHECK_ARGS_EXIT(uselessPkt, "No combined packet provided");
         errorInfo = "Failed to update training when prefetch miss added "
-                "to prefetch miss";
-    } else if (info.target == PendingPref) {
-        // 如果一个预取合并到一个Pending预取，同时新的预取不会被删除
-        // 则训练一个无用预取
-        if (pkt->targetCacheLevel_ >= cache->cacheLevel_) {
-            uselessPkt = pkt;
-            errorInfo = "Failed to update training when prefetch miss added "
-                    "to pending prefetch";
-        }
-    } else if (info.target == Dmd) {
-        uselessPkt = pkt;
-        errorInfo = "Failed to update training when pref miss "
-                "added to demand miss"; 
+                "to (pending) prefetch miss";
     } else if (info.target == NullType && *(pkt->caches_.begin()) == cache) {
         // 根据最后的结果更新统计数据
         for (auto cpuId : cache->cpuIds_) {
@@ -615,7 +601,7 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
     }
 
     if (uselessPkt) {
-        CHECK_ARGS(uselessPkt->caches_.size() == 1,
+        CHECK_ARGS_EXIT(uselessPkt->caches_.size() == 1,
                 "Prefetch packet should have only one source cache");
         // 如果一个预取Miss并合并到了Demand Request Miss，属于无用预取
         for (BaseCache* srcCache : uselessPkt->caches_) {
@@ -1475,7 +1461,7 @@ void PerceptronPrefetchFilter::regStats() {
                 prefTrainingType_[i][j] = new Stats::Vector();
                 prefTrainingType_[i][j]->init(numCpus_)
                         .name(name() + ".ppf_training_type_" + typeStr +
-                                "_from_" + workTable.name_)
+                                "_for_" + workTable.name_)
                         .desc(std::string("Times of training with type ") +
                                 typeStr + " from " + workTable.name_)
                         .flags(total);

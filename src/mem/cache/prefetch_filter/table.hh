@@ -164,7 +164,8 @@ public:
     IdealPrefetchUsefulTable(BaseCache* cache, const bool valid);
     
     // 判断一个数据是否是一个已知的预取
-    int checkDataType(const uint64_t& addr, const uint64_t& prefIndex,
+    int checkDataType(const uint64_t& addr,
+            const std::set<uint64_t>& prefIndexes,
             const DataType type, const bool isMiss);
 
     // 判断一个预取是否被Demand Request覆盖了
@@ -181,7 +182,7 @@ public:
             const DataType type);
 
     // 在预取数据被预取命中的时候进行合并记录
-    int combinePref(const uint64_t& addr, const uint64_t& index,
+    int combinePref(const uint64_t& addr, const std::set<uint64_t>& indexes,
             std::set<BaseCache*>* correlatedCaches = nullptr);
    
     // 在预取被Demand Request替换掉的时候进行处理，同时处理无效化
@@ -216,7 +217,7 @@ public:
     
     // 设置预取合并的任务
     int addPrefCombination(const Tick& completeTick, const uint64_t& addr,
-            const uint64_t& index);
+            const std::set<uint64_t>& indexes);
     
     // 依据给定的时钟周期将到点的预取无效化
     int updateInvalidation(const Tick& tickNow,
@@ -306,7 +307,7 @@ private:
         // 对应的地址
         uint64_t addr_;
         // 需要合并的预取Index
-        uint64_t index_;
+        std::set<uint64_t> indexes_;
         // 比较大小排序函数
         bool operator< (const Combination& b) const {
             return completeTick_ > b.completeTick_;

@@ -280,6 +280,9 @@ MSHR::allocate(Addr blk_addr, unsigned blk_size, PacketPtr target,
     /// 如果是一个预取，那么会创建一个合并的Target
     if (target->packetType_ == prefetch_filter::Pref) {
         prefTarget_ = &(targets.front());
+        panic_if(!target->recentCache_,
+                "Recent processing cache not available");
+        prefTargetMap_[target->recentCache_] = prefTarget_;
     }
 }
 
@@ -323,6 +326,7 @@ MSHR::deallocate()
     assert(deferredTargets.isReset());
     inService = false;
     prefTarget_ = nullptr;
+    prefTargetMap_.clear();
     needPostProcess_ = false;
 }
 
@@ -331,7 +335,8 @@ MSHR::deallocate()
  */
 void
 MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
-                     bool alloc_on_fill, BaseCache* cache)
+                     bool alloc_on_fill, BaseCache* cache,
+                     std::set<PacketPtr>* deletedPacket)
 {
     /// 预取合并的正则表达式如下
     /// (local2any pref)?(high2low pref)*((high2high pref)?|(high demand)?)
@@ -341,31 +346,52 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
             pkt->srcCacheLevel_ >= cacheLevel,
             "Should not have more than one prefetch from local cache");
     
-    /// 是否设置最新的Target为预取主要Target
-    bool useNewTarget = false;
-    /// 是否将顶部的Target删除
-    bool popFrontTarget = false;
-    /// 如果不使用新的Target，新的Target是否要处理（针对Pending的情况）
-    bool deleteNewTarget = false;
-
     /// 合并不会修改recentBrnachPC_，以最早的Target为准
     /// （影响触发预取的指令训练）
-    if (targets.front().pkt->packetType_ == prefetch_filter::Pref) {
-        panic_if(targets.size() > 1 || prefTarget_ != &(targets.front()),
-                "Only one prefetch target can be available");
-        PacketPtr validPkt = prefTarget_->pkt;
+    if (!prefTargetMap_.empty()) {
+        panic_if(targets.size() > prefetch_filter::numCpus_,
+                "Too many available prefetch targets in one MSHR");
+        /// 来自同一个Cache的预取Packet
+        PacketPtr validPkt = nullptr;
+        Target* validTarget = nullptr;
+        /// 本地Cache的预取请求Packet
+        PacketPtr localPkt = nullptr;
+        Target* localTarget = nullptr;
+        
+        panic_if(!pkt->recentCache_,
+                "No available processing cache for packet");
+        auto mapIter = prefTargetMap_.find(pkt->recentCache_);
+        if (mapIter != prefTargetMap_.end()) {
+            validTarget = mapIter->second;
+            validPkt = validTarget->pkt;
+        }
+        
+        mapIter = prefTargetMap_.find(cache);
+        if (mapIter != prefTargetMap_.end()) {
+            localTarget = mapIter->second;
+            localPkt = localTarget->pkt;
+        }
+        
         if (inService) {
-            /// 合并Pending的MSHR，有效的Target要么是一个本地非降级预取
-            /// 要么是一个高级平级预取
-            panic_if(!(validPkt->srcCacheLevel_ == cacheLevel ||
-                    (validPkt->srcCacheLevel_ < cacheLevel &&
-                    validPkt->targetCacheLevel_ == cacheLevel)),
-                    "Pending prefetch MSHR where to allocate new target "
-                    "must be with expected type");
-            /// PendingMSHR不会改变prefTraget
-            if (pkt->packetType_ == prefetch_filter::Dmd) {
+            if (validPkt) {
+                /// 如果对应的Cache已经存在相应的Packet
+
+                /// 合并Pending的MSHR，有效的Target要么是一个本地非降级预取
+                /// 要么是一个高级平级预取
+                panic_if(!(validPkt->srcCacheLevel_ == cacheLevel ||
+                        (validPkt->srcCacheLevel_ < cacheLevel &&
+                        validPkt->targetCacheLevel_ == cacheLevel)),
+                        "Pending prefetch MSHR where to allocate new target "
+                        "must be with expected type");
+            }
+            
+            /// PendingMSHR新增Target不会改变prefTraget
+            if (pkt->packetType_ != prefetch_filter::Pref) {
                 /// PendingMSHR合并Demand，不会对新的Demand做任何处理
-                prefTarget_->source = Target::FromPrefetcher;
+                if (localPkt) {
+                    /// 本地Cache的请求一定会被强制转换为平级预取处理
+                    localTarget->source = Target::FromPrefetcher;
+                }
                 needPostProcess_ = true;
             } else {
                 if (pkt->targetCacheLevel_  < cacheLevel) {
@@ -373,40 +399,50 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
                     needPostProcess_ = true;
                 } else {
                     /// 合并一个降级预取，删除预取
-                    deleteNewTarget = true;
+                    deletedPacket->insert(pkt);
                 }
             }
         } else {
-            /// 合并之前的预取要么是高等级降级预取，要么是本地预取
-            panic_if(!((validPkt->srcCacheLevel_ < cacheLevel &&
-                    validPkt->targetCacheLevel_ >= cacheLevel) ||
-                    validPkt->srcCacheLevel_ == cacheLevel),
-                    "Can not combine new prefetch into prefetch targetting "
-                    "high-level cache");
-            if (pkt->packetType_ == prefetch_filter::Dmd) {
+            if (validPkt) {
+                /// 合并之前的预取要么是高等级降级预取，要么是本地预取
+                panic_if(!((validPkt->srcCacheLevel_ < cacheLevel &&
+                        validPkt->targetCacheLevel_ >= cacheLevel) ||
+                        validPkt->srcCacheLevel_ == cacheLevel),
+                        "Can not combine new prefetch into prefetch targetting "
+                        "high-level cache");
+            }
+            /// 本地预取一定会被删除
+            if (localPkt) {
+                deletedPacket->insert(localPkt);
+            }
+            
+            if (pkt->packetType_ != prefetch_filter::Pref) {
                 /// 这里合并的请求是Demand合并到Prefetch
-                popFrontTarget = true;
                 isSecure = pkt->isSecure();
-                readyTime = whenReady;
-                order = _order;
                 _isUncacheable = pkt->req->isUncacheable();
-            } else {
-                /// 对于预取合并预取的情况，取最高等级的最新决策作为实际的目标
-                if (pkt->srcCacheLevel_ <= validPkt->srcCacheLevel_) {
-                    popFrontTarget = true;
-                    isSecure = pkt->isSecure();
-                    readyTime = whenReady;
-                    order = _order;
-                    _isUncacheable = pkt->req->isUncacheable();
-                    
-                    useNewTarget = true;
-                } else {
-                    deleteNewTarget = true;
+                for (auto mapIter : prefTargetMap_) {
+                    PacketPtr oldPkt = mapIter.second->pkt;
+                    /// 删除所有的降级预取
+                    if (oldPkt->targetCacheLevel_ >= cacheLevel) {
+                        deletedPacket->insert(oldPkt);
+                    }
                 }
+            } else {
+                /// 对于预取合并预取的情况
+                if (validPkt) {
+                    /// 如果已经存在了Packet，则会选择唯一有效的Packet
+                    if (pkt->srcCacheLevel_ <= validPkt->srcCacheLevel_) {
+                        /// 取最高等级的最新决策作为实际的目标
+                        isSecure = pkt->isSecure();
+                        deletedPacket->insert(validPkt);
+                    } else {
+                        deletedPacket->insert(pkt);
+                    }
+                } else {
+                    /// 否则直接插入，无论是一个什么样的预取
+                } 
             }
         }
-    } else {
-        targets.front().pkt->addCaches(pkt->caches_);
     }
     
     // assume we'd never issue a prefetch when we've got an
@@ -428,7 +464,19 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
     //   getting a writable block back or we have already snooped
     //   another read request that will downgrade our writable block
     //   to non-writable (Shared or Owned)
-    PacketPtr tgt_pkt = targets.front().pkt;
+    PacketPtr tgt_pkt = nullptr;
+    if (prefTarget_) {
+        tgt_pkt = prefTarget_->pkt;
+    } else {
+        /// 寻找第一个合并进来的Demand请求
+        for (auto& target : targets) {
+            if (target.pkt->packetType_ != prefetch_filter::Pref) {
+                tgt_pkt = target.pkt;
+                break;
+            }
+        }
+    }
+    assert(tgt_pkt);
 
     bool toDeferredList = false;
     if (pkt->req->isCacheMaintenance() ||
@@ -452,25 +500,53 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
         targets.add(pkt, whenReady, _order, Target::FromCPU, !inService,
                     alloc_on_fill);
     }
-    if (popFrontTarget) {
-        panic_if(inService || toDeferredList, "Should never pop prefetch "
-                "target when mshr is still pending");
-        delete prefTarget_->pkt;
-        targets.pop_front();
-        prefTarget_ = nullptr;
+    /// 删除被无效化的Packet对应的Target
+    for (auto listIter = targets.begin(); listIter != targets.end();) {
+        if (deletedPacket->find(listIter->pkt) != deletedPacket->end()) {
+            listIter = targets.erase(listIter);
+        } else {
+            listIter++;
+        }
+    }
+    
+    for (auto listIter = deferredTargets.begin();
+            listIter != deferredTargets.end();) {
+        if (deletedPacket->find(listIter->pkt) != deletedPacket->end()) {
+            listIter = deferredTargets.erase(listIter);
+        } else {
+            listIter++;
+        }
     }
 
-    if (useNewTarget) {
-        panic_if(inService || toDeferredList, "Should never update prefetch "
-                "target when mshr is still pending");
-        /// Target实体指向最后/最新一个Target
-        prefTarget_ = &(targets.back());
-    } else if (deleteNewTarget && !toDeferredList) {
-        /// 将新的Target标记为无效
-        targets.pop_back();
-    } else if (deleteNewTarget && toDeferredList) {
-        /// 将新的Target标记为无效
-        deferredTargets.pop_back();
+    if (!inService) {
+        /// 更新prefTarget_和prefTargetMap_（如果正在处理，则不会更新数据）
+        prefTargetMap_.clear();
+        bool haveDemandTarget = false;
+        int minTargetCacheLevel = 999;
+        for (auto& target : targets) {
+            tgt_pkt = target.pkt;
+            if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
+                if (tgt_pkt->targetCacheLevel_ < minTargetCacheLevel) {
+                    prefTarget_ = &target;
+                    minTargetCacheLevel = tgt_pkt->targetCacheLevel_;
+                }
+                panic_if(prefTargetMap_.find(tgt_pkt->recentCache_) !=
+                        prefTargetMap_.end(),
+                        "More than 1 valid prefetch for one source cache");
+                prefTargetMap_[tgt_pkt->recentCache_] = &target;
+            } else {
+                haveDemandTarget = true;
+            }
+        }
+        if (haveDemandTarget) {
+            prefTarget_ = nullptr;
+        }
+    } else if (toDeferredList) {
+        /// 对于合并到PendingPref的Target，如果没有删除，需要标记
+        deferredTargets.back().postAddedTarget_ = true;
+    } else {
+        /// 对于合并到PendingPref的Target，如果没有删除，需要标记
+        targets.back().postAddedTarget_ = true;
     }
 }
 
@@ -636,23 +712,62 @@ MSHR::extractServiceableTargets(PacketPtr pkt)
 /// 针对PrefTarget进行修改
 void
 MSHR::popTarget() {
-    if (prefTarget_) {
-        panic_if(prefTarget_ != &(targets.front()),
-                "Pref Target should always point to the front of targets");
+    panic_if(inService, "Trying to pop target for pending MSHR");
+    panic_if(!prefTarget_,
+            "Trying to pop target for MSHR with out prefTarget_");
+    
+    for (auto listIter = targets.begin(); listIter != targets.end();) {
+        if (listIter->pkt == prefTarget_->pkt) {
+            listIter = targets.erase(listIter);
+            prefTarget_ = nullptr;
+            break;
+        } else {
+            listIter++;
+        }
+    }
+    panic_if(prefTarget_, "Failed to delete prefTarget_");
+    
+    /// 更新prefTarget_和prefTargetMap_（如果正在处理，则不会更新数据）
+    prefTargetMap_.clear();
+    bool haveDemandTarget = false;
+    int minTargetCacheLevel = 999;
+    for (auto& target : targets) {
+        PacketPtr tgt_pkt = target.pkt;
+        if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
+            if (tgt_pkt->targetCacheLevel_ < minTargetCacheLevel) {
+                prefTarget_ = &target;
+                minTargetCacheLevel = tgt_pkt->targetCacheLevel_;
+            }
+            panic_if(prefTargetMap_.find(tgt_pkt->recentCache_) !=
+                    prefTargetMap_.end(),
+                    "More than 1 valid prefetch for one source cache");
+            prefTargetMap_[tgt_pkt->recentCache_] = &target;
+        } else {
+            haveDemandTarget = true;
+        }
+    }
+    if (haveDemandTarget) {
         prefTarget_ = nullptr;
     }
-    targets.pop_front();
 }
 
 /// 查存函数自动支持合并的预取MSHR
 MSHR::Target*
 MSHR::getTarget() {
     assert(hasTargets());
-    if (prefTarget_ && prefTarget_->pkt->packetType_ ==
-            prefetch_filter::Pref) {
+    if (prefTarget_) {
+        /// 如果有prefTarget直接返回即可
+        panic_if(prefTarget_->pkt->packetType_ !=
+                prefetch_filter::Pref, "PrefTarget in MSHR is not a prefetch");
         return prefTarget_;
     } else {
-        return &(targets.front());
+        /// 如果没有，则返回第一个Demand Request
+        for (auto& target : targets) {
+            if (target.pkt->packetType_ != prefetch_filter::Pref) {
+                return &target;
+            }
+        }
+        panic_if(true, "Can not found target for MSHR without prefTarget");
     }
 }
 

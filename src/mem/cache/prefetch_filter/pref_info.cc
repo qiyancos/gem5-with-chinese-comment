@@ -35,10 +35,11 @@
 
 namespace prefetch_filter {
 
-Tick debugStartTick_ = 1000000000000LLU;
+Tick debugStartTick_ = 2270000000000LLU;
 Tick maxResponseGap_ = 1000000000LLU;
 Tick timerPrintGap_ = 100000000LLU;
 Tick tickNow_ = 0;
+int numCpus_ = 0;
 
 uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches) {
     std::set<uint8_t> cpuIds;
@@ -57,7 +58,7 @@ uint64_t generatePrefIndex(const PacketPtr pkt) {
     // 只对新的预取生成Index
     CHECK_ARGS_EXIT(pkt->caches_.size() == 1,
             "Only generate index for newly generated prefetch");
-    CHECK_ARGS_EXIT(pkt->prefIndex_ == 0,
+    CHECK_ARGS_EXIT(pkt->prefIndexes_.empty(),
             "Only generate index for newly generated prefetch");
     return pkt->getAddr() ^
             ((pkt->req->time() / BasePrefetchFilter::clockPeriod_) << 32) ^

@@ -159,8 +159,8 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
     }
     
     // 检查目标的正确性
-    CHECK_RET_EXIT(usefulTable_[cache].checkDataType(hitBlkAddr, 0,
-            info.target, false),
+    CHECK_RET_EXIT(usefulTable_[cache].checkDataType(hitBlkAddr,
+            std::set<uint64_t>(), info.target, false),
             "Data type not match with the record in BPF");
 
     // 依据源数据和目标数据类型进行统计数据更新
@@ -200,7 +200,7 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
                     "pref data");
             std::set<BaseCache*> correlatedCaches;
             CHECK_RET_EXIT(usefulTable_[cache].combinePref(hitBlkAddr,
-                    pkt->prefIndex_, &correlatedCaches),
+                    pkt->prefIndexes_, &correlatedCaches),
                     "Failed to combine two prefetch when pref hit pref data");
             
             // 开始传递合并预取信息
@@ -214,7 +214,7 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
                         if (otherCache->cacheLevel_ == cacheLevel) {
                             CHECK_RET(usefulTable_[otherCache].
                                     addPrefCombination(completedTick,
-                                    hitBlkAddr, pkt->prefIndex_),
+                                    hitBlkAddr, pkt->prefIndexes_),
                                     "Failed to forward prefetch combination");
                         }
                     }
@@ -252,7 +252,8 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
     // 检查目标的正确性
     CHECK_RET_EXIT(usefulTable_[cache].checkDataType(combinedPkt ?
             combinedPkt->getAddr() & cacheLineAddrMask_ : 0,
-            combinedPkt ? combinedPkt->prefIndex_ : 0, info.target, true),
+            combinedPkt ? combinedPkt->prefIndexes_ : std::set<uint64_t>(),
+            info.target, true),
             "Data type not match with the record in BPF");
     
     CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
@@ -283,7 +284,7 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
             "Prefetch will not combined with demand in mshr.");
     if (info.source == Dmd) {
         if (info.target == Pref) {
-            CHECK_ARGS(combinedPkt->caches_.size() == 1,
+            CHECK_ARGS_EXIT(combinedPkt->caches_.size() == 1,
                     "Prefetch pakcet should have only one source cache");
             for (BaseCache* srcCache : combinedPkt->caches_) {
                 for (const uint8_t cpuId : srcCache->cpuIds_) {
@@ -294,44 +295,25 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
             CHECK_RET_EXIT(usefulTable_[*(combinedPkt->caches_.begin())].
                     deletePref(combinedPkt),
                     "Failed to delete prefetch info after being shadowed");
-        } else if (info.target == PendingPref) {
-            // Demand合并PendingPref无须处理，会在PostProcess触发
-        } else {
+        }
+        if (info.target == Dmd || info.target == NullType) {
             // 一个新的Dmd请求发生了Miss
             CHECK_RET_EXIT(usefulTable_[cache].updateMiss(pkt),
                     "Failed to update when demand request miss");
         }
-    } else if (info.target == Pref) {
-        // 删除的不一定是合并的Target，此处会进行判断
-        // 选择更高等级的决策，或者最高等级的最新决策
-        PacketPtr deletedPkt = pkt->srcCacheLevel_ ==
-                combinedPkt->srcCacheLevel_ ? combinedPkt :
-                (pkt->srcCacheLevel_ > combinedPkt->srcCacheLevel_ ?
-                combinedPkt : pkt);
-        CHECK_ARGS(deletedPkt->caches_.size() == 1,
+    } else if (info.target == Pref || info.target == PendingPref) {
+        // 删除的一定是合并的Target
+        CHECK_ARGS_EXIT(combinedPkt, "No combined packet provided");
+        CHECK_ARGS_EXIT(combinedPkt->caches_.size() == 1,
                 "Prefetch pakcet should have only one source cache");
-        for (BaseCache* srcCache : deletedPkt->caches_) {
+        for (BaseCache* srcCache : combinedPkt->caches_) {
             for (const uint8_t cpuId : srcCache->cpuIds_) {
                 (*squeezedPrefCount_[srcCache->cacheLevel_])[cpuId]++;
             }
         }
-        CHECK_RET_EXIT(usefulTable_[*(deletedPkt->caches_.begin())].
-                deletePref(deletedPkt),
+        CHECK_RET_EXIT(usefulTable_[*(combinedPkt->caches_.begin())].
+                deletePref(combinedPkt),
                 "Failed to delete prefetch info after being squeezed");
-    } else if (info.target == PendingPref) {
-        // 如果新的Packet是一个降级预取，则会被删除
-        if (pkt->targetCacheLevel_ >= cache->cacheLevel_) {
-            CHECK_RET_EXIT(usefulTable_[*(pkt->caches_.begin())].
-                    deletePref(pkt),
-                    "Failed to delete prefetch info after being squeezed");
-            CHECK_ARGS(pkt->caches_.size() == 1,
-                    "Prefetch pakcet should have only one source cache");
-            for (BaseCache* srcCache : pkt->caches_) {
-                for (const uint8_t cpuId : srcCache->cpuIds_) {
-                    (*squeezedPrefCount_[srcCache->cacheLevel_])[cpuId]++;
-                }
-            }
-        }
     } else if (info.target == NullType && *(pkt->caches_.begin()) == cache) {
         // 更新相关计数
         uint8_t level = cache->cacheLevel_;
@@ -366,8 +348,8 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
     const uint64_t evictedBlkAddr = evictedAddr & cacheLineAddrMask_;
     
     // 检查目标的正确性
-    CHECK_RET_EXIT(usefulTable_[cache].checkDataType(evictedBlkAddr, 0,
-            info.target, false),
+    CHECK_RET_EXIT(usefulTable_[cache].checkDataType(evictedBlkAddr,
+            std::set<uint64_t>(), info.target, false),
             "Data type not match with the record in BPF");
     CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
     
@@ -624,6 +606,8 @@ int BasePrefetchFilter::initThis() {
     havePref_.resize(caches_.size());
     usePref_.resize(caches_.size());
     numCpus_ = caches_[0].size();
+    prefetch_filter::numCpus_ = numCpus_;
+
     for (int i = 0; i <= maxCacheLevel_; i++) {
         usePref_[i] = caches_[i][0]->prefetcher != NULL;
         if (i > 1) {

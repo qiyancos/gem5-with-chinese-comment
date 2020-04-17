@@ -381,6 +381,9 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
         writeAllocator->updateMode(pkt->getAddr(), pkt->getSize(),
                                    pkt->getBlockAddr(blkSize));
     }
+    
+    /// 记录因为合并MSHR导致无效化的Packet
+    std::set<PacketPtr> deletedPacket;
     if (mshr) {
         // MSHR hit
         // @note writebacks will be checked in getNextMSHR()
@@ -417,7 +420,8 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
                 // port and also takes into account the additional
                 // delay of the xbar.
                 mshr->allocateTarget(pkt, forward_time, order++,
-                                     allocOnFill(pkt->cmd), this);
+                                     allocOnFill(pkt->cmd), this,
+                                     &deletedPacket);
                 if (mshr->getNumTargets() == numTarget) {
                     noTargetMSHR = mshr;
                     setBlocked(Blocked_NoTargets);
@@ -462,6 +466,20 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
             // a miss (outbound) just as forwardLatency, neglecting the
             // lookupLatency component.
             allocateMissBuffer(pkt, forward_time);
+        }
+    }
+    
+    /// 进行发生Miss情况的训练操作
+    /// dmd->pref; pref->pref; pref->pendingPref
+    if (deletedPacket.size() && prefetchFilter_ && pkt->isRead()) {
+        panic_if(!mshr, "This should never happen");
+        for (auto combinedPkt : deletedPacket) {
+            prefetch_filter::DataTypeInfo infoPair;
+            infoPair.source = pkt->packetType_;
+            infoPair.target = mshr->inService ? prefetch_filter::PendingPref :
+                    prefetch_filter::Pref;
+            prefetchFilter_->notifyCacheMiss(this, pkt, combinedPkt, infoPair);
+            delete combinedPkt;
         }
     }
 }
@@ -693,21 +711,23 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     /// 这里会进行PendingPref覆盖情况的后后续处理
     if (is_fill && !is_error && mshr->needPostProcess_ &&
             mshr->prefTarget_->pkt->packetType_ == prefetch_filter::Pref) {
-        PacketPtr targetPkt = mshr->targets.back().pkt;
-        panic_if(!(targetPkt->packetType_ == prefetch_filter::Dmd ||
-                (targetPkt->packetType_ == prefetch_filter::Pref &&
-                targetPkt->srcCacheLevel_ < cacheLevel_ &&
-                targetPkt->targetCacheLevel_ < cacheLevel_)),
-                "Found unexpected MSHR target status when doing"
-                " post process");
-        if (prefetchFilter_ && blk) {
-            /// 处理PendingPref被Demand/Pref覆盖的情况
-            Addr hitAddr = pkt->getAddr();
-            prefetch_filter::DataTypeInfo infoPair;
-            infoPair.target = prefetch_filter::Pref;
-            infoPair.source = targetPkt->packetType_;
-            prefetchFilter_->notifyCacheHit(this, targetPkt, hitAddr,
-                    infoPair);
+        for (auto& target : mshr->targets) {
+            if (target.postAddedTarget_ && prefetchFilter_ && blk) {
+                PacketPtr targetPkt = target.pkt;
+                panic_if(!(targetPkt->packetType_ == prefetch_filter::Dmd ||
+                        (targetPkt->packetType_ == prefetch_filter::Pref &&
+                        targetPkt->srcCacheLevel_ < cacheLevel_ &&
+                        targetPkt->targetCacheLevel_ < cacheLevel_)),
+                        "Found unexpected MSHR target status when doing"
+                        " post process");
+                /// 处理PendingPref被Demand/Pref覆盖的情况
+                Addr hitAddr = pkt->getAddr();
+                prefetch_filter::DataTypeInfo infoPair;
+                infoPair.target = prefetch_filter::Pref;
+                infoPair.source = targetPkt->packetType_;
+                prefetchFilter_->notifyCacheHit(this, targetPkt, hitAddr,
+                        infoPair);
+            }
         }
     }
 
@@ -1940,6 +1960,13 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
         pkt->recentCache_ = this;
         
         assert(!pkt->isWrite());
+    }
+    
+    /// 进行预取信息的合并，无论是Demand还是预取都会进行合并
+    if (pkt) {
+        for (auto& target : mshr->targets) {
+            pkt->combinePacket(target.pkt);
+        }
     }
 
     /// 如果是一个提升级别的预取会设置一个虚拟MSHR供高层级响应

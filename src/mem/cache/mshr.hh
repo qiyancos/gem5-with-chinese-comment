@@ -133,6 +133,9 @@ class MSHR : public QueueEntry, public Printable
             FromPrefetcher
         };
 
+        // 表明当前的Target是不是一个需要后续处理的Target
+        bool postAddedTarget_ = false;
+
         /// 去掉const属性以便进行修改
         Tick recvTime;  //!< Time when request was received (for stats)
         Tick readyTime; //!< Time when request is ready to be serviced
@@ -408,6 +411,9 @@ class MSHR : public QueueEntry, public Printable
     /// 该变量存放着唯一有效的预取Target
     Target* prefTarget_ = nullptr;
     
+    /// 该变量用于区分不同源头的预取Target
+    std::map<BaseCache*, Target*> prefTargetMap_;
+
     /// 该变量决定是否因为合并了Pending MSHR，而需要额外操作
     bool needPostProcess_ = false;
 
@@ -453,8 +459,11 @@ class MSHR : public QueueEntry, public Printable
      * @param target The target.
      */
     /// 添加一个Cache指针说明当前的Cache等级
+    /// 添加一个Set记录所有被无效化的Packet
     void allocateTarget(PacketPtr target, Tick when, Counter order,
-                        bool alloc_on_fill, BaseCache* cache);
+                        bool alloc_on_fill, BaseCache* cache,
+                        std::set<PacketPtr>* deletedPacket);
+    
     bool handleSnoop(PacketPtr target, Counter order);
 
     /** A simple constructor. */

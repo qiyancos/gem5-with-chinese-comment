@@ -51,6 +51,9 @@ extern Tick maxResponseGap_;
 // 用于进行时间计时，方便确认bug位置
 extern Tick timerPrintGap_;
 
+// 当前系统下的CPU个数，由BasePrefetchFilter初始化
+extern int numCpus_;
+
 // 依据一组Cache指针生成对应的CPUID位向量
 uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches);
 

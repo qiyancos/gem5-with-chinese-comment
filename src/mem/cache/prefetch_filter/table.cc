@@ -276,16 +276,19 @@ IdealPrefetchUsefulTable::IdealPrefetchUsefulTable(BaseCache* cache,
         const bool valid) : valid_(valid), cache_(cache) {}
 
 int IdealPrefetchUsefulTable::checkDataType(const uint64_t& addr,
-        const uint64_t& prefIndex, const DataType type, const bool isMiss) {
+        const std::set<uint64_t>& prefIndexes,
+        const DataType type, const bool isMiss) {
     if (type == NullType || !valid_) return 0;
     
     if (type == Pref) {
         // 如果是Miss，那么MSHR中的预取应该只有info，还未添加记录
         if (isMiss) {
-            CHECK_ARGS(prefIndex != 0,
+            CHECK_ARGS(prefIndexes.size() != 0,
                     "Found a prefetch packet without generated index");
-            CHECK_ARGS(infoList_.find(prefIndex) != infoList_.end(),
-                    "Can not find record for prefetch in MSHR");
+            for (auto prefIndex : prefIndexes) {
+                CHECK_ARGS(infoList_.find(prefIndex) != infoList_.end(),
+                        "Can not find record for prefetch in MSHR");
+            }
             return 0;
         }
         // 如果是不是Miss，那么一定存在本地记录
@@ -299,7 +302,7 @@ int IdealPrefetchUsefulTable::checkDataType(const uint64_t& addr,
         }
     } else if (type == Dmd) {
         if (isMiss) {
-            CHECK_ARGS(prefIndex == 0,
+            CHECK_ARGS(prefIndexes.empty(),
                     "None prefetch packet should not have prefetch index");
             return 0;
         } else {
@@ -312,10 +315,12 @@ int IdealPrefetchUsefulTable::checkDataType(const uint64_t& addr,
     } else {
         // 对于一个PendingPref，一定会有Info记录
         CHECK_ARGS(isMiss, "Only check pending prefetch when miss");
-        CHECK_ARGS(prefIndex != 0,
+        CHECK_ARGS(prefIndexes.size() != 0,
                 "Found a prefetch packet without generated index");
-        CHECK_ARGS(infoList_.find(prefIndex) != infoList_.end(),
-                "Can not find record for prefetch in MSHR");
+        for (auto prefIndex : prefIndexes) {
+            CHECK_ARGS(infoList_.find(prefIndex) != infoList_.end(),
+                    "Can not find record for prefetch in MSHR");
+        }
         return 0;
     }
     return 0;
@@ -336,10 +341,10 @@ int IdealPrefetchUsefulTable::newPref(PacketPtr& prefPkt) {
             "Packet is not for a prefetch request");
     CHECK_ARGS(prefPkt->caches_.size() == 1,
             "New pref added to useful table must not be combined");
-    CHECK_ARGS(prefPkt->prefIndex_ == 0,
+    CHECK_ARGS(prefPkt->prefIndexes_.empty(),
             "New prefetch should not have global index");
     uint64_t index = generatePrefIndex(prefPkt);
-    prefPkt->prefIndex_ = index;
+    prefPkt->prefIndexes_.insert(index);
     if (infoList_.find(index) == infoList_.end()) {
         DEBUG_PF(1, "BPF new prefetch @0x%lx Record[0x%lx] in %s",
                 prefPkt->getAddr(), index,
@@ -368,17 +373,17 @@ int IdealPrefetchUsefulTable::deletePref(const PacketPtr& prefPkt) {
     }
     CHECK_ARGS(prefPkt->packetType_ == Pref,
             "Packet is not for a prefetch request");
-    CHECK_ARGS(prefPkt->prefIndex_ != 0,
-            "No invalid index for a prefetch packet");
+    CHECK_ARGS(prefPkt->prefIndexes_.size() == 1,
+            "Too many or no valid prefetch index for a prefetch packet");
     uint64_t addr = prefPkt->getAddr();
-    auto infoIter = infoList_.find(prefPkt->prefIndex_);
+    auto infoIter = infoList_.find(*(prefPkt->prefIndexes_.begin()));
     CHECK_ARGS(infoIter != infoList_.end(),
             "Failed to find prefetch info when trying delete prefetch");
     if (infoIter->second.canDelete()) {
         deletedPref_.push_back(infoIter->second);
         infoList_.erase(infoIter);
         DEBUG_PF(2, "BPF directly delete prefetch @0x%lx Record[0x%lx] in %s",
-                addr, prefPkt->prefIndex_,
+                addr, *(prefPkt->prefIndexes_.begin()),
                 BaseCache::levelName_[cache_->cacheLevel_].c_str());
     }
     return 0;
@@ -389,27 +394,28 @@ int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
     if (!valid_) {
         return 0;
     }
-    PrefetchUsefulInfo* newInfo;
     
-    DEBUG_PF(2, "%s @0x%lx record [0x%lx] replace @0x%lx",
-            "BPF add prefetch", prefPkt->getAddr(),
-            prefPkt->prefIndex_, replacedAddr);
-    auto infoIter = infoList_.find(prefPkt->prefIndex_);
-    CHECK_ARGS(infoIter != infoList_.end(),
-            "Prefetch record can not be found when adding new prefetch");
-    infoIter->second.addReplacedAddr(cache_, replacedAddr);
-    newInfo = &(infoIter->second); 
-    
+    std::set<PrefetchUsefulInfo*> newInfoList;
+    for (auto index : prefPkt->prefIndexes_) {
+        DEBUG_PF(2, "%s @0x%lx record [0x%lx] replace @0x%lx",
+                "BPF add prefetch", prefPkt->getAddr(), index, replacedAddr);
+        auto infoIter = infoList_.find(index);
+        CHECK_ARGS(infoIter != infoList_.end(),
+                "Prefetch record can not be found when adding new prefetch");
+        infoIter->second.addReplacedAddr(cache_, replacedAddr);
+        newInfoList.insert(&(infoIter->second)); 
+    }
+
     const uint64_t prefAddr = prefPkt->getAddr() &
             BasePrefetchFilter::cacheLineAddrMask_;
     CHECK_ARGS(prefMap_.find(prefAddr) == prefMap_.end(),
             "Trying to add a prefetch already exists in the prefetch map");
-    prefMap_[prefAddr] = std::set<PrefetchUsefulInfo*> {newInfo};
+    prefMap_[prefAddr] = newInfoList;
     // 确保本级别记录的预取数目不会超过当前Cache的容量
     CHECK_ARGS(prefMap_.size() + invalidatingPref_.size() +
             invalidatedMap_.size() <= cache_->tags->numBlocks,
             "It seems that some prefetches are not invalidated properly");
-
+ 
     if (type == Dmd) {
         // 如果预取替换目标是一个Demand
         // 存在一种情况导致两个预取替换同一个地址，A预取替换了D
@@ -417,10 +423,10 @@ int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
         auto evictIter = evictMap_.find(replacedAddr);
         if (evictIter == evictMap_.end()) {
             DEBUG_PF(3, "BPF adds new victim record for prefetch");
-            evictMap_[replacedAddr] = std::set<PrefetchUsefulInfo*> {newInfo};
+            evictMap_[replacedAddr] = newInfoList;
         } else {
             DEBUG_PF(3, "BPF combines victim record for prefetch");
-            evictIter->second.insert(newInfo);
+            evictIter->second.insert(newInfoList.begin(), newInfoList.end());
             CHECK_ARGS(evictIter->second.size() <= infoList_.size(),
                     "It seems that some info in evict map are not "
                     "released normally");
@@ -437,10 +443,10 @@ int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
                         "replaced prefetch");
             }
             DEBUG_PF(3, "BPF replaces old victim record for prefetch");
-            evictIter->second = std::set<PrefetchUsefulInfo*> {newInfo};
+            evictIter->second = newInfoList;
         } else {
             DEBUG_PF(3, "BPF adds new victim record for prefetch");
-            evictMap_[replacedAddr] = std::set<PrefetchUsefulInfo*> {newInfo};
+            evictMap_[replacedAddr] = newInfoList;
         }
     } else {
         CHECK_ARGS(replacedAddr == 0,
@@ -452,7 +458,8 @@ int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
 }
 
 int IdealPrefetchUsefulTable::combinePref(const uint64_t& addr,
-        const uint64_t& index, std::set<BaseCache*>* correlatedCaches) {
+        const std::set<uint64_t>& indexes,
+        std::set<BaseCache*>* correlatedCaches) {
     if (!valid_) {
         return 0;
     }
@@ -462,32 +469,35 @@ int IdealPrefetchUsefulTable::combinePref(const uint64_t& addr,
             "Failed to find hit prefetch address in the prefetch map");
     auto& prefInfoList = prefInfoIter->second;
     
-    auto infoIter = infoList_.find(index);
-    CHECK_ARGS(infoIter != infoList_.end(),
-            "Prefetch record can not be found when combining prefetch");
-    PrefetchUsefulInfo* newInfo = &(infoIter->second); 
-    // 如果已经存在，则不做处理
-    if (prefInfoList.find(newInfo) != prefInfoList.end()) {
-        DEBUG_PF(2, "%s @0x%lx with record[0x%lx] but already exists",
+    for (auto index : indexes) {
+        auto infoIter = infoList_.find(index);
+        CHECK_ARGS(infoIter != infoList_.end(),
+                "Prefetch record can not be found when combining prefetch");
+        PrefetchUsefulInfo* newInfo = &(infoIter->second); 
+        // 如果已经存在，则不做处理
+        if (prefInfoList.find(newInfo) != prefInfoList.end()) {
+            DEBUG_PF(2, "%s @0x%lx with record[0x%lx] but already exists",
+                    "BPF combine prefetch", addr, index);
+            return 0;
+        }
+ 
+        DEBUG_PF(2, "%s @0x%lx with record[0x%lx] with old prefetch",
                 "BPF combine prefetch", addr, index);
-        return 0;
-    }
-
-    DEBUG_PF(2, "%s @0x%lx with record[0x%lx] with old prefetch",
-            "BPF combine prefetch", addr, index);
-    uint64_t replacedAddr;
-    CHECK_RET((*prefInfoList.begin())->getReplacedAddr(cache_,
-            &replacedAddr), "Failed to get replaced addr for old prefetch");
-    CHECK_RET((*prefInfoList.begin())->getCorrelatedCaches(cache_,
-            correlatedCaches), "Failed to get correlated caches for "
-            "combined prefetch");
-    newInfo->addReplacedAddr(cache_, replacedAddr);
-    
-    prefInfoList.insert(newInfo);
-    if (replacedAddr) {
-        CHECK_ARGS(evictMap_.find(replacedAddr) != evictMap_.end(),
-                "Record for replaced address not exist in evict map");
-        evictMap_[replacedAddr].insert(newInfo);
+        uint64_t replacedAddr;
+        CHECK_RET((*prefInfoList.begin())->getReplacedAddr(cache_,
+                &replacedAddr),
+                "Failed to get replaced addr for old prefetch");
+        CHECK_RET((*prefInfoList.begin())->getCorrelatedCaches(cache_,
+                correlatedCaches), "Failed to get correlated caches for "
+                "combined prefetch");
+        newInfo->addReplacedAddr(cache_, replacedAddr);
+        
+        prefInfoList.insert(newInfo);
+        if (replacedAddr) {
+            CHECK_ARGS(evictMap_.find(replacedAddr) != evictMap_.end(),
+                    "Record for replaced address not exist in evict map");
+            evictMap_[replacedAddr].insert(newInfo);
+        }
     }
     return 0;
 }
@@ -616,12 +626,14 @@ int IdealPrefetchUsefulTable::findAllSrcCaches(BaseCache* cache,
     auto prefInfoIter = prefMap_.find(addr);
     const std::set<PrefetchUsefulInfo*>* infoList;
     if (prefInfoIter == prefMap_.end()) {
-        CHECK_ARGS(pkt->prefIndex_ != 0,
+        CHECK_ARGS(pkt->prefIndexes_.size() != 0,
                 "Prefetch pakcet must have at least one valid index");
-        auto infoIter = infoList_.find(pkt->prefIndex_);
-        CHECK_ARGS(infoIter != infoList_.end(),
-                "Can not prefetch in anywhere");
-        caches->insert(infoIter->second.srcCache_);
+        for (auto index : pkt->prefIndexes_) {
+            auto infoIter = infoList_.find(index);
+            CHECK_ARGS(infoIter != infoList_.end(),
+                    "Can not prefetch in anywhere");
+            caches->insert(infoIter->second.srcCache_);
+        }
         return 0;
     } else {
         infoList = &(prefInfoIter->second);
@@ -645,10 +657,12 @@ int IdealPrefetchUsefulTable::updateHit(const PacketPtr& srcPkt,
     if (srcType == Pref) {
         // 如果源操作是一个预取，需要对源预取有用进行判断
         // 足够有用的话可以当作Demand命中Prefetch处理
-        auto infoIter = infoList_.find(srcPkt->prefIndex_);
-        if (infoIter != infoList_.end() && infoIter->second.isUseful()) {
-            cpuIds.insert(infoIter->second.srcCache_->cpuIds_.begin(),
-                    infoIter->second.srcCache_->cpuIds_.end());
+        for (auto index : srcPkt->prefIndexes_) {
+            auto infoIter = infoList_.find(index);
+            if (infoIter != infoList_.end() && infoIter->second.isUseful()) {
+                cpuIds.insert(infoIter->second.srcCache_->cpuIds_.begin(),
+                        infoIter->second.srcCache_->cpuIds_.end());
+            }
         }
     } else {
         // 如果源操作是一个Demand，直接将相关CPU合并即可
@@ -748,7 +762,7 @@ int IdealPrefetchUsefulTable::addPrefInvalidation(BaseCache* cache,
 }
     
 int IdealPrefetchUsefulTable::addPrefCombination(const Tick& completeTick,
-        const uint64_t& addr, const uint64_t& index) {
+        const uint64_t& addr, const std::set<uint64_t>& indexes) {
     if (!valid_) {
         return 0;
     }
@@ -756,11 +770,13 @@ int IdealPrefetchUsefulTable::addPrefCombination(const Tick& completeTick,
     // 记录需要无效化的信息
     CHECK_ARGS(prefMap_.find(addr) != prefMap_.end(),
             "No trainable record for prefetch ready for invalidation");
-    combiningTick_.push(Combination {completeTick, addr, index});
-    DEBUG_PF(2, "%s @0x%lx with new record[0x%lx] and end tick[%lu] in %s",
-            "BPF start ticking combination for prefetch",
-            addr, index, completeTick,
-            BaseCache::levelName_[cache_->cacheLevel_].c_str());
+    combiningTick_.push(Combination {completeTick, addr, indexes});
+    for (auto index : indexes) {
+        DEBUG_PF(2, "%s @0x%lx with new record[0x%lx] and end tick[%lu] in %s",
+                "BPF start ticking combination for prefetch",
+                addr, index, completeTick,
+                BaseCache::levelName_[cache_->cacheLevel_].c_str());
+    }
     return 0;
 }
 
@@ -865,13 +881,16 @@ int IdealPrefetchUsefulTable::updateCombination(const Tick& tickNow) {
     Combination nextCombination = combiningTick_.top();
     while (tickNow >= nextCombination.completeTick_) {
         combiningTick_.pop();
-        CHECK_RET(combinePref(nextCombination.addr_, nextCombination.index_),
+        CHECK_RET(combinePref(nextCombination.addr_,
+                nextCombination.indexes_),
                 "Failed to combine prefetch to old one's record");
-        DEBUG_PF(2, "%s @0x%lx record[0x%lx] with end tick[%lu] in %s",
-                "BPF finish combining prefetch",
-                nextCombination.addr_, nextCombination.index_,
-                nextCombination.completeTick_,
-                BaseCache::levelName_[cache_->cacheLevel_].c_str());
+        for (auto index : nextCombination.indexes_) {
+            DEBUG_PF(2, "%s @0x%lx record[0x%lx] with end tick[%lu] in %s",
+                    "BPF finish combining prefetch",
+                    nextCombination.addr_, index,
+                    nextCombination.completeTick_,
+                    BaseCache::levelName_[cache_->cacheLevel_].c_str());
+        }
         if (combiningTick_.empty()) {
             return 0;
         } else {
