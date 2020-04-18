@@ -160,7 +160,8 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
     
     // 检查目标的正确性
     CHECK_RET_EXIT(usefulTable_[cache].checkDataType(hitBlkAddr,
-            std::set<uint64_t>(), info.target, false),
+            std::set<uint64_t>(),
+            info.target == PendingPref ? Pref : info.target, false),
             "Data type not match with the record in BPF");
 
     // 依据源数据和目标数据类型进行统计数据更新
