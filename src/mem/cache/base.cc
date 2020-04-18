@@ -2922,7 +2922,7 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
                                 "not have demand target");
                         if (target.pkt->targetCacheLevel_ <=
                                 cache.cacheLevel_) {
-                            target->source = MSHR::Target::FromCPU;
+                            target.source = MSHR::Target::FromCPU;
                         }
                     }
                 }
