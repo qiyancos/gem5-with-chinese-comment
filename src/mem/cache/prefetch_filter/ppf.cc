@@ -524,6 +524,29 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
         // 由于Demand命中，需要强制删除记录
         CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr, true),
                 "Failed to remove prefetch record when hit by dmd");
+    } else if (info.source == Dmd && info.target == PendingPref) {
+        // 该情况实际上源自于Demand Miss pendingPref导致的PostProcess
+        std::set<BaseCache*> srcCaches;
+        CHECK_RET_EXIT(usefulTable_[cache].findSrcCaches(hitBlkAddr,
+                &srcCaches), "Failed to found prefetch recorded in cache");
+        // 如果没有反馈Cache，说明被无效化了，但是删除操作依旧需要处理
+        for (BaseCache* srcCache : srcCaches) {
+            // 不对ICache进行训练
+            if (!srcCache->cacheLevel_) continue;
+            Tables& workTable = getTable(srcCache);
+            // 一个Demand Request命中了预取数据，因此训练奖励
+            CHECK_RET_EXIT(train(workTable, hitBlkAddr, cacheLevel, GoodPref),
+                    "Failed to update training data when dmd hit pref");
+        }
+        if (!srcCaches.empty()) {
+            // 更新预取有害性统计数据（必须不是无效化预取）
+            CHECK_RET_EXIT(prefUsefulTable_[cache].updateHit(hitBlkAddr),
+                    "Failed to update pref hit to prefetch useful table");
+        } else {
+            CHECK_ARGS_EXIT(!usefulTable_[cache].isPrefValid(hitBlkAddr),
+                    "Find prefetch not invalid in useful table");
+        }
+        // 该情况只会更新命中，但是并不会进行删除
     } else if (info.source == Pref && info.target == Dmd) {
         // 如果一个降级预取命中了目标等级，则属于一个无用预取
         if (pkt->targetCacheLevel_ > pkt->srcCacheLevel_ &&

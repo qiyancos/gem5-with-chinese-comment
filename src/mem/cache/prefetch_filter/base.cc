@@ -176,6 +176,14 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
                 CHECK_RET_EXIT(removePrefetch(cache, hitBlkAddr, true),
                         "Failed to remove prefetch record when hit by dmd");
             }
+        } else if (info.target == PendingPref) {
+            // 该情况实际上源自于Demand Miss pendingPref导致的PostProcess
+            // 该情况只会更新命中，但是并不会进行删除
+            if (usefulTable_[cache].isPrefValid(hitBlkAddr)) {
+                // Demand Request命中了预取数据，只有当前预取还是预取才会处理
+                CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitBlkAddr,
+                        Dmd), "Failed to update when dmd hit pref data");
+            }
         }
     } else if (info.source == Pref) {
         // 更新预取请求的命中情况
@@ -191,8 +199,8 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
             }
         }
        
-        // 预取命中了预取数据
-        if (info.target == Pref &&
+        // 预取命中了预取数据，命中pendingPref属于PostProcess内容
+        if ((info.target == Pref || info.target == PendingPref) &&
                 usefulTable_[cache].isPrefValid(hitBlkAddr)) {
             // 只有目标预取确实是一个预取，才会更新
             CHECK_RET_EXIT(usefulTable_[cache].updateHit(pkt, hitBlkAddr,

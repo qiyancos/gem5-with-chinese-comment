@@ -709,25 +709,31 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     }
     
     /// 这里会进行PendingPref覆盖情况的后后续处理
-    if (is_fill && !is_error && mshr->needPostProcess_ &&
+    if (is_fill && !is_error && blk &&
+            prefetchFilter_ && mshr->needPostProcess_ &&
             mshr->prefTarget_->pkt->packetType_ == prefetch_filter::Pref) {
+        std::vector<PacketPtr> postAddedPkt;
         for (auto& target : mshr->targets) {
-            if (target.postAddedTarget_ && prefetchFilter_ && blk) {
-                PacketPtr targetPkt = target.pkt;
-                panic_if(!(targetPkt->packetType_ == prefetch_filter::Dmd ||
-                        (targetPkt->packetType_ == prefetch_filter::Pref &&
-                        targetPkt->srcCacheLevel_ < cacheLevel_ &&
-                        targetPkt->targetCacheLevel_ < cacheLevel_)),
-                        "Found unexpected MSHR target status when doing"
-                        " post process");
-                /// 处理PendingPref被Demand/Pref覆盖的情况
-                Addr hitAddr = pkt->getAddr();
-                prefetch_filter::DataTypeInfo infoPair;
-                infoPair.target = prefetch_filter::Pref;
-                infoPair.source = targetPkt->packetType_;
-                prefetchFilter_->notifyCacheHit(this, targetPkt, hitAddr,
-                        infoPair);
+            if (target.postAddedTarget_) {
+                postAddedPkt.push_back(target.pkt);
             }
+        }
+        for (int i = 0; i < postAddedPkt.size(); i++) {
+            PacketPtr targetPkt = postAddedPkt[i];
+            panic_if(!(targetPkt->packetType_ == prefetch_filter::Dmd ||
+                    (targetPkt->packetType_ == prefetch_filter::Pref &&
+                    targetPkt->srcCacheLevel_ < cacheLevel_ &&
+                    targetPkt->targetCacheLevel_ < cacheLevel_)),
+                    "Found unexpected MSHR target status when doing"
+                    " post process");
+            /// 处理PendingPref被Demand/Pref覆盖的情况
+            Addr hitAddr = pkt->getAddr();
+            prefetch_filter::DataTypeInfo infoPair;
+            infoPair.target = i == postAddedPkt.size() - 1 ?
+                    prefetch_filter::Pref : prefetch_filter::PendingPref;
+            infoPair.source = targetPkt->packetType_;
+            prefetchFilter_->notifyCacheHit(this, targetPkt, hitAddr,
+                    infoPair);
         }
     }
 
