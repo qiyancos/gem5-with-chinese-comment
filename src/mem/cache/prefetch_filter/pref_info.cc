@@ -35,7 +35,7 @@
 
 namespace prefetch_filter {
 
-Tick debugStartTick_ = 2270000000000LLU;
+Tick debugStartTick_ = 670000000000LLU;
 Tick maxResponseGap_ = 1000000000LLU;
 Tick timerPrintGap_ = 100000000LLU;
 Tick tickNow_ = 0;

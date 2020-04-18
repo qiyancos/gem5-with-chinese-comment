@@ -2915,7 +2915,16 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
                     /// 如果合并为一个提级/平级预取，
                     DEBUG_MEM("MSHR changed for none low level prefetch "
                             "@0x%lx", tgt_pkt->getAddr());
-                    mshr->getTarget()->source = MSHR::Target::FromCPU;
+                    /// 为所有平级/提级预取修改属性
+                    for (auto& target : mshr->targets) {
+                        panic_if(target.pkt->packetType_ !=
+                                prefetch_filter::Pref, "Prefetch mshr should "
+                                "not have demand target");
+                        if (target.pkt->targetCacheLevel_ <=
+                                cache.cacheLevel_) {
+                            target->source = MSHR::Target::FromCPU;
+                        }
+                    }
                 }
             }
         }

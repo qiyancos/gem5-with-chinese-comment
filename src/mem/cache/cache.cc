@@ -792,6 +792,15 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             prefetch_filter::Pref && cacheLevel_ < prefPkt->srcCacheLevel_ &&
             cacheLevel_ >= prefPkt->targetCacheLevel_;
     
+    /// 表明当前MSHR是否存在Demand Target
+    bool hasDemandTarget = false;
+    for (auto& target : targets) {
+        if (target.pkt->packetType_ == prefetch_filter::Dmd) {
+            hasDemandTarget = true;
+            break;
+        }
+    }
+
     for (auto &target: targets) {
         PacketPtr tgt_pkt = target.pkt;
         switch (target.source) {
@@ -800,7 +809,7 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             /// 则会当作预取处理
             if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
                 /// 标记被预取的状况
-                if (blk) {
+                if (blk && !(mshr->needPostProcess_ && hasDemandTarget)) {
                     blk->status |= BlkHWPrefetched;
                 }
                 if (tgt_pkt->targetCacheLevel_ == cacheLevel_) {
@@ -992,9 +1001,7 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                         getName().c_str(), tgt_pkt, tgt_pkt->getAddr(),
                         BaseCache::levelName_[tgt_pkt->srcCacheLevel_].c_str(),
                         BaseCache::levelName_[tgt_pkt->targetCacheLevel_].c_str());
-                if (!(mshr->needPostProcess_ &&
-                        targets.back().pkt->packetType_ ==
-                        prefetch_filter::Dmd)) {
+                if (!(mshr->needPostProcess_ && hasDemandTarget)) {
                     // 对于被Demand Shadowed的Pending预取请求不会设置预取属性
                     blk->status |= BlkHWPrefetched;
                 }

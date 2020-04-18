@@ -386,7 +386,7 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
             }
             
             /// PendingMSHR新增Target不会改变prefTraget
-            if (pkt->packetType_ != prefetch_filter::Pref) {
+            if (pkt->packetType_ == prefetch_filter::Dmd) {
                 /// PendingMSHR合并Demand，不会对新的Demand做任何处理
                 if (localPkt) {
                     /// 本地Cache的请求一定会被强制转换为平级预取处理
@@ -416,7 +416,7 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
                 deletedPacket->insert(localPkt);
             }
             
-            if (pkt->packetType_ != prefetch_filter::Pref) {
+            if (pkt->packetType_ == prefetch_filter::Dmd) {
                 /// 这里合并的请求是Demand合并到Prefetch
                 isSecure = pkt->isSecure();
                 _isUncacheable = pkt->req->isUncacheable();
