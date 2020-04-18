@@ -77,9 +77,10 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port,
 
     /// 标记当前处理的是否是一个提升级别的预取
     const bool isLevelUpPref = cpkt->packetType_ == prefetch_filter::Pref &&
-            cpkt->recentCache_->cacheLevel_ <= cpkt->srcCacheLevel_;
+            cpkt->recentCache_->cacheLevel_ <= cpkt->srcCacheLevel_ &&
+            cpkt->isResponse();
     
-    if (isLevelUpPref && cpkt->isResponse()) {
+    if (isLevelUpPref) {
         panic_if(!success, "Success flag must be provided for level up "
                 "prefetch process");
         *success = true;
@@ -94,7 +95,7 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port,
     }
     SnoopMask req_port = portToMask(slave_port);
     reqLookupResult = cachedLocations.find(line_addr);
-    bool is_hit = (reqLookupResult != cachedLocations.end());
+    bool is_hit = reqLookupResult != cachedLocations.end();
 
     // If no hit in snoop filter create a new element and update iterator
     if (!is_hit) {
@@ -118,8 +119,6 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port,
             is_hit = false;
         } else {
             if (isLevelUpPref) {
-                panic_if(!cpkt->isResponse(),
-                        "Level-up prefetch does not expect request packet");
                 DEBUG_MEM("SnoopFilter[%p] cancle adding new entry for "
                         "level-up prefetch @0x%lx ", this, line_addr);
                 /// 如果发现已经存在了一个其他记录，当前是一个提级预取
