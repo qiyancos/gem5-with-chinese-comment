@@ -127,6 +127,7 @@ int PrefetchUsefulTable::init(const uint8_t counterBits, const uint32_t CCSize,
     if (!cache) {
         return 0;
     }
+    cache_ = cache;
     valid_ = cache->enableHarmTable_;
     if (!valid_) {
         return 0;
@@ -157,7 +158,7 @@ int PrefetchUsefulTable::getReplacedAddr(const uint64_t& addr,
     if (prefIter == prefInCache_.end()) {
         CHECK_ARGS(invalidatedPref_.find(addr) != invalidatedPref_.end(),
                 "Can not find prefetch record for given addr");
-        *replacedAddr = 0;
+        *replacedAddr = invalidBlkAddr_;
         return 0;
     }
     if (prefIter->second == Trainable) {
@@ -166,7 +167,7 @@ int PrefetchUsefulTable::getReplacedAddr(const uint64_t& addr,
                 "Failed to find counter in the counter cache for prefetch");
         *replacedAddr = entry->evictedAddr_;
     } else {
-        *replacedAddr = 0;
+        *replacedAddr = invalidBlkAddr_;
     }
     return 0;
 }
@@ -220,7 +221,7 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
     // 发生了新的预取替换Demand/Pref数据，相关记录被更新
     CHECK_ARGS(prefInCache_.find(prefAddr) == prefInCache_.end(),
             "Found prefetch already in record when adding prefetch");
-    prefInCache_[prefAddr] = evictedAddr ? Trainable : CleanPref;
+    prefInCache_[prefAddr] = type == NullType ? CleanPref : Trainable;
     
     if (type == NullType) {
         DEBUG_PF(2, "PPF add clean prefetch @0x%lx", prefAddr);
@@ -243,8 +244,9 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
         CHECK_ARGS(replacedPrefIter != prefInCache_.end(),
                 "Can not find prefetch record bound with victim");
         CHECK_ARGS(replacedPrefIter->second == Trainable,
-                "Trainable prefetch will only replace another "
-                "trainable prefetch");
+                "Trainable prefetch can not replace non-trainable "
+                "prefetch @0x%lx", replacedPrefIter->first);
+        
         replacedPrefIter->second = NotTrainable;
         
         CounterEntry* counterEntry;
@@ -280,8 +282,8 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
         CHECK_ARGS(replacedPrefIter != prefInCache_.end(),
                 "Can not find prefetch record bound with victim");
         CHECK_ARGS(replacedPrefIter->second == Trainable,
-                "Trainable prefetch will only replace another "
-                "trainable prefetch");
+                "Trainable prefetch can not replace non-trainable "
+                "prefetch @0x%lx", replacedPrefIter->first);
         replacedPrefIter->second = NotTrainable;
         
         CHECK_ARGS(counterEntry.prefAddr_ == replacedPrefAddr,
@@ -357,7 +359,7 @@ int PrefetchUsefulTable::deletePref(const uint64_t& addr,
                 "Counter correspond to prefetch not exists or error occurred");
         *counterPtr = counterEntry->counter_;
 
-        if (counterEntry->evictedAddr_) {
+        if (counterEntry->evictedAddr_ != invalidBlkAddr_) {
             CHECK_ARGS(victimCache_.invalidate(
                     counterEntry->evictedAddr_) == 1,
                     "Failed to invalidate victim data in victim cache");
@@ -576,7 +578,7 @@ int PerceptronPrefetchFilter::notifyCacheMiss(BaseCache* cache,
     DEBUG_PF(1, "%s @0x%lx Miss %s @0x%lx",
             getDataTypeString(info.source).c_str(), pkt->getAddr(),
             getDataTypeString(info.target).c_str(),
-            combinedPkt ? combinedPkt->getAddr() : 0);
+            combinedPkt ? combinedPkt->getAddr() : invalidBlkAddr_);
     CHECK_ARGS_EXIT(info.source != NullType, "Unexpected source data type");
     BasePrefetchFilter::notifyCacheMiss(cache, pkt, combinedPkt, info);
     uint8_t cacheLevel = cache->cacheLevel_;
@@ -673,7 +675,8 @@ int PerceptronPrefetchFilter::notifyCacheFill(BaseCache* cache,
             std::map<uint64_t, uint8_t> conflictPref;
             CHECK_RET_EXIT(prefUsefulTable_[cache].addPref(pkt->getAddr() &
                     cacheLineAddrMask_,
-                    enableRecursiveReplace_ && oldReplacedAddr ?
+                    (enableRecursiveReplace_ &&
+                    oldReplacedAddr != invalidBlkAddr_) ?
                     oldReplacedAddr : evictedBlkAddr,
                     info.target, &conflictPref),
                     "Failed to add new pref info when pref replaced pref");

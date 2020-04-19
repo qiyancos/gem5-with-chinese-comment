@@ -121,7 +121,7 @@ private:
         uint64_t tag_ = 0;
 
         // 完整的地址
-        uint64_t addr_ = 0;
+        uint64_t addr_ = invalidBlkAddr_;
         
         // valid bit
         bool valid_ = false;

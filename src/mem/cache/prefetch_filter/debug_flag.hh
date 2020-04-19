@@ -41,6 +41,7 @@
 #define __MEM_CACHE_PREFETCH_FILTER_DEBUG_FLAG_HH__
 
 #include <cstdint>
+#include <climits>
 #include <string>
 
 #include <stdio.h>

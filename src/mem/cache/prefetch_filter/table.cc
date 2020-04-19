@@ -79,7 +79,7 @@ int CacheTable<T>::init(const int8_t tagBits, const uint32_t size,
 
     // 初始化表格
     data_.clear();
-    data_.resize(sets_, Set(assoc, CacheEntry {0, 0, valid}));
+    data_.resize(sets_, Set(assoc, CacheEntry {0, invalidBlkAddr_, valid}));
     validAddr_.resize(sets_);
     return 0;
 }
@@ -123,7 +123,8 @@ int CacheTable<T>::init(const int8_t tagBits, const uint32_t size,
 
     // 初始化表格
     data_.clear();
-    data_.resize(sets_, Set(assoc, CacheEntry {0, 0, valid, data}));
+    data_.resize(sets_, Set(assoc,
+            CacheEntry {0, invalidBlkAddr_, valid, data}));
     validAddr_.resize(sets_);
     return 0;
 }
@@ -281,6 +282,8 @@ int IdealPrefetchUsefulTable::checkDataType(const uint64_t& addr,
     if (type == NullType || !valid_) return 0;
     
     if (type == Pref) {
+        CHECK_ARGS(addr != invalidBlkAddr_,
+                "Prefetch packet with invalid addres");
         // 如果是Miss，那么MSHR中的预取应该只有info，还未添加记录
         if (isMiss) {
             CHECK_ARGS(prefIndexes.size() != 0,
@@ -301,6 +304,8 @@ int IdealPrefetchUsefulTable::checkDataType(const uint64_t& addr,
                     "Can not find prefetch record in BPF");
         }
     } else if (type == Dmd) {
+        CHECK_ARGS(addr != invalidBlkAddr_,
+                "Demand packet with invalid addres");
         if (isMiss) {
             CHECK_ARGS(prefIndexes.empty(),
                     "None prefetch packet should not have prefetch index");
@@ -313,6 +318,8 @@ int IdealPrefetchUsefulTable::checkDataType(const uint64_t& addr,
             return 0;
         }
     } else {
+        CHECK_ARGS(addr != invalidBlkAddr_,
+                "PendingPref with invalid address");
         // 对于一个PendingPref，一定会有Info记录
         CHECK_ARGS(isMiss, "Only check pending prefetch when miss");
         CHECK_ARGS(prefIndexes.size() != 0,
@@ -431,14 +438,14 @@ int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
                     "It seems that some info in evict map are not "
                     "released normally");
         }
-    } else if (type == Pref && replacedAddr) {
+    } else if (type == Pref && replacedAddr != invalidBlkAddr_) {
         auto evictIter = evictMap_.find(replacedAddr);
         if (evictIter != evictMap_.end()) {
             // 如果替换目标是一个预取，则不会检查是否存在
             const std::set<PrefetchUsefulInfo*>& oldInfoList =
                     evictIter->second;
             for (auto info : oldInfoList) {
-                CHECK_RET(info->resetReplacedAddr(cache_, 0),
+                CHECK_RET(info->resetReplacedAddr(cache_, invalidBlkAddr_),
                         "Failed to reset replaced address for a "
                         "replaced prefetch");
             }
@@ -449,8 +456,8 @@ int IdealPrefetchUsefulTable::addPref(const PacketPtr& prefPkt,
             evictMap_[replacedAddr] = newInfoList;
         }
     } else {
-        CHECK_ARGS(replacedAddr == 0,
-                "NullType can not have none-zero address");
+        CHECK_ARGS(replacedAddr == invalidBlkAddr_,
+                "NullType can not have valid address");
     }
     CHECK_ARGS(evictMap_.size() <= cache_->tags->numBlocks,
             "It seems that some evictions are not erased properly");
@@ -493,7 +500,7 @@ int IdealPrefetchUsefulTable::combinePref(const uint64_t& addr,
         newInfo->addReplacedAddr(cache_, replacedAddr);
         
         prefInfoList.insert(newInfo);
-        if (replacedAddr) {
+        if (replacedAddr != invalidBlkAddr_) {
             CHECK_ARGS(evictMap_.find(replacedAddr) != evictMap_.end(),
                     "Record for replaced address not exist in evict map");
             evictMap_[replacedAddr].insert(newInfo);
@@ -537,7 +544,7 @@ int IdealPrefetchUsefulTable::evictPref(const uint64_t& addr,
         uint64_t replacedAddr;
         CHECK_RET((*infoList.begin())->getReplacedAddr(cache_, &replacedAddr),
                 "Failed to find replaced addr for prefetch in cache");
-        if (replacedAddr) {
+        if (replacedAddr != invalidBlkAddr_) {
             auto evictInfoIter = evictMap_.find(replacedAddr);
             CHECK_ARGS(evictInfoIter != evictMap_.end(),
                     "Failed to find replaced record in evicted map");
@@ -718,7 +725,7 @@ int IdealPrefetchUsefulTable::getReplacedAddr(const uint64_t& addr,
                 invalidatedMap_.find(addr) != invalidatedMap_.end(),
                 "Can not find prefetch record anywhere when trying to get"
                 " replaced addr");
-        *replacedAddr = 0;
+        *replacedAddr = invalidBlkAddr_;
         return 0;
     }
     CHECK_RET((*infoIter->second.begin())->getReplacedAddr(
@@ -830,7 +837,7 @@ int IdealPrefetchUsefulTable::updateInvalidation(const Tick& tickNow,
         uint64_t replacedAddr;
         CHECK_RET((*infoList.begin())->getReplacedAddr(cache_, &replacedAddr),
                 "Failed to find replaced addr for prefetch in cache");
-        if (replacedAddr) {
+        if (replacedAddr != invalidBlkAddr_) {
             auto evictInfoIter = evictMap_.find(replacedAddr);
             CHECK_RET(evictInfoIter != evictMap_.end(),
                     "Failed to find replaced record in evicted map");

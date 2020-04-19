@@ -330,7 +330,7 @@ Packet::getProcessTime(const uint8_t level) {
 Addr
 Packet::getAddr() const {
     // assert(flags.isSet(VALID_ADDR));
-    return flags.isSet(VALID_ADDR) ? addr : 0;
+    return flags.isSet(VALID_ADDR) ? addr : prefetch_filter::invalidBlkAddr_;
 }
 
 /// 迁移到cc以避免头文件互相包含问题

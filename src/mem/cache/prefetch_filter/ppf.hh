@@ -188,6 +188,9 @@ private:
 
     // 最近被无效化但是尚未删除的预取地址（仅用于正确性检查）
     std::set<uint64_t> invalidatedPref_;
+    
+    // 所属Cache
+    BaseCache* cache_;
 };
 
 } // namespace prefetch_filter

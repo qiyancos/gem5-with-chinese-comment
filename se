@@ -39,7 +39,7 @@ setScript(){
 ################# Other Change for Source File in Gem5 #################
 additionalChange() {
     tagPrefDegree=2
-    stridePrefConfThresh=0 # 0-7
+    stridePrefConfThresh=2 # 0-7
     stridePrefDegree=16
     useFilter=True
 

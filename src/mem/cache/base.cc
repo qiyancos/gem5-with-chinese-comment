@@ -604,6 +604,8 @@ BaseCache::recvTimingResp(PacketPtr pkt)
             cacheLevel_ < pkt->srcCacheLevel_ &&
             pkt->caches_.find(this) == pkt->caches_.end();
     
+    CacheBlk *blk = tags->findBlock(pkt->getAddr(), pkt->isSecure());
+
     if (needLevelUpPrefProcess) {
         /// 如果我们发现Packet是一个提升级别的预取
         /// 那么会获取Pakcet里面存放着的额外MSHR
@@ -626,6 +628,18 @@ BaseCache::recvTimingResp(PacketPtr pkt)
             return;
         } else if (oldWBEntry) {
             /// 如果已存在的WriteBuffer，则会直接无效化提升等级预取的响应
+            assert(mshr);
+            // delete mshr;
+            if (prefetchFilter_) {
+                for (auto cpuId : cpuIds_) {
+                    (*BasePrefetchFilter::dismissedLevelUpPrefLate_[
+                            cacheLevel_])[cpuId]++;
+                }
+            }
+            delete pkt;
+            return;
+        } else if (blk) {
+            /// 如果已存在对应的Block，则会直接无效化提升等级预取的响应
             assert(mshr);
             // delete mshr;
             if (prefetchFilter_) {
@@ -675,8 +689,6 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     // make sure that if the mshr was due to a whole line write then
     // the response is an invalidation
     assert(!mshr->wasWholeLineWrite || pkt->isInvalidate());
-
-    CacheBlk *blk = tags->findBlock(pkt->getAddr(), pkt->isSecure());
 
     if (is_fill && !is_error) {
         DPRINTF(Cache, "Block for addr %#llx being updated in Cache\n",
@@ -1322,7 +1334,8 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
                         prefetch_filter::Pref : prefetch_filter::Dmd;
                 infoPair.target = blk->wasValid_ ? infoPair.target :
                     prefetch_filter::NullType;
-                Addr evictedAddr = blk->wasValid_ ? blk->oldAddr_ : 0;
+                Addr evictedAddr = blk->wasValid_ ? blk->oldAddr_ :
+                        prefetch_filter::invalidBlkAddr_;
                 prefetchFilter_->notifyCacheFill(this, pkt,
                         evictedAddr, infoPair);
             }
@@ -1332,7 +1345,7 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
             }
             blk->wasValid_ = false;
             blk->usedToBePrefetched_ = false;
-            blk->oldAddr_ = 0;
+            blk->oldAddr_ = prefetch_filter::invalidBlkAddr_;
             
             blk->status |= BlkReadable;
         }
@@ -1422,7 +1435,8 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
                             prefetch_filter::Pref : prefetch_filter::Dmd;
                     infoPair.target = blk->wasValid_ ? infoPair.target :
                         prefetch_filter::NullType;
-                    Addr evictedAddr = blk->wasValid_ ? blk->oldAddr_ : 0;
+                    Addr evictedAddr = blk->wasValid_ ? blk->oldAddr_ :
+                            prefetch_filter::invalidBlkAddr_;
                     prefetchFilter_->notifyCacheFill(this, pkt,
                             evictedAddr, infoPair);
                 }
@@ -1431,7 +1445,7 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
                 }
                 blk->wasValid_ = false;
                 blk->usedToBePrefetched_ = false;
-                blk->oldAddr_ = 0;
+                blk->oldAddr_ = prefetch_filter::invalidBlkAddr_;
                 blk->status |= BlkReadable;
             }
         }
@@ -1620,7 +1634,8 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
                     prefetch_filter::Pref : prefetch_filter::Dmd;
             infoPair.target = blk->wasValid_ ? infoPair.target :
                     prefetch_filter::NullType;
-            Addr evictedAddr = blk->wasValid_ ? blk->oldAddr_ : 0;
+            Addr evictedAddr = blk->wasValid_ ? blk->oldAddr_ :
+                    prefetch_filter::invalidBlkAddr_;
             prefetchFilter_->notifyCacheFill(this, pkt, evictedAddr, infoPair);
         }
         
@@ -1630,7 +1645,7 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
     
     blk->wasValid_ = false;
     blk->usedToBePrefetched_ = false;
-    blk->oldAddr_ = 0;
+    blk->oldAddr_ = prefetch_filter::invalidBlkAddr_;
     
     // The block will be ready when the payload arrives and the fill is done
     blk->setWhenReady(clockEdge(fillLatency) + pkt->headerDelay +

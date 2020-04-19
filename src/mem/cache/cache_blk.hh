@@ -93,7 +93,7 @@ class CacheBlk : public ReplaceableEntry
     bool usedToBePrefetched_ = false;
 
     /// 表示该Block在被替换前的地址
-    uint64_t oldAddr_ = 0;
+    uint64_t oldAddr_ = prefetch_filter::invalidBlkAddr_;
 
     /** Task Id associated with this block */
     uint32_t task_id;

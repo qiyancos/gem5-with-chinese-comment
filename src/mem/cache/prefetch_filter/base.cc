@@ -64,7 +64,8 @@ BasePrefetchFilter::BasePrefetchFilter(const BasePrefetchFilterParams *p) :
         enableFilter_(p->enable_filter),
         enableRecursiveReplace_(p->enable_recursive_replace) {
     nextCorrectionTick_ = correctionPeriod_;
-    cacheLineAddrMask_ = ~(p->block_size - 1);
+    cacheLineAddrMask_ = ~(static_cast<uint64_t>(p->block_size - 1));
+    prefetch_filter::invalidBlkAddr_ = cacheLineAddrMask_;
     int blockSize = p->block_size;
     cacheLineOffsetBits_ = 0;
     while (blockSize >> ++cacheLineOffsetBits_) {}
@@ -245,7 +246,7 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
 
     skipCorrectPref_ = DoublePref(cache,
             std::pair<uint64_t, uint64_t>(info.source == Pref ?
-            hitBlkAddr : 0, 0));
+            hitBlkAddr : invalidBlkAddr_, invalidBlkAddr_));
     // 时间维度的检查与更新
     CHECK_RET_EXIT(checkUpdateTimingPost(),
             "Failed check & update timing stats information");
@@ -260,7 +261,7 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
     
     // 检查目标的正确性
     CHECK_RET_EXIT(usefulTable_[cache].checkDataType(combinedPkt ?
-            combinedPkt->getAddr() & cacheLineAddrMask_ : 0,
+            combinedPkt->getAddr() & cacheLineAddrMask_ : invalidBlkAddr_,
             combinedPkt ? combinedPkt->prefIndexes_ : std::set<uint64_t>(),
             info.target, true),
             "Data type not match with the record in BPF");
@@ -342,7 +343,8 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
     
     skipCorrectPref_ = DoublePref(cache,
             std::pair<uint64_t, uint64_t>(info.source == Pref ?
-            pkt->getAddr() & cacheLineAddrMask_ : 0, 0));
+            pkt->getAddr() & cacheLineAddrMask_ : invalidBlkAddr_,
+            invalidBlkAddr_));
     // 时间维度的检查与更新
     CHECK_RET_EXIT(checkUpdateTimingPost(),
             "Failed check & update timing stats information");
@@ -426,7 +428,8 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                 // 也可以选择原本预取替换的Demand地址作为Victim
                 // (只有原来的预取替换了Demand，才会选择)
                 CHECK_RET_EXIT(usefulTable_[cache].addPref(pkt,
-                        enableRecursiveReplace_ && oldReplacedAddr?
+                        (enableRecursiveReplace_ &&
+                        oldReplacedAddr != invalidBlkAddr_)?
                         oldReplacedAddr : evictedBlkAddr, Pref),
                         "Failed to replace old pref with new pref");
             }
@@ -439,8 +442,9 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
     
     skipCorrectPref_ = DoublePref(cache,
             std::pair<uint64_t, uint64_t>(
-            info.source == Pref ? pkt->getAddr() & cacheLineAddrMask_ : 0,
-            info.target == Pref ? evictedBlkAddr : 0));
+            info.source == Pref ?
+            pkt->getAddr() & cacheLineAddrMask_ : invalidBlkAddr_,
+            info.target == Pref ? evictedBlkAddr : invalidBlkAddr_));
     // 时间维度的检查与更新
     CHECK_RET_EXIT(checkUpdateTimingPost(),
             "Failed check & update timing stats information");
@@ -470,7 +474,7 @@ int BasePrefetchFilter::invalidatePrefetch(BaseCache* cache,
             "Failed to remove prefetch record when invalidated");
     
     skipCorrectPref_ = DoublePref(cache,
-            std::pair<uint64_t, uint64_t>(prefAddr, 0));
+            std::pair<uint64_t, uint64_t>(prefAddr, invalidBlkAddr_));
     // 时间维度的检查与更新
     CHECK_RET_EXIT(checkUpdateTimingPost(),
             "Failed check & update timing stats information");

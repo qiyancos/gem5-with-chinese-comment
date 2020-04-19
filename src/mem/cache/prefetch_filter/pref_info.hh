@@ -54,6 +54,9 @@ extern Tick timerPrintGap_;
 // 当前系统下的CPU个数，由BasePrefetchFilter初始化
 extern int numCpus_;
 
+// 该变量表示一个无效地址
+extern uint64_t invalidBlkAddr_;
+
 // 依据一组Cache指针生成对应的CPUID位向量
 uint64_t generateCoreIDMap(const std::set<BaseCache*>& caches);
 
@@ -240,7 +243,7 @@ public:
     const uint64_t index_ = 0;
 
     // 对应预取的地址
-    const uint64_t addr_ = 0;
+    const uint64_t addr_ = invalidBlkAddr_;
 
     // 该预取是不是一个降级预取（用于预取校正）
     bool isLevelDown_ = false;
