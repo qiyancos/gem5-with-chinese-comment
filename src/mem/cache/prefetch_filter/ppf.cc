@@ -549,7 +549,8 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
                     "Find prefetch not invalid in useful table");
         }
         // 该情况只会更新命中，但是并不会进行删除
-    } else if (info.source == Pref && info.target == Dmd) {
+    } else if (info.source == Pref &&
+            (info.target == Dmd || info.target == Pref)) {
         // 如果一个降级预取命中了目标等级，则属于一个无用预取
         if (pkt->targetCacheLevel_ > pkt->srcCacheLevel_ &&
                 pkt->targetCacheLevel_ == cache->cacheLevel_) {

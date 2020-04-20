@@ -84,25 +84,25 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     
     # Filter Setting
     # Feature Table Setting
-    feature_weight_bits = Param.UInt8(4, "Number of bits of weight for a "
+    feature_weight_bits = Param.UInt8(5, "Number of bits of weight for a "
             "feature")
-    feature_weight_init = VectorParam.UInt8([14, 10, 6], "Initiated value "
+    feature_weight_init = VectorParam.UInt8([28, 20, 12], "Initiated value "
             "for weight in differenct cache")
+    # 0-L1ICache, 1-L1DCache, 2-L2Cache...n-LnCache
+    prefetch_threshold = VectorParam.UInt16([24, 16, 4],
+            "Thresholds for prefetch to different caches")
+    
     # Used to deal with death valley for prefetch training
     feature_weight_reset_times = Param.UInt32(4096, "The number of rejected "
             "prefetches we see when weight table need to be reset")
 
-    # 0-L1ICache, 1-L1DCache, 2-L2Cache...n-LnCache
-    prefetch_threshold = VectorParam.UInt16([12, 8, 2],
-            "Thresholds for prefetch to different caches")
-    
     # Feature: "key1 key2 key3 x n" means to extract n bits start from
     #          the xth bit (include xth bit) from '[key1]^[key2]^[key3]'
     #          as the feature index
     original_features = VectorParam.String([
-            "PC1 Confidence 0 12", # PC ^ Confidence;
-            #"Address 0 6", # Address inside a cache block;
+            "PageAddress Confidence 0 10", # PageAddr ^ conf
             "Address 6 6", # Offset of a cache block within a page;
+            "Address 0 12", # Lower bits of address;
             "PageAddress 0 10", # Lower bits of physical page num;
             "Confidence 0 3", # Confidence of the prefetch;
             "PC1 PC2>>1 PC3>>2 0 12", # Hash of last insts;
@@ -113,9 +113,10 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     
     # Newly added features
     added_features = VectorParam.String([
+            #"PC1 Confidence 0 12", # PC ^ Confidence;
             "BPC1 BPC2>>1 BPC3>>2 0 12", # Hash of branch insts;
-            "PrefetcherID PC1 0 12", # CoreID bitmap ^ PC;
-            "PrefetcherID PageAddress 0 12", # CoreID bitmap ^ Page address;
+            #"PrefetcherID PC1 0 12", # CoreID bitmap ^ PC;
+            #"PrefetcherID PageAddress 0 12", # CoreID bitmap ^ Page address;
             # "PrefHarm 0 4", # Prefetch Harm;
             # "PrefetcherID PrefHarm 0 8", # CoreID bitmap ^ Prefetch Harm;
             ], "List of added features used for PPF")

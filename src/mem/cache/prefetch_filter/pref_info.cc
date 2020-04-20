@@ -175,11 +175,13 @@ DEF_INFO(CoreIDMap, CoreIDMap, 8)
 DEF_INFO(CoreID, CoreID, 3)
 // 发射预取的PrefetcherID, 最多支持16核心, 6 bits
 DEF_INFO(PrefetcherID, PrefetcherID, 6)
+// 预取地址, 32 bits
+DEF_INFO(PrefAddress, PrefAddress, 32)
 
 // 避免出现unused-variable错误提示
 std::vector<int> PrefInfoIndexes {PC1, PC2_1, PC3_2, Confidence, Address,
         PageAddress, Depth, Delta, Signature, BPC1, BPC2_1, BPC3_2,
-        PrefHarm, CoreIDMap, CoreID, PrefetcherID};
+        PrefHarm, CoreIDMap, CoreID, PrefetcherID, PrefAddress};
 
 // 多核有用的预取（他核心有用多于单核心有用）
 int CrossCoreUseful = addNewPrefUsefulType("cross_core_useful",

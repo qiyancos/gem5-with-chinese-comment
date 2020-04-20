@@ -130,6 +130,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                 prefInfo.setInfo("CoreIDMap",
                         prefetch_filter::generateCoreIDMap(pkt->caches_));
                 prefInfo.setInfo("PrefetcherID", cache->prefetcherId_);
+                prefInfo.setInfo("PrefAddress", addr_prio.first);
                 
                 uint8_t targetCacheLevel =
                         cache->prefetchFilter_->filterPrefetch(
