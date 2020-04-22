@@ -163,7 +163,7 @@ int PrefetchUsefulTable::getReplacedAddr(const uint64_t& addr,
     }
     if (prefIter->second == Trainable) {
         CounterEntry* entry;
-        CHECK_ARGS(counterCache_.read(addr, &entry) == 1,
+        CHECK_ARGS(counterCache_.read(addr, &entry, true) == 1,
                 "Failed to find counter in the counter cache for prefetch");
         *replacedAddr = entry->evictedAddr_;
     } else {
@@ -180,7 +180,7 @@ int PrefetchUsefulTable::updateHit(const uint64_t& addr) {
             "Failed to find record for prefetch in the table");
     if (prefIter->second == Trainable) {
         CounterEntry* entry;
-        CHECK_ARGS(counterCache_.read(addr, &entry) == 1,
+        CHECK_ARGS(counterCache_.read(addr, &entry, false) > 0,
                 "Failed to update counter in the counter cache when pref hit");
         entry->counter_++;
         DEBUG_PF(2, "PPF update demand hit event for prefetch 0x%lx", addr);
@@ -197,14 +197,14 @@ int PrefetchUsefulTable::updateMiss(const uint64_t& addr) {
     // 如果发生了一个Demand Miss情况
     uint64_t* counterIndex;
     int result;
-    CHECK_RET(result = victimCache_.read(addr, &counterIndex),
+    CHECK_RET(result = victimCache_.read(addr, &counterIndex, false),
             "Failed to find record for demand miss in the table");
     if (!result) {
         // 如果一个Demand Miss没有找到，那么可以跳过
         return 0;
     }
     CounterEntry* entry;
-    CHECK_ARGS(counterCache_.read(*counterIndex, &entry) == 1,
+    CHECK_ARGS(counterCache_.read(*counterIndex, &entry, true) == 1,
             "Failed to update counter in the counter cache when pref hit");
     entry->counter_--;
     DEBUG_PF(2, "PPF update demand miss for prefetch @0x%lx",
@@ -232,17 +232,14 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
     // 如果存在替换的地址，则进行Victim更新
     uint64_t replacedPrefAddr, replacedVictimAddr;
     CHECK_RET(result = victimCache_.write(evictedAddr, prefAddr,
-            &replacedVictimAddr, &replacedPrefAddr),
+            false, &replacedVictimAddr, &replacedPrefAddr),
             "Failed to add prefetch victim info to victim cache");
-    if (result == 0) {
-        // 如果发生两个预取共享一个Victim，手动设置
-        replacedVictimAddr = evictedAddr;
-    }
-    if (result == 2 || result == 0) {
+    if (result > 1 || result == 0) {
         // 两个预取发生了冲突，导致新的预取替换信息和原来的替换信息发生冲突
         auto replacedPrefIter = prefInCache_.find(replacedPrefAddr);
         CHECK_ARGS(replacedPrefIter != prefInCache_.end(),
-                "Can not find prefetch record bound with victim");
+                "Can not find prefetch record bound with victim @0x%lx",
+                replacedVictimAddr);
         CHECK_ARGS(replacedPrefIter->second == Trainable,
                 "Trainable prefetch can not replace non-trainable "
                 "prefetch @0x%lx", replacedPrefIter->first);
@@ -250,19 +247,23 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
         replacedPrefIter->second = NotTrainable;
         
         CounterEntry* counterEntry;
-        CHECK_ARGS(counterCache_.read(replacedPrefAddr, &counterEntry) == 1,
+        CHECK_ARGS(counterCache_.read(replacedPrefAddr,
+                &counterEntry, true) == 1,
                 "Failed to get counter from counter cache");
         CHECK_ARGS(counterEntry->prefAddr_ == replacedPrefAddr &&
                 counterEntry->evictedAddr_ == replacedVictimAddr,
-                "Address in counter entry does not match");
+                "Address in counter entry does not match [pref_addr %lx:%lx] "
+                "[victim_addr %lx:%lx]", replacedPrefAddr,
+                counterEntry->prefAddr_, replacedVictimAddr,
+                counterEntry->evictedAddr_);
         (*conflictPref)[replacedPrefAddr] = counterEntry->counter_;
         
         // 这时候应该将原来的预取训练属性删除，并进行更新
-        CHECK_ARGS(counterCache_.invalidate(replacedPrefAddr) == 1,
+        CHECK_ARGS(counterCache_.invalidate(replacedPrefAddr, true) == 1,
                 "Failed to invalidate old prefetch counter");
         DEBUG_PF(2, "Delete prefetch @0x%lx due to victim cache conflict",
                 replacedPrefIter->first);
-    } else {
+    } else if (result == 1) {
         // 新的预取替换的地址加入并且使用了空表项，可以继续执行
         DEBUG_PF(2, "PPF add prefetch @0x%lx with new victim entry", prefAddr);
     }
@@ -271,12 +272,12 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
     CounterEntry counterEntry;
     CHECK_RET(result = counterCache_.write(prefAddr,
             CounterEntry(counterBits_, counterInit_, prefAddr, evictedAddr),
-            &replacedPrefAddr, &counterEntry),
+            false, &replacedPrefAddr, &counterEntry),
             "Failed to allocate new counter for prefetch");
     if (result == 0) {
         // 可能发生了问题，之前的预取Counter没有正确的Invalidate
         CHECK_ARGS(false, "Counter for prefetch already exists");
-    } else if (result == 2) {
+    } else if (result > 1) {
         // 两个预取的Counter发生了冲突
         auto replacedPrefIter = prefInCache_.find(replacedPrefAddr);
         CHECK_ARGS(replacedPrefIter != prefInCache_.end(),
@@ -291,7 +292,8 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
         (*conflictPref)[replacedPrefAddr] = counterEntry.counter_;
         
         // 这时候应该将原来的预取训练属性删除，并进行更新
-        CHECK_ARGS(victimCache_.invalidate(counterEntry.evictedAddr_) == 1,
+        CHECK_ARGS(victimCache_.invalidate(
+                counterEntry.evictedAddr_, true) == 1,
                 "Failed to add prefetch victim info to victim cache");
         DEBUG_PF(2, "Delete prefetch @0x%lx due to counter cache conflict",
                 replacedPrefIter->first);
@@ -355,17 +357,18 @@ int PrefetchUsefulTable::deletePref(const uint64_t& addr,
     if (prefIter->second == Trainable) {
         // 如果可以训练，对应的Counter也一定的存在
         CounterEntry* counterEntry;
-        CHECK_ARGS(counterCache_.read(addr, &counterEntry) == 1,
+        CHECK_ARGS(counterCache_.read(addr, &counterEntry, true) == 1,
                 "Counter correspond to prefetch not exists or error occurred");
         *counterPtr = counterEntry->counter_;
 
         if (counterEntry->evictedAddr_ != invalidBlkAddr_) {
             CHECK_ARGS(victimCache_.invalidate(
-                    counterEntry->evictedAddr_) == 1,
-                    "Failed to invalidate victim data in victim cache");
+                    counterEntry->evictedAddr_, true) == 1,
+                    "Failed to invalidate victim data @0x%lx in victim cache",
+                    counterEntry->evictedAddr_);
         }
 
-        CHECK_ARGS(counterCache_.invalidate(addr) == 1,
+        CHECK_ARGS(counterCache_.invalidate(addr, true) == 1,
                 "Failed to invalidate counter in counter cache");
     } else if (prefIter->second == CleanPref) {
         *counterPtr = counterInit_;
@@ -441,14 +444,16 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
     // 简单初始化信息表格
     workTables_.resize(1, std::vector<Tables>(1));
     Tables& LLCTable = workTables_[0][0];
-    CHECK_WARN((tempFlag = LLCTable.prefetchTable_.init(p->prefetch_table_size,
-            p->prefetch_table_assoc,
+    CHECK_WARN((tempFlag = LLCTable.prefetchTable_.init(
+            p->prefetch_table_tag_bits,
+            p->prefetch_table_size, p->prefetch_table_assoc,
             BasePrefetchFilter::cacheLineOffsetBits_)) >= 0,
             "Failed to initiate prefetch table for init");
     initFailFlag_ |= tempFlag < 0;
     
-    CHECK_WARN((tempFlag = LLCTable.rejectTable_.init(p->reject_table_size,
-            p->reject_table_assoc,
+    CHECK_WARN((tempFlag = LLCTable.rejectTable_.init(
+            p->reject_table_tag_bits,
+            p->reject_table_size, p->reject_table_assoc,
             BasePrefetchFilter::cacheLineOffsetBits_)) >= 0,
             "Failed to initiate reject table for init");
     initFailFlag_ |= tempFlag < 0;
@@ -740,7 +745,7 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
             validFeatureCount++;
             SaturatedCounter* weight;
             CHECK_RET_EXIT(workTable.featureTable_[i].read(
-                    featureIndex, &weight) == 1,
+                    featureIndex, &weight, true) == 1,
                     "Failed to read weight for feature \"%s\" with index %d",
                     featureList_[i].name_.c_str(), featureIndex);
             CHECK_ARGS_EXIT(weight, "Feature index [%d] illegal for \"%s\"",
@@ -1101,12 +1106,12 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
             BaseCache::levelName_[cacheLevel].c_str());
     // 查询Prefetch Table
     std::vector<uint16_t>* prefIndexPtr = nullptr;
-    CHECK_RET(workTable.prefetchTable_.read(prefAddr, &prefIndexPtr),
+    CHECK_RET(workTable.prefetchTable_.read(prefAddr, &prefIndexPtr, false),
             "Failed to find prefetch in prefetch table");
     
     // 查询Reject Table
     std::vector<uint16_t>* rejectIndexPtr = nullptr;
-    CHECK_RET(workTable.rejectTable_.read(prefAddr, &rejectIndexPtr),
+    CHECK_RET(workTable.rejectTable_.read(prefAddr, &rejectIndexPtr, false),
             "Failed to find prefetch in prefetch table");
     
     // 如果均不存在，则更新相关计数
@@ -1123,7 +1128,7 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
     for (auto cpuId : workTable.cpuIds_) {
         (*prefTrainingType_[workTable.statsLevel_][type])[cpuId]++;
     }
-
+    
     CHECK_ARGS((prefIndexPtr != nullptr) ^ (rejectIndexPtr != nullptr),
             "One prefetch should not exist %s",
             "both in prefetch table and reject table");
@@ -1149,7 +1154,7 @@ int PerceptronPrefetchFilter::train(Tables& workTable,
         /// 对于无效的Index不会进行训练
         if ((*indexPtr)[i] != 0xffff) {
             CHECK_ARGS(workTable.featureTable_[i].read(
-                    (*indexPtr)[i], &weight) == 1,
+                    (*indexPtr)[i], &weight, true) == 1,
                     "Failed to read weight for a feature");
             *weight += step;
             DEBUG_PF(2, "Weight @%s[%d]: %u(add with %d)",
@@ -1242,7 +1247,7 @@ int PerceptronPrefetchFilter::updateTable(Tables& workTable,
         // 并从Reject Table删除
         std::vector<uint16_t> replacedIndexes;
         CHECK_RET(result = workTable.prefetchTable_.write(prefAddr, indexes,
-                &evictedAddr, &replacedIndexes),
+                false, &evictedAddr, &replacedIndexes),
                 "Failed to add new prefetch into prefetch table");
         
         // 如果对应的预取写入未命中，则生成新的表项包括替换，需要记录
@@ -1257,7 +1262,8 @@ int PerceptronPrefetchFilter::updateTable(Tables& workTable,
         }
 
         // 如果替换的预取在另一个表格也不存在，删除记录表项
-        if (result == 2 && workTable.rejectTable_.touch(evictedAddr) == 0) {
+        if (result > 2 && workTable.rejectTable_.touch(
+                evictedAddr, true) == 0) {
             // 依据表格出现次数更新统计信息
             CHECK_RET(updateWorkTableStats(workTable, evictedAddr),
                     "Failed to update work table statistics");
@@ -1265,14 +1271,14 @@ int PerceptronPrefetchFilter::updateTable(Tables& workTable,
             CHECK_RET(updateFreqStats(workTable, replacedIndexes),
                     "Failed to update weight frequency stats");
         }
-        CHECK_RET(workTable.rejectTable_.invalidate(prefAddr),
+        CHECK_RET(workTable.rejectTable_.invalidate(prefAddr, false),
                 "Failed to remove old prefetch from reject table");
     } else {
         // 如果预取被过滤，则预取会被记录到Reject Table
         // 并从Prefetch Table删除
         std::vector<uint16_t> replacedIndexes;
         CHECK_RET(workTable.rejectTable_.write(prefAddr, indexes,
-                &evictedAddr, &replacedIndexes),
+                false, &evictedAddr, &replacedIndexes),
                 "Failed to add new prefetch into reject table");
         
         // 如果对应的预取写入未命中，则生成新的表项包括替换，需要记录
@@ -1288,7 +1294,8 @@ int PerceptronPrefetchFilter::updateTable(Tables& workTable,
         }
         
         // 如果替换的预取在另一个表格也不存在，删除记录表项
-        if (result == 2 && workTable.prefetchTable_.touch(evictedAddr) == 0) {
+        if (result == 2 && workTable.prefetchTable_.touch(
+                evictedAddr, true) == 0) {
             // 依据表格出现次数更新统计信息
             CHECK_RET(updateWorkTableStats(workTable, evictedAddr),
                     "Failed to update work table statistics");
@@ -1296,7 +1303,7 @@ int PerceptronPrefetchFilter::updateTable(Tables& workTable,
             CHECK_RET(updateFreqStats(workTable, replacedIndexes),
                     "Failed to update weight frequency stats");
         }
-        CHECK_RET(workTable.prefetchTable_.invalidate(prefAddr),
+        CHECK_RET(workTable.prefetchTable_.invalidate(prefAddr, false),
                 "Failed to remove old prefetch from prefetch table");
     }
     return 0;
@@ -1310,7 +1317,7 @@ int PerceptronPrefetchFilter::updateFreqStats(Tables& workTable,
         // 对于无效的权重不会尝试更新
         if (indexes[i] != 0xffff) {
             CHECK_ARGS(workTable.featureTable_[i].read(
-                    indexes[i], &weight) == 1,
+                    indexes[i], &weight, true) == 1,
                     "Failed to read weight for a feature when updating stats");
             for (auto cpuId : workTable.cpuIds_) {
                 (*featureWeightFrequency_[workTable.statsLevel_][i][*weight])

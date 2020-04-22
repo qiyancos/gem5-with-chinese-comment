@@ -37,7 +37,7 @@ class BasePrefetchFilter(ClockedObject):
     cxx_header = "mem/cache/prefetch_filter/base.hh"
     sys = Param.System(Parent.any, "System this prefetcher belongs to")
 
-    enable_filter = Param.Bool(True, "Whether to enable Filter Engine")
+    enable_filter = Param.Bool(False, "Whether to enable Filter Engine")
     enable_stats = Param.Bool(True, "Whether to enable Stats Engine")
 
     enable_recursive_replace = Param.Bool(True, "Whether to use old replaced"
@@ -73,13 +73,13 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     prefetch_table_size = Param.UInt32(1024, "Size of the prefetch table")
     prefetch_table_assoc = Param.UInt8(4, "Associativity of the prefetch "
             "table")
+    prefetch_table_tag_bits = Param.Int8(6, "Tag bits of the prefetch "
+            "table")
     
     reject_table_size = Param.UInt32(1024, "Size of the reject table")
     reject_table_assoc = Param.UInt8(4, "Associativity of the reject "
             "table")
-    
-    old_pref_table_size = Param.UInt32(1024, "Size of the old prefetch table")
-    old_pref_table_assoc = Param.UInt8(4, "Associativity of the old prefetch "
+    reject_table_tag_bits = Param.Int8(6, "Tag bits of the reject "
             "table")
     
     # Filter Setting
@@ -135,7 +135,7 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     # Counter Cache Setting
     counter_cache_size = Param.UInt32(1024, "Size of the counter cache")
     counter_cache_assoc = Param.UInt8(4, "Associativity of the counter cache")
-    counter_cache_tag_bits = Param.Int8(-1, "Number of tag bits of the "
+    counter_cache_tag_bits = Param.Int8(6, "Number of tag bits of the "
             "counter cache (-1 means using full-length tag)")
     
     counter_bits = Param.UInt8(3, "Number of bits for a counter")
@@ -144,5 +144,5 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     # Victim Cache Setting
     victim_cache_size = Param.UInt32(1024, "Size of the victim cache")
     victim_cache_assoc = Param.UInt8(4, "Associativity of the victim cache")
-    victim_cache_tag_bits = Param.Int8(-1, "Number of tag bits of the "
+    victim_cache_tag_bits = Param.Int8(6, "Number of tag bits of the "
             "victim cache (-1 means using full-length tag)")

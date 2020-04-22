@@ -39,9 +39,9 @@ setScript(){
 ################# Other Change for Source File in Gem5 #################
 additionalChange() {
     tagPrefDegree=2
-    stridePrefConfThresh=4 # 0-7
+    stridePrefConfThresh=0 # 0-7
     stridePrefDegree=16
-    useFilter=True
+    useFilter=False
 
     # Change Tagged Prefetcher Degree
     sed -i "146c\    degree = Param.Int($tagPrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
@@ -79,9 +79,9 @@ setGem5(){
         # Clock for blocks running at CPU speed
         fastForwardInsts="" # []
         # number of instruction put into warm up region
-        warmupInsts="1000000" # []
+        warmupInsts="2000000" # []
         # warmup period in total instructions
-        maxInsts="10000000" # []
+        maxInsts="100000000" # []
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds
@@ -1100,12 +1100,10 @@ buildSpecOptions(){
         while [ "`eval echo -e '$'"{${target}_${testSet}_${suiteID}[0]}"`x" != x ]
         do
             specVarName="${target}_${testSet}_${suiteID}"
-            options[$suiteID]="-c ./`eval echo -e '$'"{$specVarName[0]}"`"
-            if [ "`eval echo -e '$'"{$specVarName[2]}"`x" != x ]
-            then
-                specArg=`eval echo -e '$'"{$specVarName[2]}"`
-                options[$suiteID]="${options[$suiteID]} -o '$specArg'"
-            fi
+            specExec="`eval echo -e '$'"{$specVarName[0]}"`"
+            specArg=`eval echo -e '$'"{$specVarName[2]}"`
+            specInput=`eval echo -e '$'"{$specVarName[3]}"`
+            options[$suiteID]="-c '$specExec' -o '$specArg' -i '$specInput'"
             diffFileList[$suiteID]=`eval echo -e '$'"{$specVarName[1]}"`
             if [ $runSpecSuites = No ]
             then break

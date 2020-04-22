@@ -70,19 +70,22 @@ public:
             const uint8_t rightShiftBits, const T& data,
             const bool valid = false);
 
-    // 判断某一个地址是否有数据，0表示不存在，1表示存在，-1表示出现错误
-    int touch(const uint64_t& addr);
+    // 判断某一个地址是否有数据，0表示不存在，1表示真命中
+    // 2表示伪命中，-1表示出现错误
+    int touch(const uint64_t& addr, const bool withFullTag);
 
-    // 读取某一个地址对应的数据，0表示不存在，1表示成功，-1表示出现错误
-    int read(const uint64_t& addr, T** data);
+    // 读取某一个地址对应的数据，0表示不存在，1表示真命中
+    // 2表示伪命中，-1表示出现错误
+    int read(const uint64_t& addr, T** data, const bool withFullTag);
 
-    // 写入一个地址对应的数据，0表示命中并写入，1表示未命中且未替换，
-    // 2表示未命中但是发生了替换，-1表示出现错误
-    int write(const uint64_t& addr, const T& data,
+    // 写入一个地址对应的数据，0表示真命中并写入，1表示未命中且未替换，
+    // 2表示未命中但是发生了替换，3表示伪命中并写入，-1表示出现错误
+    int write(const uint64_t& addr, const T& data, const bool withFullTag,
             uint64_t* replacedAddr = nullptr, T* oldData = nullptr);
     
-    // 无效化一个地址对应的表项，0表示不存在，1表示成功，-1表示出现错误
-    int invalidate(const uint64_t& addr);
+    // 无效化一个地址对应的表项，0表示不存在，1表示真命中
+    // 2表示伪命中，-1表示出现错误
+    int invalidate(const uint64_t& addr, const bool withFullTag);
 
     // 该函数会对所有的单元进行批量写操作
     int writeAll(const T& data, const bool valid = true);
@@ -147,6 +150,9 @@ private:
 
     // Set对应的Mask
     uint64_t setMask_;
+    
+    // 不进行任何压缩的TagMask
+    uint64_t fullTagMask_;
 };
 
 class IdealPrefetchUsefulTable {

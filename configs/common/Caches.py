@@ -63,6 +63,7 @@ class L1_ICache(L1Cache):
 
 class L1_DCache(L1Cache):
     cache_level = 1
+    write_buffers = 8
 
 class L2Cache(Cache):
     assoc = 8

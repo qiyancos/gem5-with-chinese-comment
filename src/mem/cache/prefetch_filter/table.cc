@@ -59,6 +59,7 @@ int CacheTable<T>::init(const int8_t tagBits, const uint32_t size,
     // 生成对应的Mask
     // 生成对应的Mask
     tagMask_ = 0xffffffffffffffffLLU;
+    fullTagMask_ = tagMask_;
     setMask_ = tagMask_;
     uint8_t setBits = 0;
     while (sets_ >> ++setBits) {}
@@ -71,10 +72,15 @@ int CacheTable<T>::init(const int8_t tagBits, const uint32_t size,
         tagBitsTemp = 64 - totalBits;
         totalBits = 0;
     } else {
-        totalBits = 64 - setBits + tagBits + rightShiftBits_;
+        totalBits = 64 - setBits - tagBits - rightShiftBits_;
     }
     CHECK_ARGS(totalBits <= 64, "Bits of tag is too big for 64-bit addr");
     tagMask_ = tagMask_ << totalBits >> (64 - tagBitsTemp) <<
+            (rightShiftBits_ + setBits);
+    
+    tagBitsTemp = 64 - setBits - rightShiftBits_;
+    totalBits = 0;
+    fullTagMask_ = fullTagMask_ << totalBits >> (64 - tagBitsTemp) <<
             (rightShiftBits_ + setBits);
 
     // 初始化表格
@@ -103,6 +109,7 @@ int CacheTable<T>::init(const int8_t tagBits, const uint32_t size,
     
     // 生成对应的Mask
     tagMask_ = 0xffffffffffffffffLLU;
+    fullTagMask_ = tagMask_;
     setMask_ = tagMask_;
     uint8_t setBits = 0;
     while (sets_ >> ++setBits) {}
@@ -115,10 +122,15 @@ int CacheTable<T>::init(const int8_t tagBits, const uint32_t size,
         tagBitsTemp = 64 - totalBits;
         totalBits = 0;
     } else {
-        totalBits = 64 - setBits + tagBits + rightShiftBits_;
+        totalBits = 64 - setBits - tagBits - rightShiftBits_;
     }
     CHECK_ARGS(totalBits <= 64, "Bits of tag is too big for 64-bit addr");
     tagMask_ = tagMask_ << totalBits >> (64 - tagBitsTemp) <<
+            (rightShiftBits_ + setBits);
+    
+    tagBitsTemp = 64 - setBits - rightShiftBits_;
+    totalBits = 0;
+    fullTagMask_ = fullTagMask_ << totalBits >> (64 - tagBitsTemp) <<
             (rightShiftBits_ + setBits);
 
     // 初始化表格
@@ -130,32 +142,34 @@ int CacheTable<T>::init(const int8_t tagBits, const uint32_t size,
 }
 
 template<typename T>
-int CacheTable<T>::touch(const uint64_t& addr) {
+int CacheTable<T>::touch(const uint64_t& addr, const bool withFullTag) {
     uint32_t setIndex = ((addr & setMask_) >> rightShiftBits_) % sets_;
-    uint64_t tag = addr & tagMask_;
+    uint64_t tagMask = withFullTag ? fullTagMask_ : tagMask_;
     Set& set = data_[setIndex];
     for (auto entry = set.begin(); entry != set.end(); entry++) {
-        if (entry->tag_ == tag && entry->valid_) {
-            return 1;
+        if ((entry->tag_ & tagMask) == (addr & tagMask) && entry->valid_) {
+            return withFullTag ? 1 : (entry->addr_ == addr ? 1 : 2);
         }
     }
     return 0;
 }
 
 template<typename T>
-int CacheTable<T>::read(const uint64_t& addr, T** data) {
+int CacheTable<T>::read(const uint64_t& addr, T** data,
+        const bool withFullTag) {
     uint32_t setIndex = ((addr & setMask_) >> rightShiftBits_) % sets_;
-    uint64_t tag = addr & tagMask_;
+    uint64_t tagMask = withFullTag ? fullTagMask_ : tagMask_;
+    uint64_t tag = addr & tagMask;
     Set& set = data_[setIndex];
     for (auto entry = set.begin(); entry != set.end(); entry++) {
-        if (entry->tag_ == tag && entry->valid_) {
+        if ((entry->tag_ & tagMask) == tag && entry->valid_) {
             *data = &(entry->data_);
             CacheEntry temp = *entry;
             set.erase(entry);
             set.push_front(temp);
             DEBUG_PF(3, "Read hit: Addr @0x%lx; Set %u; tag @0x%lx",
-                    addr, setIndex, tag);
-            return 1;
+                    entry->addr_, setIndex, tag);
+            return withFullTag ? 1 : (entry->addr_ == addr ? 1 : 2);
         }
     }
     DEBUG_PF(3, "Read miss: Addr @0x%lx; Set %u; tag @0x%lx",
@@ -166,23 +180,30 @@ int CacheTable<T>::read(const uint64_t& addr, T** data) {
 
 template<typename T>
 int CacheTable<T>::write(const uint64_t& addr, const T& data,
-        uint64_t* replacedAddr, T* oldData) {
+        const bool withFullTag, uint64_t* replacedAddr, T* oldData) {
     uint32_t setIndex = ((addr & setMask_) >> rightShiftBits_) % sets_;
-    uint64_t tag = addr & tagMask_;
+    uint64_t tagMask = withFullTag ? fullTagMask_ : tagMask_;
+    uint64_t tag = addr & tagMask;
     Set& set = data_[setIndex];
     for (auto entry = set.begin(); entry != set.end(); entry++) {
-        if (entry->tag_ == tag && entry->valid_) {
+        if ((entry->tag_ & tagMask) == tag && entry->valid_) {
             // 如果写入找到了表项，则写入并返回
+            uint64_t oldAddr = entry->addr_;
+            if (replacedAddr) {
+                *replacedAddr = oldAddr;
+            }
             if (oldData) {
                 *oldData = entry->data_;
             }
+            entry->addr_ = addr;
+            entry->tag_ = addr & fullTagMask_;
             entry->data_ = data;
             CacheEntry temp = *entry;
             set.erase(entry);
             set.push_front(temp);
             DEBUG_PF(3, "Write hit: Addr @0x%lx; Set %u; tag @0x%lx",
-                    addr, setIndex, tag);
-            return 0;
+                    oldAddr, setIndex, tag);
+            return withFullTag ? 0 : (oldAddr == addr ? 0 : 3);
         }
     }
     // 没有命中则会进行替换
@@ -196,37 +217,40 @@ int CacheTable<T>::write(const uint64_t& addr, const T& data,
     bool valid = replacedEntry.valid_;
     
     if (valid) {
-        validAddr_[setIndex].erase(replacedEntry.addr_);
         DEBUG_PF(3, "Write replace: Addr @0x%lx; Set %u; tag @0x%lx",
-                addr, setIndex, tag);
+                replacedEntry.addr_, setIndex, tag);
+        validAddr_[setIndex].erase(replacedEntry.addr_);
     } else {
         DEBUG_PF(3, "Write new: Addr @0x%lx; Set %u; tag @0x%lx",
                 addr, setIndex, tag);
     }
 
     set.pop_back();
-    set.push_front(CacheEntry {tag, addr, true, data});
+    set.push_front(CacheEntry {addr & fullTagMask_, addr, true, data});
     validAddr_[setIndex].insert(addr);
     return 1 + valid;
 }
     
 template<typename T>
-int CacheTable<T>::invalidate(const uint64_t& addr) {
+int CacheTable<T>::invalidate(const uint64_t& addr, const bool withFullTag) {
     uint32_t setIndex = ((addr & setMask_) >> rightShiftBits_) % sets_;
-    uint64_t tag = addr & tagMask_;
+    uint64_t tagMask = withFullTag ? fullTagMask_ : tagMask_;
+    uint64_t tag = addr & tagMask;
     Set& set = data_[setIndex];
     for (auto entry = set.begin(); entry != set.end(); entry++) {
-        if (entry->tag_ == tag && entry->valid_) {
-            DEBUG_PF(3, "Invalidate: Addr @0x%lx; Set %u; tag @0x%lx",
-                    addr, setIndex, tag)
+        if ((entry->tag_ & tagMask) == tag && entry->valid_) {
+            DEBUG_PF(3, "Invalidate hit: Addr @0x%lx; Set %u; tag @0x%lx",
+                    entry->addr_, setIndex, tag)
             entry->valid_ = false;
             CacheEntry temp = *entry;
             validAddr_[setIndex].erase(entry->addr_);
             set.erase(entry);
             set.push_back(temp);
-            return 1;
+            return withFullTag ? 1 : (entry->addr_ == addr ? 1 : 2);
         }
     }
+    DEBUG_PF(3, "Invalidate miss: Addr @0x%lx; Set %u; tag @0x%lx",
+            addr, setIndex, tag)
     return 0;
 }
 
