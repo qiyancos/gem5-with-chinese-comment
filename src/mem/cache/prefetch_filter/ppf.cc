@@ -554,9 +554,9 @@ int PerceptronPrefetchFilter::notifyCacheHit(BaseCache* cache,
                     "Find prefetch not invalid in useful table");
         }
         // 该情况只会更新命中，但是并不会进行删除
-    } else if (info.source == Pref &&
-            (info.target == Dmd || info.target == Pref)) {
+    } else if (info.source == Pref && info.target == Dmd) {
         // 如果一个降级预取命中了目标等级，则属于一个无用预取
+        // 如果目标是预取，则暂时不训练无用预取
         if (pkt->targetCacheLevel_ > pkt->srcCacheLevel_ &&
                 pkt->targetCacheLevel_ == cache->cacheLevel_) {
             CHECK_ARGS(pkt->caches_.size() == 1,
@@ -1178,18 +1178,29 @@ int PerceptronPrefetchFilter::removePrefetch(BaseCache* cache,
     CHECK_RET(prefUsefulTable_[cache].evictPref(prefBlkAddr,
             &counter), "Failed to remove old pref info when replaced");
     
-    // 基于被替换的预取有害情况进行训练，只有开启统计表格才会进行训练
     if (counter != 255 && prefUsefulTable_[cache].valid_ &&
-            // 有害预取一定会被训练
-            (counter < counterInit_ ||
-            // 如果是一个命中导致的remove，则不会训练无用预取
-            (counter == counterInit_ && !isHit))) {
+            counter < counterInit_) {
+        // 基于被替换的预取有害情况进行训练，如果开启统计表格只会训练有害预取
         for (BaseCache* srcCache : srcCaches) {
             // 不对ICache进行训练
             if (!srcCache->cacheLevel_) continue;
             Tables& workTable = getTable(srcCache);
             CHECK_RET(train(workTable, prefBlkAddr, cache->cacheLevel_,
-                    counter == counterInit_ ? UselessPref : BadPref),
+                    BadPref), "Failed to update training when pref evicted"); 
+        }
+        if (srcCaches.empty()) {
+            CHECK_ARGS(!usefulTable_[cache].isPrefValid(prefAddr),
+                    "Find prefetch not invalid in useful table");
+        }
+    } else if (!isHit) {
+        // 如果没有训练有害预取，并且是因为替换导致remove
+        // 则训练一个无用预取
+        for (BaseCache* srcCache : srcCaches) {
+            // 不对ICache进行训练
+            if (!srcCache->cacheLevel_) continue;
+            Tables& workTable = getTable(srcCache);
+            CHECK_RET(train(workTable, prefBlkAddr,
+                    cache->cacheLevel_, UselessPref),
                     "Failed to update training when pref evicted"); 
         }
         if (srcCaches.empty()) {
@@ -1213,7 +1224,8 @@ int PerceptronPrefetchFilter::trainConflictPref(BaseCache* cache,
     for (auto prefIter : conflictPref) {
         const uint64_t prefAddr = prefIter.first;
         const uint8_t counter = prefIter.second;
-        if (counter != 255 && counter <= counterInit_) {
+        // 建议不对冲突替换的无用预取进行训练
+        if (counter != 255 && counter < counterInit_) {
             // 首先查找相关的源Cache
             std::set<BaseCache*> srcCaches;
             CHECK_RET(usefulTable_[cache].findSrcCaches(prefAddr, &srcCaches),
@@ -1228,8 +1240,8 @@ int PerceptronPrefetchFilter::trainConflictPref(BaseCache* cache,
                 // 不对ICache进行训练
                 if (!srcCache->cacheLevel_) continue;
                 Tables& workTable = getTable(srcCache);
-                CHECK_RET(train(workTable, prefAddr, cache->cacheLevel_,
-                        counter == counterInit_ ? UselessPref : BadPref),
+                CHECK_RET(train(workTable, prefAddr,
+                        cache->cacheLevel_, BadPref),
                         "Failed to update training when pref evicted"); 
             }
         }

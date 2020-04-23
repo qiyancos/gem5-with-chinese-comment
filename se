@@ -79,7 +79,7 @@ setGem5(){
         # Clock for blocks running at CPU speed
         fastForwardInsts="" # []
         # number of instruction put into warm up region
-        warmupInsts="2000000" # []
+        warmupInsts="" # []
         # warmup period in total instructions
         maxInsts="100000000" # []
         # max number of instructions will be run
