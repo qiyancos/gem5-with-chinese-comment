@@ -41,7 +41,7 @@ additionalChange() {
     tagPrefDegree=2
     stridePrefConfThresh=0 # 0-7
     stridePrefDegree=16
-    useFilter=False
+    useFilter=True
 
     # Change Tagged Prefetcher Degree
     sed -i "146c\    degree = Param.Int($tagPrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py

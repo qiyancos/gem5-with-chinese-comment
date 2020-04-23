@@ -161,8 +161,8 @@ public:
     // 预取器预取命中不同层级的个数，区分不同核心和命中层级
     std::vector<std::vector<Stats::Vector*>> prefHitCount_;
 
-    // 在某一级Cache中填充的预取总个数（cpu, l1, l2, llc）
-    std::vector<std::vector<Stats::Vector*>> prefFillCount_;
+    // 在某一级Cache处理过的预取总个数（l1, l2, l3, dram）
+    std::vector<std::vector<Stats::Vector*>> prefProcCount_;
 
     // 计算一个预取请求在某一个层级Cache中的总处理时间（l1, l2, l3, dram）
     std::vector<std::vector<Stats::Vector*>> prefProcessCycles_;

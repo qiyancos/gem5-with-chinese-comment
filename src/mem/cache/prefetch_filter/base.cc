@@ -374,7 +374,7 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
     } else if (info.source == Pref) {
         // 更新时间戳信息
         for (auto cpuId : (*pkt->caches_.begin())->cpuIds_) {
-            (*prefFillCount_[pkt->srcCacheLevel_][
+            (*prefProcCount_[pkt->srcCacheLevel_][
                     cache->cacheLevel_ ? cache->cacheLevel_ : 1])[cpuId]++;
             Tick processTime = pkt->getProcessTime(cache->cacheLevel_ + 1);
             // 这里加上20是为了保证不会出现499 / 500 = 0的情况出现
@@ -386,18 +386,19 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
                     processTime, pkt->getAddr());
             // 如果当前等级恰好是目标等级，则额外更新一个处理时间
             if (pkt->targetCacheLevel_ == cache->cacheLevel_ &&
-                    pkt->srcCacheLevel_ <= cache->cacheLevel_) {
-                (*prefFillCount_[pkt->srcCacheLevel_][
-                        cache->cacheLevel_ ?
-                        cache->cacheLevel_ - 1 : 0])[cpuId]++;
-                processTime = pkt->getProcessTime(cache->cacheLevel_);
-                (*prefProcessCycles_[pkt->srcCacheLevel_][
-                        cache->cacheLevel_ ?
-                        cache->cacheLevel_ - 1 : 0])[cpuId] +=
-                        (processTime + 20) / clockPeriod_;
-                DEBUG_PF(2, "Add %s process time %lu for prefetch @0x%lx",
-                        BaseCache::levelName_[cache->cacheLevel_].c_str(),
-                        processTime, pkt->getAddr());
+                    pkt->srcCacheLevel_ <= cache->cacheLevel_ &&
+                    cache->cacheLevel_ > 1) {
+                for (int otherLevel = cache->cacheLevel_ - 1;
+                        otherLevel >= pkt->srcCacheLevel_ - 1; otherLevel--) {
+                    (*prefProcCount_[pkt->srcCacheLevel_][otherLevel])[cpuId]++;
+                    processTime = pkt->getProcessTime(otherLevel + 1);
+                    (*prefProcessCycles_[pkt->srcCacheLevel_]
+                            [otherLevel])[cpuId] +=
+                            (processTime + 20) / clockPeriod_;
+                    DEBUG_PF(2, "Add %s process time %lu for prefetch @0x%lx",
+                            BaseCache::levelName_[otherLevel + 1].c_str(),
+                            processTime, pkt->getAddr());
+                }
             }
         }
         // 预取替换了一个Demand Request请求的数据
@@ -565,7 +566,7 @@ void BasePrefetchFilter::memCheck() {
     for (auto& vec : prefHitCount_) {
         DEBUG_PF(1, "Size: %lu", vec.size());
     }
-    for (auto& vec : prefFillCount_) {
+    for (auto& vec : prefProcCount_) {
         DEBUG_PF(1, "Size: %lu", vec.size());
     }
     for (auto& vec : prefProcessCycles_) {
@@ -637,7 +638,7 @@ int BasePrefetchFilter::initThis() {
             prefHitCount_.push_back(std::vector<Stats::Vector*>(
                     cacheLevel < 2 ? maxCacheLevel_ - 1 :
                     maxCacheLevel_ - cacheLevel));
-            prefFillCount_.push_back(std::vector<Stats::Vector*>(
+            prefProcCount_.push_back(std::vector<Stats::Vector*>(
                     maxCacheLevel_ + 1));
             prefProcessCycles_.push_back(std::vector<Stats::Vector*>(
                     maxCacheLevel_ + 1));
@@ -645,7 +646,7 @@ int BasePrefetchFilter::initThis() {
                     maxCacheLevel_ + 1));
         } else {
             prefHitCount_.push_back(std::vector<Stats::Vector*>());
-            prefFillCount_.push_back(std::vector<Stats::Vector*>());
+            prefProcCount_.push_back(std::vector<Stats::Vector*>());
             prefProcessCycles_.push_back(std::vector<Stats::Vector*>());
             prefAvgProcessCycles_.push_back(std::vector<Stats::Formula*>());
         }
@@ -956,20 +957,16 @@ void BasePrefetchFilter::regStats() {
                         .flags(total);
             }
             
-            for (j = 0; j < prefFillCount_[i].size(); j++) {
-                std::string tgtCacheName = j ?
-                        BaseCache::levelName_[j] : "cpu";
-                prefFillCount_[i][j] = new Stats::Vector();
-                prefFillCount_[i][j]->init(numCpus_)
+            for (j = 0; j < prefProcCount_[i].size(); j++) {
+                std::string tgtCacheName = BaseCache::levelName_[j + 1];
+                prefProcCount_[i][j] = new Stats::Vector();
+                prefProcCount_[i][j]->init(numCpus_)
                         .name(name() + ".prefetch_from_" + srcCacheName +
-                                "_fill_in_" + tgtCacheName)
+                                "_processed_in_" + tgtCacheName)
                         .desc(std::string("Number of prefetches request from ")
-                                + srcCacheName + " filled in " + tgtCacheName)
+                                + srcCacheName + " processed in " +
+                                tgtCacheName)
                         .flags(total);
-                if (j == 0) {
-                    prefFillCount_[i][j]->info()->flags.clear(total);
-                    prefFillCount_[i][j]->info()->flags.clear(display);
-                }
             }
             
             for (j = 0; j < prefProcessCycles_[i].size(); j++) {
@@ -1064,8 +1061,8 @@ void BasePrefetchFilter::regStats() {
                 for (j = 0; j < prefHitCount_[i].size(); j++) {
                     prefHitCount_[i][j]->subname(k, cpuIdStr);
                 }
-                for (j = 0; j < prefFillCount_[i].size(); j++) {
-                    prefFillCount_[i][j]->subname(k, cpuIdStr);
+                for (j = 0; j < prefProcCount_[i].size(); j++) {
+                    prefProcCount_[i][j]->subname(k, cpuIdStr);
                 }
                 for (j = 0; j < prefProcessCycles_[i].size(); j++) {
                     prefProcessCycles_[i][j]->subname(k, cpuIdStr);
@@ -1075,7 +1072,7 @@ void BasePrefetchFilter::regStats() {
                     if (k == numCpus_ - 1) {
                         *prefAvgProcessCycles_[i][j] =
                                 *prefProcessCycles_[i][j] /
-                                *prefFillCount_[i][j];
+                                *prefProcCount_[i][j];
                     }
                 }
                 for (j = 0; j < prefUsefulDegree_[i].size(); j++) {
@@ -1104,8 +1101,8 @@ void BasePrefetchFilter::regStats() {
             for (j = 0; j < prefHitCount_[j].size(); j++) {
                 prefHitCount_[i][j] = emptyStatsVar_;
             }
-            for (j = 0; j < prefFillCount_[j].size(); j++) {
-                prefFillCount_[i][j] = emptyStatsVar_;
+            for (j = 0; j < prefProcCount_[j].size(); j++) {
+                prefProcCount_[i][j] = emptyStatsVar_;
             }
             for (j = 0; j < prefProcessCycles_[j].size(); j++) {
                 prefProcessCycles_[i][j] = emptyStatsVar_;
