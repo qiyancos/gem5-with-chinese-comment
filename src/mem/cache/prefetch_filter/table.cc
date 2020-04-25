@@ -947,10 +947,12 @@ int IdealPrefetchUsefulTable::updatePrefTiming(
         const uint8_t cacheLevel = info.srcCache_->cacheLevel_;
         CHECK_ARGS(totalUsefulValue[cacheLevel].size() == 2,
                 "Trying to update prefetch from cache without prefetcher");
-        int singleCoreCount = info.info_.singleCoreUsefulCount_ -
-                    info.info_.singleCoreHarmCount_;
-        int crossCoreCount = info.info_.crossCoreUsefulCount_ -
-                    info.info_.crossCoreHarmCount_;
+        int singleCoreCount =
+                static_cast<int>(info.info_.singleCoreUsefulCount_) -
+                info.info_.singleCoreHarmCount_;
+        int crossCoreCount =
+                static_cast<int>(info.info_.crossCoreUsefulCount_) -
+                info.info_.crossCoreHarmCount_;
         
         // 计算单核心Useful Degree
         int singleCoreDegree;
