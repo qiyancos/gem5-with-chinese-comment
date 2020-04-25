@@ -37,7 +37,33 @@ multiStatsList=("IPC"
         "L2_Pref_BufferHit"
         "L2_Pref_CacheHit"
         "L2_Pref_RemoveFull"
-        "L2_Pref_RemoveCrossPage")
+        "L2_Pref_RemoveCrossPage"
+        "PPF_L1D_Demand_Hit"
+        "PPF_L1I_Demand_Hit"
+        "PPF_L2_Demand_Hit"
+        "PPF_L3_Demand_Hit"
+        "PPF_L1D_Demand_Miss"
+        "PPF_L1I_Demand_Miss"
+        "PPF_L2_Demand_Miss"
+        "PPF_L3_Demand_Miss"
+        "PPF_L2_Accepted_Pref"
+        "PPF_L2_Rejectted_Pref"
+        "PPF_L2_Threshing_Pref"
+        "PPF_L2_Untrained_Pref"
+        "PPF_L2_Untrained_Dmd"
+        "PPF_L2_To_L1DCache_Pref"
+        "PPF_L2_To_L2Cache_Pref"
+        "PPF_L2_To_L3Cache_Pref"
+        "PPF_L2_To_DRAM_Pref"
+        "PPF_L2_Train_GoodPref"
+        "PPF_L2_Train_BadPref"
+        "PPF_L2_Train_UselessPref"
+        "PPF_L2_Train_DemandMiss"
+        "PPF_L2_Process_Time_L1DCache"
+        "PPF_L2_Process_Time_L2Cache"
+        "PPF_L2_Process_Time_L3Cache"
+        "PPF_L2_Process_Time_DRAM"
+        "")
 
 multiStatsString=("ipc_total"
         "dcache.overall_miss_rate::total"
@@ -55,7 +81,33 @@ multiStatsString=("ipc_total"
         "l2.prefetcher.pfBufferHit"
         "l2.prefetcher.pfInCache"
         "l2.prefetcher.pfRemovedFull"
-        "l2.prefetcher.pfSpanPage")
+        "l2.prefetcher.pfSpanPage"
+        "demand_requests_hit_L1DCache"
+        "demand_requests_hit_L1ICache"
+        "demand_requests_hit_L2Cache"
+        "demand_requests_hit_L3Cache"
+        "demand_requests_miss_L1DCache"
+        "demand_requests_miss_L1ICache"
+        "demand_requests_miss_L2Cache"
+        "demand_requests_miss_L3Cache"
+        "ppf_prefetch_accepted_from_L2Cache"
+        "ppf_prefetch_rejected_from_L2Cache"
+        "ppf_prefetch_threshing_from_L2Cache"
+        "ppf_prefetch_untrained_pref_from_L2Cache"
+        "ppf_prefetch_untrained_dmd_from_L2Cache"
+        "ppf_prefetch_sent_from_L2Cache_to_L1DCache"
+        "ppf_prefetch_sent_from_L2Cache_to_L2Cache"
+        "ppf_prefetch_sent_from_L2Cache_to_L3Cache"
+        "ppf_prefetch_sent_from_L2Cache_to_DRAM"
+        "ppf_training_type_GoodPref_for_L2Cache"
+        "ppf_training_type_BadPref_for_L2Cache"
+        "ppf_training_type_UselessPref_for_L2Cache"
+        "ppf_training_type_DemandMiss_for_L2Cache"
+        "prefetch_avg_process_cycle_from_L2Cache_in_L1DCache"
+        "prefetch_avg_process_cycle_from_L2Cache_in_L2Cache"
+        "prefetch_avg_process_cycle_from_L2Cache_in_L3Cache"
+        "prefetch_avg_process_cycle_from_L2Cache_in_DRAM"
+        "")
 
 ################################################################
 
@@ -98,7 +150,7 @@ multiStats() {
         exit -1
     fi
     statsString=${multiStatsString[$statsIndex]}
-    statsVal=(`eval "awk '/$statsString/ {print \\$2}' $2"`)
+    statsVal=(`eval "awk '/$statsString/ {print \\$1, \\$2}' $2 | sed '/::total/d' | awk '{print \\$2}'"`)
     index=0
     if [ x$(eval "echo \$statsFlag$1") = x ]
     then

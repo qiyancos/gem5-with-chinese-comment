@@ -231,6 +231,23 @@ MemCmd::commandInfo[] =
       InvalidCmd, "InvalidateResp" }
 };
 
+/// 该函数用于合并有效的时间戳信息
+void
+Packet::combineTimeStamp(PacketPtr pkt) {
+    if (pkt->timeStamp_.size() > timeStamp_.size()) {
+        timeStamp_.resize(pkt->timeStamp_.size(),
+                std::vector<Tick>(WhenRecv, 0));
+    }
+    for (int level = 0; level < timeStamp_.size(); level++) {
+        for (int type = 0; type < WhenRecv; type++) {
+            if (pkt->timeStamp_[level][type]) {
+                setTimeStamp(level, static_cast<TimeStampType>(type),
+                        pkt->timeStamp_[level][type]);
+            }
+        }
+    }
+}
+
 /// 该函数用于设置给定处理的时间点
 void
 Packet::setTimeStamp(const uint8_t level, const TimeStampType type,
@@ -239,9 +256,10 @@ Packet::setTimeStamp(const uint8_t level, const TimeStampType type,
             "Unexpected level when setting time stamp");
     if (packetType_ == prefetch_filter::Pref) {
         DEBUG_MEM("Set time stamp for prefetch[%p] @0x%lx [%s -> %s] "
-                "with level %u, type %s and tick %lu", this, getAddr(),
+                "for %s type %s and tick %lu", this, getAddr(),
                 BaseCache::levelName_[srcCacheLevel_].c_str(),
-                BaseCache::levelName_[targetCacheLevel_].c_str(), level,
+                BaseCache::levelName_[targetCacheLevel_].c_str(),
+                BaseCache::levelName_[level].c_str(),
                 type == WhenRecv ? "recv" : type == WhenFill ? "fill" : "send",
                 tick);
     }

@@ -266,6 +266,9 @@ class Packet : public Printable
     /// 存放时间戳信息的结构
     std::vector<std::vector<Tick>> timeStamp_;
 
+    // 合并时间戳信息
+    void combineTimeStamp(PacketPtr pkt);
+
     /// 该函数用于设置给定处理的时间点，Level中0代表CPU而非ICache
     /// 1同时代表ICache和DCache
     void setTimeStamp(const uint8_t level, const TimeStampType type,

@@ -935,12 +935,15 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                 }
                 /// 同时拷贝关键的时间戳信息
                 if (!mshr->needPostProcess_) {
+                    tgt_pkt->combineTimeStamp(pkt);
+                    /*
                     tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
                             Packet::WhenSend,
                             pkt->getTimeStamp(cacheLevel_, Packet::WhenSend));
                     tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
                             Packet::WhenFill,
                             pkt->getTimeStamp(cacheLevel_, Packet::WhenFill));
+                    */
                 } else {
                     /// 如果当前的Packet是一个提级合并PendingPref
                     /// 则直接使用当前的时间作为两个点

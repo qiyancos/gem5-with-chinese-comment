@@ -81,7 +81,7 @@ setGem5(){
         # number of instruction put into warm up region
         warmupInsts="" # []
         # warmup period in total instructions
-        maxInsts="100000000" # []
+        maxInsts="10000000" # []
         # max number of instructions will be run
         maxTime="" # []
         # Run to the specified absolute simulated time in seconds

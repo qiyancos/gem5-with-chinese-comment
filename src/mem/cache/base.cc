@@ -1964,9 +1964,12 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
     
     /// 获取一个额外的时间戳信息
     if (pkt && tgt_pkt && pkt->packetType_ == prefetch_filter::Pref) {
+        pkt->combineTimeStamp(tgt_pkt);
+        /*
         pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ - 1 : 0, Packet::WhenSend,
                 tgt_pkt->getTimeStamp(cacheLevel_ ? cacheLevel_ - 1 : 0,
                 Packet::WhenSend));
+        */
     }
 
     mshr->isForward = (pkt == nullptr);
