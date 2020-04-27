@@ -306,9 +306,9 @@ int PrefetchUsefulTable::addPref(const uint64_t& prefAddr,
 }
 
 int PrefetchUsefulTable::evictPref(const uint64_t& addr, uint8_t* counterPtr) {
+    *counterPtr = 255;
     if (!valid_) return 0;
     
-    *counterPtr = 255;
     if (prefInCache_.find(addr) == prefInCache_.end()) {
         DEBUG_PF(2, "PPF evict prefetch @0x%lx already invalidated", addr);
         auto invalidatedIter = invalidatedPref_.find(addr);
@@ -324,8 +324,8 @@ int PrefetchUsefulTable::evictPref(const uint64_t& addr, uint8_t* counterPtr) {
 
 int PrefetchUsefulTable::invalidatePref(const uint64_t& addr,
         uint8_t* counterPtr) {
-    if (!valid_) return 0;
     *counterPtr = 255;
+    if (!valid_) return 0;
     DEBUG_PF(2, "PPF invalidate prefetch @0x%lx", addr);
     CHECK_ARGS(prefInCache_.find(addr) != prefInCache_.end(),
             "Can not find invalidating prefetch in record table");
