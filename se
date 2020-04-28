@@ -46,7 +46,7 @@ additionalChange() {
     tagBits=6
     ppfTableSize=1024
     enableUpgrade=True
-    useHarmTable=False
+    useHarmTable=True
 
     # Change Tagged Prefetcher Degree
     sed -i "146c\    degree = Param.Int($tagPrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py

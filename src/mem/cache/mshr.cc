@@ -478,7 +478,6 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
     }
     assert(tgt_pkt);
 
-    bool toDeferredList = false;
     if (pkt->req->isCacheMaintenance() ||
         tgt_pkt->req->isCacheMaintenance() ||
         !deferredTargets.empty() ||
@@ -491,7 +490,6 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
             replaceUpgrade(pkt);
         deferredTargets.add(pkt, whenReady, _order, Target::FromCPU, true,
                             alloc_on_fill);
-        toDeferredList = true;
     } else {
         // No request outstanding, or still OK to append to
         // outstanding request: append to regular target list.  Only
@@ -500,11 +498,16 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
         targets.add(pkt, whenReady, _order, Target::FromCPU, !inService,
                     alloc_on_fill);
     }
+
     /// 删除被无效化的Packet对应的Target
+    /// 为新加入的Target设置属性
     for (auto listIter = targets.begin(); listIter != targets.end();) {
         if (deletedPacket->find(listIter->pkt) != deletedPacket->end()) {
             listIter = targets.erase(listIter);
         } else {
+            if (listIter->pkt == pkt) {
+                listIter->postAddedTarget_ = inService;
+            }
             listIter++;
         }
     }
@@ -514,6 +517,9 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
         if (deletedPacket->find(listIter->pkt) != deletedPacket->end()) {
             listIter = deferredTargets.erase(listIter);
         } else {
+            if (listIter->pkt == pkt) {
+                listIter->postAddedTarget_ = inService;
+            }
             listIter++;
         }
     }
@@ -541,12 +547,6 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
         if (haveDemandTarget) {
             prefTarget_ = nullptr;
         }
-    } else if (toDeferredList) {
-        /// 对于合并到PendingPref的Target，如果没有删除，需要标记
-        deferredTargets.back().postAddedTarget_ = true;
-    } else {
-        /// 对于合并到PendingPref的Target，如果没有删除，需要标记
-        targets.back().postAddedTarget_ = true;
     }
 }
 
