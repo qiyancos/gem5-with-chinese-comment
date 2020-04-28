@@ -39,15 +39,32 @@ setScript(){
 ################# Other Change for Source File in Gem5 #################
 additionalChange() {
     tagPrefDegree=2
-    stridePrefConfThresh=0 # 0-7
+    stridePrefConfThresh=4 # 0-7
     stridePrefDegree=16
+    prefetchQueueSize=32
     useFilter=True
+    tagBits=6
+    ppfTableSize=1024
+    enableUpgrade=True
+    useHarmTable=False
 
     # Change Tagged Prefetcher Degree
     sed -i "146c\    degree = Param.Int($tagPrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
     sed -i "127c\    thresh_conf = Param.Int($stridePrefConfThresh, \"Threshold confidence level\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
     sed -i "135c\    degree = Param.Int($stridePrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "111c\    queue_size = Param.Int($prefetchQueueSize, \"Maximum number of queued prefetches\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
     sed -i "40c\    enable_filter = Param.Bool($useFilter, \"Whether to enable Filter Engine\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    
+    sed -i "76c\    prefetch_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the prefetch \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "82c\    reject_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the reject \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "138c\    counter_cache_tag_bits = Param.Int8($tagBits, \"Number of tag bits of the \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "147c\    victim_cache_tag_bits = Param.Int8($tagBits, \"Number of tag bits of the \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    
+    sed -i "73c\    prefetch_table_size = Param.UInt32($ppfTableSize, \"Size of the prefetch table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "79c\    reject_table_size = Param.UInt32($ppfTableSize, \"Size of the reject table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    
+    sed -i "70c\    allow_upgrade = Param.Bool($enableUpgrade, \"If a pref from low-level cache can be\"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "87c\    enable_harm_table = Param.Bool($useHarmTable," $gem5Dir/src/mem/cache/Cache.py
 }
 
 ################# settings for gem5 #################
@@ -152,7 +169,6 @@ setGem5(){
     enableDebug="Yes" # [Yes/No]
         debugOutputDir="$gem5Dir/debug_temp"
         debugFlags="PrefetchFilterTimer"
-        #debugFlags="Fetch,Rename,Decode,IEW,LSQ,LSQUnit,Commit,Cache,CachePort"
         #"XBar,CoherentXBar,PacketQueue,Cache,CachePort,CacheRepl,CacheVerbose" #
         # [Flag1,Flag2] use "-h gem5 --debug-help" to see the debug flags 
         debugStartTick=""

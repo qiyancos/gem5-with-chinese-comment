@@ -154,6 +154,10 @@ int PrefetchUsefulTable::isPrefValid(const uint64_t& addr) {
 
 int PrefetchUsefulTable::getReplacedAddr(const uint64_t& addr,
         uint64_t* replacedAddr) {
+    if (!valid_) {
+        *replacedAddr = invalidBlkAddr_;
+        return 0;
+    }
     auto prefIter = prefInCache_.find(addr);
     if (prefIter == prefInCache_.end()) {
         CHECK_ARGS(invalidatedPref_.find(addr) != invalidatedPref_.end(),
