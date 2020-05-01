@@ -133,7 +133,7 @@ class MSHR : public QueueEntry, public Printable
             FromPrefetcher
         };
 
-        // 表明当前的Target是不是一个需要后续处理的Target
+        /// 表明当前的Target是不是一个需要后续处理的Target
         bool postAddedTarget_ = false;
 
         /// 去掉const属性以便进行修改

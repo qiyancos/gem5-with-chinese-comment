@@ -706,6 +706,10 @@ MSHR::extractServiceableTargets(PacketPtr pkt)
     }
     targets.populateFlags();
 
+    /// 由于已经进行了ServiceMSHR，强制重置，针对Write合并Pref的情况
+    prefTarget_ = nullptr;
+    prefTargetMap_.clear();
+    needPostProcess_ = false;
     return ready_targets;
 }
 

@@ -471,7 +471,7 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
     
     /// 进行发生Miss情况的训练操作
     /// dmd->pref; pref->pref; pref->pendingPref
-    if (deletedPacket.size() && prefetchFilter_ && pkt->isRead()) {
+    if (deletedPacket.size() && prefetchFilter_) {
         panic_if(!mshr, "This should never happen");
         for (auto combinedPkt : deletedPacket) {
             prefetch_filter::DataTypeInfo infoPair;
@@ -600,6 +600,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     MSHR *mshr;
     /// 表明当前的预取是否需要执行提级预取的处理
     const bool needLevelUpPrefProcess =
+            pkt->packetType_ == prefetch_filter::Pref &&
             cacheLevel_ >= pkt->targetCacheLevel_ &&
             cacheLevel_ < pkt->srcCacheLevel_ &&
             pkt->caches_.find(this) == pkt->caches_.end();

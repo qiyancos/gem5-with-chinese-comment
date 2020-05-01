@@ -42,7 +42,7 @@ additionalChange() {
     stridePrefConfThresh=4 # 0-7
     stridePrefDegree=16
     prefetchQueueSize=32
-    useFilter=True
+    useFilter=False
     tagBits=6
     ppfTableSize=1024
     enableUpgrade=True
@@ -134,7 +134,7 @@ setGem5(){
         L1Dassoc="8"
         L1DMSHR="4"
         L1DWriteBuffer="8"
-        L1Dprefetcher=""
+        L1Dprefetcher="StridePrefetcher"
         # Prefetcher used for L1DCache
         # Following prefetchers are available
         # [TaggedPrefetcher, BOPPrefetcher, STeMSPrefetcher
@@ -153,7 +153,7 @@ setGem5(){
         L2assoc="8"
         L2MSHR="20"
         L2WriteBuffer="8"
-        L2prefetcher="StridePrefetcher"
+        L2prefetcher=""
 
     enableL3Cache="Yes"
         numL3Caches=""

@@ -784,6 +784,8 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
     bool is_invalidate = pkt->isInvalidate() &&
         !mshr->wasWholeLineWrite;
 
+    /// 获取是否需要postprocess信息
+    bool needPostProcess = mshr->needPostProcess_;
     MSHR::TargetList targets = mshr->extractServiceableTargets(pkt);
     
     /// 添加两个变量说明当前的预取是一个提级/平级预取
@@ -809,7 +811,7 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
             /// 则会当作预取处理
             if (tgt_pkt->packetType_ == prefetch_filter::Pref) {
                 /// 标记被预取的状况
-                if (blk && !(mshr->needPostProcess_ && hasDemandTarget)) {
+                if (blk && !(needPostProcess && hasDemandTarget)) {
                     blk->status |= BlkHWPrefetched;
                 }
                 if (tgt_pkt->targetCacheLevel_ == cacheLevel_) {
@@ -934,7 +936,7 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                     tgt_pkt->mshr_ = pkt->mshr_;
                 }
                 /// 同时拷贝关键的时间戳信息
-                if (!mshr->needPostProcess_) {
+                if (!needPostProcess) {
                     tgt_pkt->combineTimeStamp(pkt);
                     /*
                     tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
@@ -1004,7 +1006,7 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                         getName().c_str(), tgt_pkt, tgt_pkt->getAddr(),
                         BaseCache::levelName_[tgt_pkt->srcCacheLevel_].c_str(),
                         BaseCache::levelName_[tgt_pkt->targetCacheLevel_].c_str());
-                if (!(mshr->needPostProcess_ && hasDemandTarget)) {
+                if (!(needPostProcess && hasDemandTarget)) {
                     // 对于被Demand Shadowed的Pending预取请求不会设置预取属性
                     blk->status |= BlkHWPrefetched;
                 }
