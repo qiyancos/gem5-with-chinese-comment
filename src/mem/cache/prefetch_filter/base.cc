@@ -136,7 +136,10 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
     // 时间维度的更新
     CHECK_ARGS_EXIT(info.source != NullType && info.target != NullType,
             "Unexpected source data type");
-    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingAhead(),
+                "Failed update timing processes");
+    }
 
     const uint64_t hitBlkAddr = hitAddr & cacheLineAddrMask_; 
     if (info.source == Dmd) {
@@ -248,8 +251,10 @@ int BasePrefetchFilter::notifyCacheHit(BaseCache* cache,
             std::pair<uint64_t, uint64_t>(info.source == Pref ?
             hitBlkAddr : invalidBlkAddr_, invalidBlkAddr_));
     // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingPost(),
-            "Failed check & update timing stats information");
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingPost(),
+                "Failed check & update timing stats information");
+    }
     return 0;
 }
 
@@ -265,8 +270,10 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
             combinedPkt ? combinedPkt->prefIndexes_ : std::set<uint64_t>(),
             info.target, true),
             "Data type not match with the record in BPF");
-    
-    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingAhead(),
+                "Failed update timing processes");
+    }
     
     if (info.source == Dmd) {
         uint8_t cacheLevel = cache->cacheLevel_;
@@ -346,8 +353,10 @@ int BasePrefetchFilter::notifyCacheMiss(BaseCache* cache,
             pkt->getAddr() & cacheLineAddrMask_ : invalidBlkAddr_,
             invalidBlkAddr_));
     // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingPost(),
-            "Failed check & update timing stats information");
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingPost(),
+                "Failed check & update timing stats information");
+    }
     return 0;
 }
 
@@ -362,8 +371,11 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
     CHECK_RET_EXIT(usefulTable_[cache].checkDataType(evictedBlkAddr,
             std::set<uint64_t>(), info.target, false),
             "Data type not match with the record in BPF");
-    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
-    
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingAhead(),
+                "Failed update timing processes");
+    }
+
     if (info.source == Dmd && info.target == Pref) {
         // 如果一个Demand Request替换了一个预取请求的数据
         // 则会将对应预取从当前Cache记录表中剔除
@@ -447,19 +459,24 @@ int BasePrefetchFilter::notifyCacheFill(BaseCache* cache,
             pkt->getAddr() & cacheLineAddrMask_ : invalidBlkAddr_,
             info.target == Pref ? evictedBlkAddr : invalidBlkAddr_));
     // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingPost(),
-            "Failed check & update timing stats information");
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingPost(),
+                "Failed check & update timing stats information");
+    }
     return 0;
 }
 
 int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
         const uint64_t& prefAddr, const PrefetchInfo& info) {
-    // 时间维度的更新
-    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
+    if (!typeHash_) {
+        // 时间维度的更新
+        CHECK_RET_EXIT(checkUpdateTimingAhead(),
+                "Failed update timing processes");
     
-    // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingPost(),
-            "Failed check & update timing stats information");
+        // 时间维度的检查与更新
+        CHECK_RET_EXIT(checkUpdateTimingPost(),
+                "Failed check & update timing stats information");
+    }
     // 默认的过滤器没有实现，因此不会改变预取数据的存放位置
     return cache->cacheLevel_;
 }
@@ -467,8 +484,11 @@ int BasePrefetchFilter::filterPrefetch(BaseCache* cache,
 int BasePrefetchFilter::invalidatePrefetch(BaseCache* cache,
         const uint64_t& prefAddr){
     // 时间维度的更新
-    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
-    
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingAhead(),
+                "Failed update timing processes");
+    }
+
     const uint64_t prefBlkAddr = prefAddr & cacheLineAddrMask_;
     // 删除被替换掉的预取
     CHECK_RET_EXIT(removePrefetch(cache, prefBlkAddr, false),
@@ -477,8 +497,10 @@ int BasePrefetchFilter::invalidatePrefetch(BaseCache* cache,
     skipCorrectPref_ = DoublePref(cache,
             std::pair<uint64_t, uint64_t>(prefAddr, invalidBlkAddr_));
     // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingPost(),
-            "Failed check & update timing stats information");
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingPost(),
+                "Failed check & update timing stats information");
+    }
     return 0;
 }
 
@@ -486,14 +508,19 @@ int BasePrefetchFilter::notifyCacheReqSentFailed(BaseCache* cache,
         const int totalEntries, const int waitingDemands,
         const uint8_t originalDegree, uint8_t* newDegree) {
     // 时间维度的更新
-    CHECK_RET_EXIT(checkUpdateTimingAhead(), "Failed update timing processes");
-   
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingAhead(),
+                "Failed update timing processes");
+    }
+
     // 默认的过滤取不对预取器的预取深度进行调节
     *newDegree = originalDegree;
     
     // 时间维度的检查与更新
-    CHECK_RET_EXIT(checkUpdateTimingPost(),
-            "Failed check & update timing stats information");
+    if (!typeHash_) {
+        CHECK_RET_EXIT(checkUpdateTimingPost(),
+                "Failed check & update timing stats information");
+    }
     return 0;
 }
 

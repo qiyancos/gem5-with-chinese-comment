@@ -290,6 +290,8 @@ template class CacheTable<SaturatedCounter>;
 template class CacheTable<PrefetchUsefulTable::CounterEntry>;
 // Prefetch Information for PPF work table
 template class CacheTable<PerceptronPrefetchFilter::Tables::PrefInfoEntry>;
+// Training Target Table
+template class CacheTable<std::set<BaseCache*>>;
 
 std::vector<PrefetchUsefulInfo> IdealPrefetchUsefulTable::deletedPref_;
 std::map<uint64_t, PrefetchUsefulInfo> IdealPrefetchUsefulTable::infoList_;

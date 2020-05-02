@@ -34,6 +34,8 @@
 #include <cstdint>
 
 #include "mem/cache/prefetch_filter/base.hh"
+#include "mem/cache/prefetch_filter/pref_harm_table.hh"
+#include "mem/cache/prefetch_filter/ppf_trainer.hh"
 #include "mem/cache/prefetch_filter/saturated_counter.hh"
 
 struct PerceptronPrefetchFilterParams;
@@ -66,133 +68,6 @@ private:
     uint8_t bits_;
 };
 
-class PrefetchUsefulTable {
-public:
-    // 进行表格的初始化
-    int init(const uint8_t counterBits, const uint32_t CCSize,
-            const uint8_t CCAssoc, const uint32_t VCSize,
-            const uint8_t VCAssoc, const int counterInit,
-            BaseCache* cache = nullptr,
-            const int8_t CCTagBits = -1, const int8_t VCTagBits = -1);
-
-    // 判断一个预取是否可用（可以不可训练，但是必须存在，
-    // 既没有被无效化或者删除）
-    int isPrefValid(const uint64_t& addr);
-
-    // 获取一个预取当前的替换地址
-    int getReplacedAddr(const uint64_t& addr, uint64_t* replacedAddr);
-
-    // 对命中Pref的情况进行处理
-    int updateHit(const uint64_t& addr);
-    
-    // 对Miss的情况进行处理，不区分Pref还是替换数据地址
-    int updateMiss(const uint64_t& addr);
-    
-    // 当新的Pref出现的时候，进行替换信息的更新
-    int addPref(const uint64_t& prefAddr, const uint64_t evictedAddr,
-            const DataType type, std::map<uint64_t, uint8_t>* conflictPref);
-    
-    // 当前Cache中的预取被替换了（如果需要训练返回1，否则返回0）
-    int evictPref(const uint64_t& addr, uint8_t* counterPtr);
-   
-    // 将给定的预取无效化
-    int invalidatePref(const uint64_t& addr, uint8_t* counterPtr);
-
-    // 用于作内存检查
-    void memCheck();
-
-private:
-    // 该函数负责完全删除一个预取的记录
-    int deletePref(const uint64_t& addr, uint8_t* counterPtr);
-
-public:
-    // Counter的大小
-    uint8_t counterBits_;
-
-    // Counter的初始化数值
-    int counterInit_;
-
-    // Counter Cache的Tag大小
-    int8_t counterCacheTagBits_;
-    
-    // Counter Cache的大小
-    uint32_t counterCacheSize_;
-
-    // Counter Cache的组相联毒
-    uint8_t counterCacheAssoc_;
-
-    // Counter Cache的Tag大小
-    int8_t victimCacheTagBits_;
-    
-    // Victim Cache的大小
-    uint32_t victimCacheSize_;
-
-    // Victim Cache的组相联度
-    uint8_t victimCacheAssoc_;
-
-public:
-    // Counter Cache的存储表项
-    class CounterEntry {
-    public:
-        // 默认初始化函数
-        CounterEntry() {}
-        
-        // 默认初始化函数
-        CounterEntry(const uint8_t counterBits, const int counterInit) {
-            counter_.init(counterBits, counterInit);
-        }
-        
-        // 完整初始化函数
-        CounterEntry(const uint8_t counterBits, const int counterInit,
-                const uint64_t& prefAddr, const uint64_t& evictedAddr) :
-                prefAddr_(prefAddr), evictedAddr_(evictedAddr) {
-            counter_.init(counterBits, counterInit);
-        }
-
-    public:
-        // 计数器大小
-        SaturatedCounter counter_;
-        
-        // 对应的预取地址
-        uint64_t prefAddr_;
-        
-        // 对应的被替换的地址
-        uint64_t evictedAddr_;
-    };
-
-    // 是否开启了统计
-    bool valid_ = false;
-
-private:
-    // 当前处于Cache中的预取地址，此处不做压缩映射，实际硬件设计
-    
-    // 预取的类型
-    enum PrefType {
-            // 当前预取可以训练，有替换数据和Counter
-            Trainable,
-            // 当前预取因为冲突而被剔除，导致无法训练
-            NotTrainable,
-            // 一个没有替换任何数据的预取，并且从未被Demand命中
-            CleanPref,
-            // 一个没有替换任何数据的预取，并且被Demand命中
-            UsefulCleanPref};
-
-    // Cache中存在压缩地址的相关记录结构，后者说明了预取的类型
-    std::map<uint64_t, PrefType> prefInCache_;
-
-    // 被替换数据到Counter Cache压缩地址的映射（实际上这里使用的是预取地址）
-    CacheTable<uint64_t> victimCache_;
-
-    // Counter Cache
-    CacheTable<CounterEntry> counterCache_;
-
-    // 最近被无效化但是尚未删除的预取地址（仅用于正确性检查）
-    std::set<uint64_t> invalidatedPref_;
-    
-    // 所属Cache
-    BaseCache* cache_;
-};
-
 } // namespace prefetch_filter
 
 // 基于感知器的预取过滤器
@@ -204,6 +79,9 @@ private:
             FeatureWeightTable;
     typedef prefetch_filter::Feature Feature;
     typedef prefetch_filter::PrefetchUsefulTable PrefetchUsefulTable;
+    typedef prefetch_filter::TrainingType TrainingType;
+    
+    friend class prefetch_filter::PPFTrainer;
 
 public:
     // 构造函数 
@@ -248,13 +126,6 @@ public:
     void regStats() override;
 
 private:
-    // 针对不同类型预取的训练方法对应的enum类型
-    enum TrainType {DemandMiss, GoodPref, BadPref,
-            UselessPref, TrainTypeCount};
-    
-    // 获取训练类型的字符串表示，用于Debug
-    std::string getTrainTypeStr(const TrainType type);
-
     // 一套PPF基本表格的数据结构
     class Tables {
     public:
@@ -335,7 +206,7 @@ private:
 
     // 对一个给定的预取进行奖励或者惩罚，处理成功返回1，失败返回0，错误返回-1
     int train(Tables& workTable, const uint64_t& prefAddr,
-            const uint8_t cacheLevel, const TrainType type);
+            const uint8_t cacheLevel, const TrainingType type);
     
     // 执行删除Prefetch记录操作的内部函数
     int removePrefetch(BaseCache* cache, const uint64_t& prefAddr,
@@ -357,6 +228,12 @@ private:
     // 更新PPF表格相关情况的统计信息
     int updateWorkTableStats(Tables& workTable, const uint64_t& prefAddr);
 
+    // 该函数会执行和时序相关的更新（在最开始执行）
+    virtual int checkUpdateTimingAhead();
+
+    // 该函数会执行和时序相关的更新（在处理的最后执行）
+    virtual int checkUpdateTimingPost();
+
 public:
     // 最终被处理成预取至L1的请求个数，第一个维度表示源头Cache等级，
     // 第二个维度表示目标的Cache等级
@@ -373,6 +250,9 @@ public:
     
     // 因为表格不足，没有进行训练的预取个数
     std::vector<Stats::Vector*> prefNotTrained_;
+
+    // 被过滤掉的预取训练事件
+    std::vector<Stats::Vector*> dismissedTraining_;
 
     // 因为表格不足，没有进行训练的DemandMiss个数
     std::vector<Stats::Vector*> dmdNotTrained_;
@@ -440,6 +320,9 @@ private:
     
     // 针对非LLC的结构使用的表格（目前不对L1ICache设置表格）
     std::vector<std::vector<Tables>> workTables_;
+
+    // 负责全局训练事件管理的结构
+    prefetch_filter::PPFTrainer trainer_;
 };
 
 #endif // __MEM_CACHE_PREFETCH_FILTER_PPF_HH__

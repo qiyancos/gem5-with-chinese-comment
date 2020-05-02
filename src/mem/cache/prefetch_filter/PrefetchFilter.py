@@ -37,7 +37,7 @@ class BasePrefetchFilter(ClockedObject):
     cxx_header = "mem/cache/prefetch_filter/base.hh"
     sys = Param.System(Parent.any, "System this prefetcher belongs to")
 
-    enable_filter = Param.Bool(False, "Whether to enable Filter Engine")
+    enable_filter = Param.Bool(True, "Whether to enable Filter Engine")
     enable_stats = Param.Bool(True, "Whether to enable Stats Engine")
 
     enable_recursive_replace = Param.Bool(True, "Whether to use old replaced"
@@ -146,3 +146,13 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     victim_cache_assoc = Param.UInt8(4, "Associativity of the victim cache")
     victim_cache_tag_bits = Param.Int8(6, "Number of tag bits of the "
             "victim cache (-1 means using full-length tag)")
+    
+    # Trainer Setting
+    target_table_size = Param.UInt32(1024, "Size of the training target table")
+    target_table_assoc = Param.UInt8(4, "Associativity of the training "
+            "target table")
+    target_table_tag_bits = Param.Int8(6, "Number of tag bits of the "
+            "training target table (-1 means using full-length tag)")
+    
+    event_queue_size = Param.UInt32(4, "Size of training event queue in "
+            "training event distributor")

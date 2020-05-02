@@ -39,10 +39,10 @@ setScript(){
 ################# Other Change for Source File in Gem5 #################
 additionalChange() {
     tagPrefDegree=2
-    stridePrefConfThresh=4 # 0-7
+    stridePrefConfThresh=0 # 0-7
     stridePrefDegree=16
     prefetchQueueSize=32
-    useFilter=False
+    useFilter=True
     tagBits=6
     ppfTableSize=1024
     enableUpgrade=True
@@ -134,7 +134,7 @@ setGem5(){
         L1Dassoc="8"
         L1DMSHR="4"
         L1DWriteBuffer="8"
-        L1Dprefetcher="StridePrefetcher"
+        L1Dprefetcher=""
         # Prefetcher used for L1DCache
         # Following prefetchers are available
         # [TaggedPrefetcher, BOPPrefetcher, STeMSPrefetcher
@@ -153,7 +153,7 @@ setGem5(){
         L2assoc="8"
         L2MSHR="20"
         L2WriteBuffer="8"
-        L2prefetcher=""
+        L2prefetcher="StridePrefetcher"
 
     enableL3Cache="Yes"
         numL3Caches=""

@@ -135,15 +135,15 @@ protected:
     int removePrefetch(BaseCache* cache, const uint64_t& prefAddr,
             const bool isHit);
 
+    // 该函数会执行和时序相关的更新（在最开始执行）
+    virtual int checkUpdateTimingAhead();
+
+    // 该函数会执行和时序相关的更新（在处理的最后执行）
+    virtual int checkUpdateTimingPost();
+
 private:
     // 进行基本结构的初始化
     int initThis();
-
-    // 该函数会执行和时序相关的更新（在最开始执行）
-    int checkUpdateTimingAhead();
-
-    // 该函数会执行和时序相关的更新（在处理的最后执行）
-    int checkUpdateTimingPost();
 
 public:
     // 用于处理未启用的统计变量

@@ -35,7 +35,9 @@ SimObject('PrefetchFilter.py')
 Source('base.cc')
 Source('table.cc')
 Source('pref_info.cc')
+Source('pref_harm_table.cc')
 Source('ppf.cc')
+Source('ppf_trainer.cc')
 Source('saturated_counter.cc')
 
 # enable timing stats?
