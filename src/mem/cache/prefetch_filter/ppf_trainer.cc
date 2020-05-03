@@ -81,6 +81,8 @@ int TrainingEventDistributor::addTrainingEvent(TrainingEvent event) {
         workingTick_ = tickNow_;
     }
     
+    CHECK_ARGS(event.cache_ != nullptr,
+            "Invalid training event with target %p", event.cache_);
     DEBUG_PF(2, "Add event for prefetch @0x%lx [src-%s tgt-%s] type %s",
             event.addr_, BaseCache::levelName_[event.srcCacheLevel_].c_str(),
             event.cache_->getName().c_str(),
@@ -189,6 +191,7 @@ int PPFTrainer::addTrainingEvent(BaseCache* cache, const uint64_t& addr,
     if (result) {
         uint8_t cacheLevel = cache->cacheLevel_;
         for (auto targetCache : *trainingTargets) {
+            CHECK_ARGS(targetCache != nullptr, "Invalid target cache pointer");
             CHECK_RET(result = distributor_.addTrainingEvent(
                     TrainingEvent(addr, type, cacheLevel, targetCache)),
                     "Failed to add training event to distributor");
@@ -227,6 +230,11 @@ int PPFTrainer::completeTrainingEvent(PerceptronPrefetchFilter* prefFilter) {
 
 int PPFTrainer::addPref(BaseCache* cache, const uint64_t& addr,
         const std::set<BaseCache*>& targets) {
+    for (auto targetCache : targets) {
+        DEBUG_PF(2, "Add target %s to prefetch @0x%lx in %s",
+                targetCache->getName().c_str(), addr,
+                cache->getName().c_str());
+    }
     int result;
     std::set<BaseCache*> fullTarget = targets;
     auto tableMapIter = targetTables_.find(cache);
@@ -241,8 +249,9 @@ int PPFTrainer::addPref(BaseCache* cache, const uint64_t& addr,
                 "Failed to write new target to target table");
         CHECK_ARGS(result == 0 || result == 3, "Unexpected write status");
     } else {
-        CHECK_RET(result = tableMapIter->second.write(addr, fullTarget, false),
-                "Failed to write new target to target table");
+        uint64_t replacedAddr = invalidBlkAddr_;
+        CHECK_RET(result = tableMapIter->second.write(addr, fullTarget, false,
+                &replacedAddr), "Failed to write new target to target table");
         CHECK_ARGS(result == 1 || result == 2, "Unexpected write status");
     }
     return 0;
@@ -255,6 +264,10 @@ int PPFTrainer::invalidatePref(BaseCache* cache, const uint64_t& addr) {
             "Can not find training target table for given cache");
     CHECK_RET(result = tableMapIter->second.invalidate(addr, false),
             "Failed to get target cache for given prefetch");
+    if (result > 0) {
+        DEBUG_PF(2, "Delete target cache record for prefetch @0x%lx in %s",
+                addr, cache->getName().c_str());
+    }
     return 0;
 }
 

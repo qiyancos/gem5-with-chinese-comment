@@ -163,10 +163,10 @@ int CacheTable<T>::read(const uint64_t& addr, T** data,
     Set& set = data_[setIndex];
     for (auto entry = set.begin(); entry != set.end(); entry++) {
         if ((entry->tag_ & tagMask) == tag && entry->valid_) {
-            *data = &(entry->data_);
             CacheEntry temp = *entry;
             set.erase(entry);
             set.push_front(temp);
+            *data = &(set.begin()->data_);
             DEBUG_PF(3, "Read hit: Addr @0x%lx; Set %u; tag @0x%lx",
                     entry->addr_, setIndex, tag);
             return withFullTag ? 1 : (entry->addr_ == addr ? 1 : 2);
