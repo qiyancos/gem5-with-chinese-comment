@@ -54,9 +54,9 @@ public:
     
     // 默认初始化函数
     TrainingEvent(const uint64_t& addr, const TrainingType type,
-            const uint8_t srcCacheLevel, BaseCache* cache) :
+            BaseCache* srcCache, BaseCache* targetCache) :
             addr_(addr), type_(type),
-            srcCacheLevel_(srcCacheLevel), cache_(cache) {}
+            srcCache_(srcCache), targetCache_(targetCache) {}
     
     // 设置训练目标
     int setTrainingTarget(BaseCache* cache);
@@ -77,10 +77,10 @@ public:
     TrainingType type_ = DemandMiss;
     
     // 生成训练事件的Cache层级
-    uint8_t srcCacheLevel_ = 255;
+    BaseCache* srcCache_ = nullptr;
 
     // 训练目标Cache
-    BaseCache* cache_ = nullptr;
+    BaseCache* targetCache_ = nullptr;
     
     // 准备就绪的时间
     Tick readyTime_ = 0;
@@ -92,7 +92,7 @@ typedef std::priority_queue<TrainingEvent, std::vector<TrainingEvent>>
 class TrainingEventDistributor final {
 public:
     // 初始化函数
-    int init(const uint32_t queueSize);
+    int init(const uint32_t queueSize, const uint32_t trainingDelay);
 
     // 初始化函数
     int init(const std::set<BaseCache*>& caches);
@@ -106,6 +106,9 @@ public:
 private:
     // EventQueue的大小
     int queueSize_;
+
+    // 训练的延迟
+    uint32_t trainingDelay_;
 
     // 记录处理周期位置
     Tick workingTick_ = 0;
@@ -124,11 +127,12 @@ public:
     // 初始化函数
     int init(const std::set<BaseCache*>& caches, const int8_t tagBits,
             const uint32_t tagetTableSize, const uint8_t targetTableAssoc,
-            const uint32_t eventQueueSize);
+            const uint32_t eventQueueSize, const uint32_t trainingDelay);
     
     // 初始化函数
     int init(const int8_t tagBits, const uint32_t tagetTableSize,
-            const uint8_t targetTableAssoc, const uint32_t eventQueueSize);
+            const uint8_t targetTableAssoc, const uint32_t eventQueueSize,
+            const uint32_t trainingDelay);
     
     // 初始化函数
     int init(const std::set<BaseCache*>& caches);

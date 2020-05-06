@@ -216,7 +216,7 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
     // 初始化训练事件调度结构
     CHECK_WARN((tempFlag = trainer_.init(p->target_table_tag_bits,
             p->target_table_size, p->target_table_assoc,
-            p->event_queue_size)) >= 0,
+            p->event_queue_size, p->training_delay)) >= 0,
             "Failed to init ppf trainer with table settings");
     initFailFlag_ |= tempFlag < 0;
 }

@@ -154,5 +154,6 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     target_table_tag_bits = Param.Int8(6, "Number of tag bits of the "
             "training target table (-1 means using full-length tag)")
     
-    event_queue_size = Param.UInt32(4, "Size of training event queue in "
+    training_delay = Param.UInt32(3, "Number of cycles needed for training");
+    event_queue_size = Param.UInt32(2, "Size of training event queue in "
             "training event distributor")

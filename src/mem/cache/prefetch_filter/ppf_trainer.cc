@@ -49,9 +49,9 @@ std::string getTrainingTypeStr(const TrainingType type) {
 }
 
 int TrainingEvent::setTrainingTarget(BaseCache* cache) {
-    CHECK_ARGS(cache_ == nullptr, "Can not set training target for "
+    CHECK_ARGS(targetCache_ == nullptr, "Can not set training target for "
             "training event already with training target");
-    cache_ = cache;
+    targetCache_ = cache;
     return 0;
 }
 
@@ -62,9 +62,12 @@ int TrainingEvent::setReadyTime(const Tick& readyTime) {
     return 0;
 }
 
-int TrainingEventDistributor::init(const uint32_t queueSize) {
+int TrainingEventDistributor::init(const uint32_t queueSize,
+        const uint32_t trainingDelay) {
     CHECK_ARGS(queueSize > 0, "Illegal event queue size.");
-    queueSize_ = queueSize;
+    // 实际的队列顶部存放的是正在执行训练的事件，不属于等待队列
+    queueSize_ = queueSize + 1;
+    trainingDelay_ = trainingDelay;
     return 0;
 }
 
@@ -81,15 +84,15 @@ int TrainingEventDistributor::addTrainingEvent(TrainingEvent event) {
         workingTick_ = tickNow_;
     }
     
-    CHECK_ARGS(event.cache_ != nullptr,
-            "Invalid training event with target %p", event.cache_);
+    CHECK_ARGS(event.targetCache_ != nullptr,
+            "Invalid training event with target %p", event.targetCache_);
     DEBUG_PF(2, "Add event for prefetch @0x%lx [src-%s tgt-%s] type %s",
-            event.addr_, BaseCache::levelName_[event.srcCacheLevel_].c_str(),
-            event.cache_->getName().c_str(),
+            event.addr_, event.srcCache_->getName().c_str(),
+            event.targetCache_->getName().c_str(),
             getTrainingTypeStr(event.type_).c_str());
-    if (invalidTargets_.find(event.cache_) == invalidTargets_.end()) {
+    if (invalidTargets_.find(event.srcCache_) == invalidTargets_.end()) {
         int dismissed = 0;
-        auto queueMapIter = eventQueues_.find(event.cache_);
+        auto queueMapIter = eventQueues_.find(event.srcCache_);
         CHECK_ARGS(queueMapIter != eventQueues_.end(),
                 "Can not find valid event queue for given target")
         std::list<TrainingEvent>& eventQueue = queueMapIter->second;
@@ -100,18 +103,19 @@ int TrainingEventDistributor::addTrainingEvent(TrainingEvent event) {
             TrainingEvent& dismissedEvent = eventQueue.front();
             DEBUG_PF(3, "Delete event for prefetch @0x%lx [src-%s tgt-%s] "
                     "type %s as queue is full", dismissedEvent.addr_,
-                    BaseCache::levelName_[dismissedEvent.srcCacheLevel_].c_str(),
-                    dismissedEvent.cache_->getName().c_str(),
+                    dismissedEvent.srcCache_->getName().c_str(),
+                    dismissedEvent.targetCache_->getName().c_str(),
                     getTrainingTypeStr(dismissedEvent.type_).c_str());
             eventQueue.pop_front();
         }
         CHECK_RET(event.setReadyTime(tickNow_ +
-                BasePrefetchFilter::clockPeriod_ * (eventQueue.size() + 1)),
+                BasePrefetchFilter::clockPeriod_ *
+                (eventQueue.size() + trainingDelay_)),
                 "Failed to set training event ready time");
         DEBUG_PF(3, "Set training event ready time %lu at tick %lu",
                 event.readyTime_, tickNow_);
         eventQueue.push_back(event);
-        invalidTargets_.insert(event.cache_);
+        invalidTargets_.insert(event.srcCache_);
         return dismissed;
     } else {
         DEBUG_PF(3, "Training event is dismissed");
@@ -139,8 +143,8 @@ int TrainingEventDistributor::getReadyTrainingEvent(
 
 int PPFTrainer::init(const std::set<BaseCache*>& caches, const int8_t tagBits,
         const uint32_t targetTableSize, const uint8_t targetTableAssoc,
-        const uint32_t eventQueueSize) {
-    CHECK_RET(distributor_.init(eventQueueSize),
+        const uint32_t eventQueueSize, const uint32_t trainingDelay) {
+    CHECK_RET(distributor_.init(eventQueueSize, trainingDelay),
             "Failed to init training event distributor in 1st step");
     CHECK_RET(distributor_.init(caches),
             "Failed to init training event distributor in 2nd step");
@@ -154,8 +158,9 @@ int PPFTrainer::init(const std::set<BaseCache*>& caches, const int8_t tagBits,
 }
 
 int PPFTrainer::init(const int8_t tagBits, const uint32_t targetTableSize,
-        const uint8_t targetTableAssoc, const uint32_t eventQueueSize) {
-    CHECK_RET(distributor_.init(eventQueueSize),
+        const uint8_t targetTableAssoc, const uint32_t eventQueueSize,
+        const uint32_t trainingDelay) {
+    CHECK_RET(distributor_.init(eventQueueSize, trainingDelay),
             "Failed to init training event distributor");
     targetTables_[nullptr] = TrainingTargetTable();
     CHECK_RET(targetTables_[nullptr].init(tagBits, targetTableSize,
@@ -189,11 +194,10 @@ int PPFTrainer::addTrainingEvent(BaseCache* cache, const uint64_t& addr,
             &trainingTargets, false),
             "Failed to get target cache for given prefetch");
     if (result) {
-        uint8_t cacheLevel = cache->cacheLevel_;
         for (auto targetCache : *trainingTargets) {
             CHECK_ARGS(targetCache != nullptr, "Invalid target cache pointer");
             CHECK_RET(result = distributor_.addTrainingEvent(
-                    TrainingEvent(addr, type, cacheLevel, targetCache)),
+                    TrainingEvent(addr, type, cache, targetCache)),
                     "Failed to add training event to distributor");
             if (!result) {
                 fullTargets->erase(targetCache);
@@ -209,18 +213,18 @@ int PPFTrainer::completeTrainingEvent(PerceptronPrefetchFilter* prefFilter) {
             "Failed to get ready training event");
     while(readyQueue.size()) {
         const TrainingEvent& event = readyQueue.top();
-        CHECK_ARGS(event.cache_ != nullptr,
+        CHECK_ARGS(event.targetCache_ != nullptr,
                 "No valid target for training event");
-        if (event.cache_->cacheLevel_) {
+        if (event.targetCache_->cacheLevel_) {
             DEBUG_PF(2, "Start completing training event for prefetch @0x%lx "
                     "[src-%s tgt-%s] type %s at %lu", event.addr_,
-                    BaseCache::levelName_[event.srcCacheLevel_].c_str(),
-                    event.cache_->getName().c_str(),
+                    event.srcCache_->getName().c_str(),
+                    event.targetCache_->getName().c_str(),
                     getTrainingTypeStr(event.type_).c_str(), tickNow_);
             PerceptronPrefetchFilter::Tables& workTable =
-                    prefFilter->getTable(event.cache_);
+                    prefFilter->getTable(event.targetCache_);
             CHECK_RET(prefFilter->train(workTable, event.addr_,
-                    event.srcCacheLevel_, event.type_),
+                    event.srcCache_->cacheLevel_, event.type_),
                     "Faield to complete single training event");
         }
         readyQueue.pop();
