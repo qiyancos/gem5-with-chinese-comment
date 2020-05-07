@@ -92,7 +92,7 @@ typedef std::priority_queue<TrainingEvent, std::vector<TrainingEvent>>
 class TrainingEventDistributor final {
 public:
     // 初始化函数
-    int init(const uint32_t queueSize, const uint32_t trainingDelay);
+    int init(const int32_t queueSize, const uint32_t trainingDelay);
 
     // 初始化函数
     int init(const std::set<BaseCache*>& caches);
@@ -127,11 +127,11 @@ public:
     // 初始化函数
     int init(const std::set<BaseCache*>& caches, const int8_t tagBits,
             const uint32_t tagetTableSize, const uint8_t targetTableAssoc,
-            const uint32_t eventQueueSize, const uint32_t trainingDelay);
+            const int32_t eventQueueSize, const uint32_t trainingDelay);
     
     // 初始化函数
     int init(const int8_t tagBits, const uint32_t tagetTableSize,
-            const uint8_t targetTableAssoc, const uint32_t eventQueueSize,
+            const uint8_t targetTableAssoc, const int32_t eventQueueSize,
             const uint32_t trainingDelay);
     
     // 初始化函数

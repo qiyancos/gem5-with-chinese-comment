@@ -62,9 +62,9 @@ int TrainingEvent::setReadyTime(const Tick& readyTime) {
     return 0;
 }
 
-int TrainingEventDistributor::init(const uint32_t queueSize,
+int TrainingEventDistributor::init(const int32_t queueSize,
         const uint32_t trainingDelay) {
-    CHECK_ARGS(queueSize > 0, "Illegal event queue size.");
+    CHECK_ARGS(queueSize > -2, "Illegal event queue size.");
     // 实际的队列顶部存放的是正在执行训练的事件，不属于等待队列
     queueSize_ = queueSize + 1;
     trainingDelay_ = trainingDelay;
@@ -90,6 +90,22 @@ int TrainingEventDistributor::addTrainingEvent(TrainingEvent event) {
             event.addr_, event.srcCache_->getName().c_str(),
             event.targetCache_->getName().c_str(),
             getTrainingTypeStr(event.type_).c_str());
+    // 理想设置下的处理
+    if (queueSize_ == 0) {
+        auto queueMapIter = eventQueues_.find(event.srcCache_);
+        CHECK_ARGS(queueMapIter != eventQueues_.end(),
+                "Can not find valid event queue for given target")
+        std::list<TrainingEvent>& eventQueue = queueMapIter->second;
+        CHECK_RET(event.setReadyTime(tickNow_ +
+                BasePrefetchFilter::clockPeriod_ *
+                (eventQueue.size() + trainingDelay_)),
+                "Failed to set training event ready time");
+        DEBUG_PF(3, "Set training event ready time %lu at tick %lu",
+                event.readyTime_, tickNow_);
+        eventQueue.push_back(event);
+        return 0;
+    }
+    // 非理想设置下的处理
     if (invalidTargets_.find(event.srcCache_) == invalidTargets_.end()) {
         int dismissed = 0;
         auto queueMapIter = eventQueues_.find(event.srcCache_);
@@ -143,7 +159,7 @@ int TrainingEventDistributor::getReadyTrainingEvent(
 
 int PPFTrainer::init(const std::set<BaseCache*>& caches, const int8_t tagBits,
         const uint32_t targetTableSize, const uint8_t targetTableAssoc,
-        const uint32_t eventQueueSize, const uint32_t trainingDelay) {
+        const int32_t eventQueueSize, const uint32_t trainingDelay) {
     CHECK_RET(distributor_.init(eventQueueSize, trainingDelay),
             "Failed to init training event distributor in 1st step");
     CHECK_RET(distributor_.init(caches),
@@ -158,7 +174,7 @@ int PPFTrainer::init(const std::set<BaseCache*>& caches, const int8_t tagBits,
 }
 
 int PPFTrainer::init(const int8_t tagBits, const uint32_t targetTableSize,
-        const uint8_t targetTableAssoc, const uint32_t eventQueueSize,
+        const uint8_t targetTableAssoc, const int32_t eventQueueSize,
         const uint32_t trainingDelay) {
     CHECK_RET(distributor_.init(eventQueueSize, trainingDelay),
             "Failed to init training event distributor");

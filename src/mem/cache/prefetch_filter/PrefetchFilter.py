@@ -155,5 +155,6 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
             "training target table (-1 means using full-length tag)")
     
     training_delay = Param.UInt32(3, "Number of cycles needed for training");
-    event_queue_size = Param.UInt32(2, "Size of training event queue in "
-            "training event distributor")
+    event_queue_size = Param.Int32(2, "Size of training event queue in "
+            "training event distributor "
+            "(-1 means using ideal training setting)")
