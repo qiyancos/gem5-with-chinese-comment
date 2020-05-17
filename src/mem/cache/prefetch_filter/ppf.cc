@@ -565,6 +565,7 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
             (*prefTarget_[cacheLevel][targetCacheLevel])[cpuId]++;
         }
     }
+    
     DEBUG_PF(2, "Filter From %s To %s with %d Weights[%d]",
             BaseCache::levelName_[cache->cacheLevel_].c_str(),
             BaseCache::levelName_[targetCacheLevel].c_str(),
