@@ -118,7 +118,8 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                 prefInfo.setInfo("BPC2>>1",
                         (*(pkt->recentBranchPC_.begin()++)) >> 1);
                 prefInfo.setInfo("BPC3>>2", pkt->recentBranchPC_.back() >> 2);
-                prefInfo.setInfo("PC1", pkt->req->getPC());
+                prefInfo.setInfo("PC1",
+                        new_pfi.hasPC() ? pkt->req->getPC() : 0);
                 prefInfo.setInfo("PC2>>1", recentTriggerPC_[0] >> 1);
                 prefInfo.setInfo("PC3>>2", recentTriggerPC_[1] >> 2);
                 prefInfo.setInfo("Address", pkt->getAddr());
@@ -194,7 +195,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
     /// 如果生成的预取，则会更新触发预取的PC
     if (sentPrefetches) {
         recentTriggerPC_[1] = recentTriggerPC_[0];
-        recentTriggerPC_[0] = pkt->req->getPC();
+        recentTriggerPC_[0] = pfi.hasPC() ? pkt->req->getPC() : 0;
     }
 }
 

@@ -52,7 +52,7 @@ TaggedPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
     Addr blkAddr = blockAddress(pfi.getAddr());
 
     for (int d = 1; d <= degree; d++) {
-        Addr newAddr = blkAddr + d*(blkSize);
+        Addr new_addr = blkAddr + d*(blkSize);
         /// 添加可用的Info信息
         AddrPriority newPref(new_addr, 0);
         newPref.info_.setInfo("Depth", d);

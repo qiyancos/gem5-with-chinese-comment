@@ -38,6 +38,17 @@ setScript(){
 
 ################# Other Change for Source File in Gem5 #################
 additionalChange() {
+    # Prefetcher
+    prefetchQueueSize=32
+    # PPF
+    useFilter=True
+    tagBits=6
+    ppfTableSize=1024
+    enableUpgrade=True
+    useHarmTable=True
+    eventQueueSize=2
+    forceTarget=0
+    
     # SAMPMP
     useSAMPMP=False
     SAMPMPDegree=16
@@ -60,18 +71,8 @@ additionalChange() {
     # Stride Prefetcher
     stridePrefConfThresh=4 # 0-7
     stridePrefDegree=16
-    # Prefetcher
-    prefetchQueueSize=32
-    # PPF
-    useFilter=True
-    tagBits=6
-    ppfTableSize=1024
-    enableUpgrade=True
-    useHarmTable=True
-    eventQueueSize=2
-    forceTarget=0
 
-    sed -i "328c\    degree = Param.Unsigned($ISBPDegree," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "328c\    degree = Param.Unsigned($ISBPDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
     
     if [ x$useSAMPMP = xTrue ]
     then

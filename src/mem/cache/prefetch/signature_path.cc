@@ -55,7 +55,7 @@ SignaturePathPrefetcher::SignaturePathPrefetcher(
 {
     /// 初始化父类的预取度
     originDegree_ = 16;
-    throttlingDegree_ = 9999;
+    throttlingDegree_ = 255;
     fatal_if(prefetchConfidenceThreshold < 0,
         "The prefetch confidence threshold must be greater than 0\n");
     fatal_if(prefetchConfidenceThreshold > 1,

@@ -124,8 +124,12 @@ class AccessMapPatternMatching : public ClockedObject
      * - State transitions from ACCESS to ACCESS
      */
     uint64_t numRawCacheHits;
+
+  public:
     /** Current degree */
     unsigned degree;
+  
+  private:  
     /** Current useful degree */
     unsigned usefulDegree;
 

@@ -560,6 +560,9 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
         targetCacheLevel = cacheLevel;
     }
     
+    uint8_t forceTarget = 0;
+    targetCacheLevel = forceTarget ? forceTarget : targetCacheLevel;
+
     if (targetCacheLevel > maxCacheLevel_) {
         for (auto cpuId : cache->cpuIds_) {
             (*prefTarget_[cacheLevel][targetCacheLevel])[cpuId]++;

@@ -160,11 +160,11 @@ IrregularStreamBufferPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
                 if (spm.counter > 0) {
                     Addr pf_addr = spm.address << lBlkSize;
                     /// 添加可用的Info信息
-                    AddrPriority newPref(new_addr, 0);
+                    AddrPriority newPref(pf_addr, 0);
                     newPref.info_.setInfo("Confidence",
                             spm.counter + mapping.counter);
                     newPref.info_.setInfo("Depth", d);
-                    addresses.push_back(nrePref);
+                    addresses.push_back(newPref);
                 }
             }
         }

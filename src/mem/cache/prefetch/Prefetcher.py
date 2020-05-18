@@ -124,7 +124,7 @@ class StridePrefetcher(QueuedPrefetcher):
     on_inst = False
 
     max_conf = Param.Int(7, "Maximum confidence level")
-    thresh_conf = Param.Int(3, "Threshold confidence level")
+    thresh_conf = Param.Int(4, "Threshold confidence level")
     min_conf = Param.Int(0, "Minimum confidence level")
     start_conf = Param.Int(3, "Starting confidence for new entries")
 
@@ -143,7 +143,7 @@ class TaggedPrefetcher(QueuedPrefetcher):
     cxx_class = 'TaggedPrefetcher'
     cxx_header = "mem/cache/prefetch/tagged.hh"
 
-    degree = Param.Int(2, "Number of prefetches to generate")
+    degree = Param.Int(16, "Number of prefetches to generate")
 
 class IndirectMemoryPrefetcher(QueuedPrefetcher):
     type = 'IndirectMemoryPrefetcher'
@@ -177,7 +177,7 @@ class IndirectMemoryPrefetcher(QueuedPrefetcher):
         "Counter threshold to start the indirect prefetching")
     stream_counter_threshold = Param.Unsigned(4,
         "Counter threshold to enable the stream prefetcher")
-    streaming_distance = Param.Unsigned(4,
+    streaming_distance = Param.Unsigned(16,
         "Number of prefetches to generate when using the stream prefetcher")
 
 class SignaturePathPrefetcher(QueuedPrefetcher):
@@ -252,7 +252,7 @@ class AccessMapPatternMatching(ClockedObject):
 
     limit_stride = Param.Unsigned(0,
         "Limit the strides checked up to -X/X, if 0, disable the limit")
-    start_degree = Param.Unsigned(4,
+    start_degree = Param.Unsigned(16,
         "Initial degree (Maximum number of prefetches generated")
     hot_zone_size = Param.MemorySize("2kB", "Memory covered by a hot zone")
     access_map_table_entries = Param.MemorySize("256",
@@ -325,7 +325,7 @@ class IrregularStreamBufferPrefetcher(QueuedPrefetcher):
         "Maximum value of the confidence counter")
     chunk_size = Param.Unsigned(256,
         "Maximum number of addresses in a temporal stream")
-    degree = Param.Unsigned(4, "Number of prefetches to generate")
+    degree = Param.Unsigned(16, "Number of prefetches to generate")
     training_unit_assoc = Param.Unsigned(128,
         "Associativity of the training unit")
     training_unit_entries = Param.MemorySize("128",

@@ -1105,21 +1105,7 @@ class BaseCache : public MemObject
      * also sets the blocked flag in the slave interface.
      * @param cause The reason for the cache blocking.
      */
-    void setBlocked(BlockedCause cause)
-    {
-        uint8_t flag = 1 << cause;
-        if (blocked == 0) {
-            DPRINTF(Cache,"Start blocking for cause %d, mask=%d\n",
-                    cause, blocked);
-            blocked_causes[cause]++;
-            blockedCycle = curCycle();
-            cpuSidePort.setBlocked();
-        } else {
-            DPRINTF(Cache,"Keep blocking for cause %d, mask=%d\n",
-                    cause, blocked);
-        }
-        blocked |= flag;
-    }
+    void setBlocked(BlockedCause cause);
 
     /**
      * Marks the cache as unblocked for the given cause. This also clears the
@@ -1128,16 +1114,7 @@ class BaseCache : public MemObject
      * @warning Calling this function can cause a blocked request on the bus to
      * access the cache. The cache must be in a state to handle that request.
      */
-    void clearBlocked(BlockedCause cause)
-    {
-        uint8_t flag = 1 << cause;
-        blocked &= ~flag;
-        DPRINTF(Cache,"Unblocking for cause %d, mask=%d\n", cause, blocked);
-        if (blocked == 0) {
-            blocked_cycles[cause] += curCycle() - blockedCycle;
-            cpuSidePort.clearBlocked();
-        }
-    }
+    void clearBlocked(BlockedCause cause);
 
     /**
      * Schedule a send event for the memory-side port. If already

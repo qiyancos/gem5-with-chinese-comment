@@ -185,6 +185,39 @@ BaseCache::getName() {
     return baseName;
 }
 
+void
+BaseCache::setBlocked(BlockedCause cause) {
+    uint8_t flag = 1 << cause;
+    if (blocked == 0) {
+        DPRINTF(Cache,"Start blocking for cause %d, mask=%d\n",
+                cause, blocked);
+        DEBUG_MEM("%s start blocking for cause %d, mask=%d",
+                getName().c_str(), cause, blocked);
+        blocked_causes[cause]++;
+        blockedCycle = curCycle();
+        cpuSidePort.setBlocked();
+    } else {
+        DPRINTF(Cache,"Keep blocking for cause %d, mask=%d\n",
+                cause, blocked);
+        DEBUG_MEM("%s keep blocking for cause %d, mask=%d",
+                getName().c_str(), cause, blocked);
+    }
+    blocked |= flag;
+}
+
+void
+BaseCache::clearBlocked(BlockedCause cause) {
+    uint8_t flag = 1 << cause;
+    blocked &= ~flag;
+    DPRINTF(Cache,"Unblocking for cause %d, mask=%d\n", cause, blocked);
+    DEBUG_MEM("%s unblocking for cause %d, mask=%d\n",
+            getName().c_str(), cause, blocked);
+    if (blocked == 0) {
+        blocked_cycles[cause] += curCycle() - blockedCycle;
+        cpuSidePort.clearBlocked();
+    }
+}
+
 bool
 BaseCache::hasWriteBufferForPref() {
     int wbForPref = writeBuffer.numEntries - writeBuffer.allocated -
@@ -2908,6 +2941,10 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
         DPRINTF(Cache, "%s schedule send event with entry"
                 "[%p, MSHR? %d] successfully\n",
                 cache.getName().c_str(), entry, entry ? entry->isMSHR_ : -1);
+        
+        DEBUG_MEM("%s schedule send event with entry"
+                "[%p, MSHR? %d] successfully",
+                cache.getName().c_str(), entry, entry ? entry->isMSHR_ : -1);
 
         schedSendEvent(cache.nextQueueReadyTime());
       
@@ -2932,10 +2969,24 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
                     MSHR::TargetList targets =
                             mshr->extractServiceableTargets(tgt_pkt);
                     for (auto target : targets) {
-                        // 删除所有降级别的预取操作
+                        /// 删除所有降级别的预取操作
                         delete target.pkt;
                     }
+                    const bool was_full = cache.mshrQueue.isFull();
                     cache.mshrQueue.deallocate(mshr);
+                    
+                    /// 释放MSHR之后处理Block状态
+                    if (was_full && !cache.mshrQueue.isFull()) {
+                        cache.clearBlocked(Blocked_NoMSHRs);
+                    }
+
+                    if (cache.prefetcher && cache.mshrQueue.canPrefetch()) {
+                        Tick next_pf_time = std::max(
+                                cache.prefetcher->nextPrefetchReadyTime(),
+                                cache.clockEdge());
+                        if (next_pf_time != MaxTick)
+                            cache.schedMemSideSendEvent(next_pf_time);
+                    }
                 } else if (cache.cacheLevel_ >= tgt_pkt->targetCacheLevel_) {
                     /// 如果合并为一个提级/平级预取，
                     DEBUG_MEM("MSHR changed for none low level prefetch "
@@ -2957,6 +3008,11 @@ BaseCache::CacheReqPacketQueue::sendDeferredPacket()
         DPRINTF(Cache, "%s schedule send event with entry"
                 "[%p, MSHR? %d] failed\n",
                 cache.getName().c_str(), entry, entry ? entry->isMSHR_ : -1);
+        
+        DEBUG_MEM("%s schedule send event with entry"
+                "[%p, MSHR? %d] failed",
+                cache.getName().c_str(), entry, entry ? entry->isMSHR_ : -1);
+        
         if (cache.prefetchFilter_ && cache.prefetcher) {
             uint8_t newDegree;
             cache.prefetchFilter_->notifyCacheReqSentFailed(&cache,

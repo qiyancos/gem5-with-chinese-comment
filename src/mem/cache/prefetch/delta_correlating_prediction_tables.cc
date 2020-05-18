@@ -37,11 +37,11 @@
 
 DeltaCorrelatingPredictionTables::DeltaCorrelatingPredictionTables(
    DeltaCorrelatingPredictionTablesParams *p) : SimObject(p),
+   degree_(p->deltas_per_entry - 4),
    deltaBits(p->delta_bits), deltaMaskBits(p->delta_mask_bits),
    table(p->table_assoc, p->table_entries, p->table_indexing_policy,
          p->table_replacement_policy, DCPTEntry(p->deltas_per_entry))
 {
-    degree_ = p->deltas_per_entry - 4;
 }
 
 void

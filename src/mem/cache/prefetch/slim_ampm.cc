@@ -38,7 +38,8 @@ SlimAMPMPrefetcher::SlimAMPMPrefetcher(const SlimAMPMPrefetcherParams* p)
   : QueuedPrefetcher(p), ampm(*p->ampm), dcpt(*p->dcpt)
 {
     /// 初始化父类的预取度 
-    originDegree_ = std::max(dcpt.degree_, ampm.degree);
+    originDegree_ = std::max(dcpt.degree_,
+            static_cast<uint16_t>(ampm.degree));
     throttlingDegree_ = originDegree_;
 }
 
