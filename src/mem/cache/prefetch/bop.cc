@@ -45,6 +45,9 @@ BOPPrefetcher::BOPPrefetcher(const BOPPrefetcherParams *p)
       issuePrefetchRequests(false), bestOffset(1), phaseBestOffset(0),
       bestScore(0), round(0)
 {
+    /// 初始化父类的预取度
+    originDegree_ = 1;
+    throttlingDegree_ = 1;
     if (!isPowerOf2(rrEntries)) {
         fatal("%s: number of RR entries is not power of 2\n", name());
     }
@@ -242,7 +245,10 @@ BOPPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
     // prefetch at most per access
     if (issuePrefetchRequests) {
         Addr prefetch_addr = addr + (bestOffset << lBlkSize);
-        addresses.push_back(AddrPriority(prefetch_addr, 0));
+        /// 添加可用的Info信息
+        AddrPriority newPref(prefetch_addr, 0);
+        newPref.info_.setInfo("Delta", abs((bestOffset << lBlkSize) + 128));
+        addresses.push_back(newPref);
         DPRINTF(HWPrefetch, "Generated prefetch %#lx\n", prefetch_addr);
     }
 }

@@ -42,6 +42,10 @@ SBOOEPrefetcher::SBOOEPrefetcher(const SBOOEPrefetcherParams *p)
       bestSandbox(NULL),
       accesses(0)
 {
+    /// 初始化父类的预取度
+    originDegree_ = 1;
+    throttlingDegree_ = 1;
+
     if (!(p->score_threshold_pct >= 0 && p->score_threshold_pct <= 100)) {
         fatal("%s: the score threshold should be between 0 and 100\n", name());
     }
@@ -137,7 +141,10 @@ SBOOEPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
 
     if (evaluationFinished && bestSandbox->score() > scoreThreshold) {
         Addr pref_line = pfi_line + bestSandbox->stride;
-        addresses.push_back(AddrPriority(pref_line << lBlkSize, 0));
+        /// 添加可用的Info信息
+        AddrPriority newPref(pref_line << lBlkSize, 0);
+        newPref.info_.setInfo("Confidence", bestSandbox->score());
+        addresses.push_back(newPref);
     }
 }
 

@@ -41,6 +41,7 @@ DeltaCorrelatingPredictionTables::DeltaCorrelatingPredictionTables(
    table(p->table_assoc, p->table_entries, p->table_indexing_policy,
          p->table_replacement_policy, DCPTEntry(p->deltas_per_entry))
 {
+    degree_ = p->deltas_per_entry - 4;
 }
 
 void
@@ -115,7 +116,11 @@ DeltaCorrelatingPredictionTables::DCPTEntry::getCandidates(
             do {
                 int pf_delta = deltas[(idx_0 + i) % deltas.size()];
                 addr += pf_delta;
-                pfs.push_back(QueuedPrefetcher::AddrPriority(addr, 0));
+                /// 添加可用的Info信息
+                QueuedPrefetcher::AddrPriority newPref(addr, 0);
+                newPref.info_.setInfo("Delta", abs(pf_delta + 128));
+                newPref.info_.setInfo("Depth", pfs.size());
+                pfs.push_back(newPref);
                 i += 1;
             } while (i < deltas.size() - 2);
         }
@@ -158,6 +163,9 @@ DeltaCorrelatingPredictionTablesParams::create()
 DCPTPrefetcher::DCPTPrefetcher(const DCPTPrefetcherParams *p)
   : QueuedPrefetcher(p), dcpt(*p->dcpt)
 {
+    /// 初始化父类的预取度
+    originDegree_ = dcpt.degree_;
+    throttlingDegree_ = dcpt.degree_;
 }
 
 void

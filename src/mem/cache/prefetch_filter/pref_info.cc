@@ -148,7 +148,7 @@ DEF_INFO(PC2_1, PC2>>1, 12)
 // 触发预取指令之前的之前触发指令的PC(右移2bit), 12 bits
 DEF_INFO(PC3_2, PC3>>2, 12)
 // 当前预取的可信度, 4 bits
-DEF_INFO(Confidence, Confidence, 3)
+DEF_INFO(Confidence, Confidence, 6)
 // 当前预取的目标地址, 32 bits
 DEF_INFO(Address, Address, 32)
 // 预取地址的物理页号低12bit, 12 bits
@@ -156,7 +156,7 @@ DEF_INFO(PageAddress, PageAddress, 12)
 // 预取的深度, 8 bits 
 DEF_INFO(Depth, Depth, 8)
 // 预取的地址间隔, 7 bits
-DEF_INFO(Delta, Delta, 7)
+DEF_INFO(Delta, Delta, 8)
 // SPP使用的签名, 12 bits
 DEF_INFO(Signature, Signature, 12) 
 

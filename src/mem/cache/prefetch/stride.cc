@@ -201,7 +201,7 @@ StridePrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
             Addr new_addr = pf_addr + d * prefetch_stride;
             /// 添加可用的Info信息
             AddrPriority newPref(new_addr, 0);
-            newPref.info_.setInfo("Delta", abs(new_stride));
+            newPref.info_.setInfo("Delta", abs(new_stride + 128));
             newPref.info_.setInfo("Confidence", entry->confidence);
             newPref.info_.setInfo("Depth", d);
 

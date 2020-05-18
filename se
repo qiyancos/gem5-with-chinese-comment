@@ -38,21 +38,65 @@ setScript(){
 
 ################# Other Change for Source File in Gem5 #################
 additionalChange() {
-    tagPrefDegree=2
-    stridePrefConfThresh=3 # 0-7
+    # SAMPMP
+    useSAMPMP=False
+    SAMPMPDegree=16
+    # ISBP
+    ISBPDegree=16
+    # DCPTP
+    DCPTPDegree=16
+    # AMPMP
+    AMPMPDegree=16
+    # IndirectMemoryPrefetcher
+    IMPDegree=16
+    # SPP
+    SPPConfThresh=0.5
+    SPPLookaheadConfThresh=0.75
+    # SPPV2
+    SPPV2ConfThresh=0.25
+    SPPV2LookaheadConfThresh=0.25
+    # Tagged Prefetcher
+    tagPrefDegree=16
+    # Stride Prefetcher
+    stridePrefConfThresh=4 # 0-7
     stridePrefDegree=16
+    # Prefetcher
     prefetchQueueSize=32
+    # PPF
     useFilter=True
     tagBits=6
     ppfTableSize=1024
     enableUpgrade=True
     useHarmTable=True
+    eventQueueSize=2
+    forceTarget=0
 
-    # Change Tagged Prefetcher Degree
+    sed -i "328c\    degree = Param.Unsigned($ISBPDegree," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
+    if [ x$useSAMPMP = xTrue ]
+    then
+        sed -i "295c\    deltas_per_entry = Param.Unsigned($[SAMPMPDegree + 4]," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+        sed -i "255c\    start_degree = Param.Unsigned($SAMPMPDegree," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    else
+        sed -i "295c\    deltas_per_entry = Param.Unsigned($[DCPTPDegree + 4]," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+        sed -i "255c\    start_degree = Param.Unsigned($AMPMPDegree," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    fi
+
+    sed -i "180c\    streaming_distance = Param.Unsigned($IMPDegree," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
+    sed -i "217c\    prefetch_confidence_threshold = Param.Float($SPPConfThresh," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "219c\    lookahead_confidence_threshold = Param.Float($SPPLookaheadConfThresh," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
+    sed -i "232c\    prefetch_confidence_threshold = $SPPV2ConfThresh" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "233c\    lookahead_confidence_threshold = $SPPV2LookaheadConfThresh" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
     sed -i "146c\    degree = Param.Int($tagPrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
     sed -i "127c\    thresh_conf = Param.Int($stridePrefConfThresh, \"Threshold confidence level\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
     sed -i "135c\    degree = Param.Int($stridePrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
     sed -i "111c\    queue_size = Param.Int($prefetchQueueSize, \"Maximum number of queued prefetches\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
     sed -i "40c\    enable_filter = Param.Bool($useFilter, \"Whether to enable Filter Engine\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
     
     sed -i "76c\    prefetch_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the prefetch \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
@@ -62,9 +106,11 @@ additionalChange() {
     
     sed -i "73c\    prefetch_table_size = Param.UInt32($ppfTableSize, \"Size of the prefetch table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
     sed -i "79c\    reject_table_size = Param.UInt32($ppfTableSize, \"Size of the reject table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
-    
     sed -i "70c\    allow_upgrade = Param.Bool($enableUpgrade, \"If a pref from low-level cache can be\"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "158c\    event_queue_size = Param.Int32($eventQueueSize, \"Size of training event queue in \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    
     sed -i "87c\    enable_harm_table = Param.Bool($useHarmTable," $gem5Dir/src/mem/cache/Cache.py
+    sed -i "563c\    uint8_t forceTarget = $forceTarget;" $gem5Dir/src/mem/cache/prefetch_filter/ppf.cc
 }
 
 ################# settings for gem5 #################
@@ -153,7 +199,7 @@ setGem5(){
         L2assoc="8"
         L2MSHR="20"
         L2WriteBuffer="8"
-        L2prefetcher="StridePrefetcher"
+        L2prefetcher="TaggedPrefetcher"
 
     enableL3Cache="Yes"
         numL3Caches=""

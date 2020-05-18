@@ -53,6 +53,11 @@ struct DeltaCorrelatingPredictionTablesParams;
 
 class DeltaCorrelatingPredictionTables : public SimObject
 {
+  public:
+    /// 记录相应的Degree
+    const uint16_t degree_;
+
+  private:
     /** Number of bits of each delta */
     const unsigned int deltaBits;
     /** Number of lower bits to ignore from the deltas */

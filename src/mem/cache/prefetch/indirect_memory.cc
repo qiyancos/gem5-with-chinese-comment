@@ -53,6 +53,9 @@ IndirectMemoryPrefetcher::IndirectMemoryPrefetcher(
     byteOrder((ByteOrder) -1)
 #endif
 {
+    /// 初始化父类的预取度
+    originDegree_ = streamingDistance;
+    throttlingDegree_ = streamingDistance;
     fatal_if(byteOrder == -1, "This prefetcher requires a defined ISA\n");
 }
 
@@ -93,7 +96,12 @@ IndirectMemoryPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
                 if (pt_entry->streamCounter >= streamCounterThreshold) {
                     int64_t delta = addr - pt_entry->address;
                     for (unsigned int i = 1; i <= streamingDistance; i += 1) {
-                        addresses.push_back(AddrPriority(addr + delta * i, 0));
+                        /// 添加可用的Info信息
+                        AddrPriority newPref(addr + delta * i, 0);
+                        newPref.info_.setInfo("Delta", abs(delta + 128));
+                        newPref.info_.setInfo("Confidence", pt_entry->streamCounter);
+                        newPref.info_.setInfo("Depth", i);
+                        addresses.push_back(newPref);
                     }
                 }
                 pt_entry->address = addr;
@@ -145,10 +153,17 @@ IndirectMemoryPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
                         if (pt_entry->indirectCounter > prefetchThreshold) {
                             unsigned distance = pt_entry->indirectCounter *
                                 maxPrefetchDistance / maxIndirectCounterValue;
+                            uint16_t depth = 0;
                             for (int delta = 1; delta < distance; delta += 1) {
                                 Addr pf_addr = pt_entry->baseAddr +
                                     (pt_entry->index << pt_entry->shift);
-                                addresses.push_back(AddrPriority(pf_addr, 0));
+                                /// 添加可用的Info信息
+                                AddrPriority newPref(pf_addr, 0);
+                                newPref.info_.setInfo("Delta", abs(delta + 128));
+                                newPref.info_.setInfo("Confidence", pt_entry->indirectCounter);
+                                newPref.info_.setInfo("Depth", depth);
+                                addresses.push_back(newPref);
+                                depth++;
                             }
                         }
                     }

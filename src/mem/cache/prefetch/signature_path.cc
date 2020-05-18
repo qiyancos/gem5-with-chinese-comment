@@ -53,6 +53,9 @@ SignaturePathPrefetcher::SignaturePathPrefetcher(
                    p->pattern_table_replacement_policy,
                    PatternEntry(stridesPerPatternEntry))
 {
+    /// 初始化父类的预取度
+    originDegree_ = 16;
+    throttlingDegree_ = 9999;
     fatal_if(prefetchConfidenceThreshold < 0,
         "The prefetch confidence threshold must be greater than 0\n");
     fatal_if(prefetchConfidenceThreshold > 1,
@@ -131,7 +134,13 @@ SignaturePathPrefetcher::addPrefetch(Addr ppn, stride_t last_block,
     new_addr += pf_block * (Addr)blkSize;
 
     DPRINTF(HWPrefetch, "Queuing prefetch to %#x.\n", new_addr);
-    addresses.push_back(AddrPriority(new_addr, 0));
+    /// 添加可用的Info信息
+    AddrPriority newPref(new_addr, 0);
+    newPref.info_.setInfo("Delta", abs(delta + 128));
+    newPref.info_.setInfo("Confidence", path_confidence * 64);
+    newPref.info_.setInfo("Signature", signature);
+    newPref.info_.setInfo("Depth", addresses.size());
+    addresses.push_back(newPref);
 }
 
 void

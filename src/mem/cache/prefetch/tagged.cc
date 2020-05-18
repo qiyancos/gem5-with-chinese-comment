@@ -40,7 +40,9 @@
 TaggedPrefetcher::TaggedPrefetcher(const TaggedPrefetcherParams *p)
     : QueuedPrefetcher(p), degree(p->degree)
 {
-
+    /// 初始化父类的预取度
+    originDegree_ = degree;
+    throttlingDegree_ = degree;
 }
 
 void
@@ -51,7 +53,10 @@ TaggedPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
 
     for (int d = 1; d <= degree; d++) {
         Addr newAddr = blkAddr + d*(blkSize);
-        addresses.push_back(AddrPriority(newAddr,0));
+        /// 添加可用的Info信息
+        AddrPriority newPref(new_addr, 0);
+        newPref.info_.setInfo("Depth", d);
+        addresses.push_back(newPref);
     }
 }
 

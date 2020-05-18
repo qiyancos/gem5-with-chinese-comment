@@ -216,7 +216,11 @@ AccessMapPatternMatching::calculatePrefetch(
                 pf_addr = am_addr * hotZoneSize + blk * blkSize;
                 setEntryState(*am_entry_curr, blk, AM_PREFETCH);
             }
-            addresses.push_back(QueuedPrefetcher::AddrPriority(pf_addr, 0));
+            /// 添加可用的Info信息
+            QueuedPrefetcher::AddrPriority newPref(pf_addr, 0);
+            newPref.info_.setInfo("Delta", abs(stride + 128));
+            newPref.info_.setInfo("Depth", addresses.size());
+            addresses.push_back(newPref);
             if (addresses.size() == degree) {
                 break;
             }
@@ -240,7 +244,11 @@ AccessMapPatternMatching::calculatePrefetch(
                 pf_addr = am_addr * hotZoneSize + blk * blkSize;
                 setEntryState(*am_entry_curr, blk, AM_PREFETCH);
             }
-            addresses.push_back(QueuedPrefetcher::AddrPriority(pf_addr, 0));
+            /// 添加可用的Info信息
+            QueuedPrefetcher::AddrPriority newPref(pf_addr, 0);
+            newPref.info_.setInfo("Delta", abs(-stride + 128));
+            newPref.info_.setInfo("Depth", addresses.size());
+            addresses.push_back(newPref);
             if (addresses.size() == degree) {
                 break;
             }
@@ -257,6 +265,9 @@ AccessMapPatternMatchingParams::create()
 AMPMPrefetcher::AMPMPrefetcher(const AMPMPrefetcherParams *p)
   : QueuedPrefetcher(p), ampm(*p->ampm)
 {
+    /// 初始化父类的预取度
+    originDegree_ = ampm.degree;
+    throttlingDegree_ = ampm.degree;
 }
 
 void

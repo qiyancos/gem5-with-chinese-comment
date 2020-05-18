@@ -55,6 +55,9 @@ IrregularStreamBufferPrefetcher::IrregularStreamBufferPrefetcher(
                               AddressMappingEntry(prefetchCandidatesPerEntry)),
         structuralAddressCounter(0)
 {
+    /// 初始化父类的预取度
+    originDegree_ = degree;
+    throttlingDegree_ = degree;
     assert(isPowerOf2(prefetchCandidatesPerEntry));
 }
 
@@ -156,7 +159,12 @@ IrregularStreamBufferPrefetcher::calculatePrefetch(const PrefetchInfo &pfi,
                 //generate prefetch
                 if (spm.counter > 0) {
                     Addr pf_addr = spm.address << lBlkSize;
-                    addresses.push_back(AddrPriority(pf_addr, 0));
+                    /// 添加可用的Info信息
+                    AddrPriority newPref(new_addr, 0);
+                    newPref.info_.setInfo("Confidence",
+                            spm.counter + mapping.counter);
+                    newPref.info_.setInfo("Depth", d);
+                    addresses.push_back(nrePref);
                 }
             }
         }

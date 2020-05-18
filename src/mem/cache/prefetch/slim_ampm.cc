@@ -28,6 +28,8 @@
  * Authors: Javier Bueno
  */
 
+#include <cmath>
+
 #include "mem/cache/prefetch/slim_ampm.hh"
 
 #include "params/SlimAMPMPrefetcher.hh"
@@ -35,6 +37,9 @@
 SlimAMPMPrefetcher::SlimAMPMPrefetcher(const SlimAMPMPrefetcherParams* p)
   : QueuedPrefetcher(p), ampm(*p->ampm), dcpt(*p->dcpt)
 {
+    /// 初始化父类的预取度 
+    originDegree_ = std::max(dcpt.degree_, ampm.degree);
+    throttlingDegree_ = originDegree_;
 }
 
 void
