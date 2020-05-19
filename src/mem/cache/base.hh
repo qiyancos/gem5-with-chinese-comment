@@ -120,7 +120,7 @@ class BaseCache : public MemObject
     std::string getName();
 
     /// 该函数用于判断是否有可供提级预取处理的WriteBuffer
-    bool hasWriteBufferForPref();
+    bool readyForLevelupPref(PacketPtr pkt);
 
   protected:
     /**

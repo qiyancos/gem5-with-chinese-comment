@@ -72,6 +72,12 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
     Addr blk_addr = blockAddress(pfi.getAddr());
     bool is_secure = pfi.isSecure();
 
+    /*
+    /// 判断是不是一个指令相关的信息
+    bool isInst = pkt->recentCache_ ?
+            pkt->recentCache_->cacheLevel_ == 0 : false;
+    */
+
     // Squash queued prefetches if demand miss to same line
     if (queueSquash) {
         auto itr = pfq.begin();
@@ -136,6 +142,12 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                 uint8_t targetCacheLevel =
                         cache->prefetchFilter_->filterPrefetch(
                         cache, addr_prio.first, prefInfo);
+                /*
+                /// 针对指令相关预取的特殊处理，禁止指令相关预取等级变更
+                /// 因为指令相关预取并不会执行训练
+                targetCacheLevel = isInst ?
+                        cache->cacheLevel_ : targetCacheLevel;
+                */
                 if (targetCacheLevel <= 
                         cache->prefetchFilter_->maxCacheLevel_) {
                     bool alreadySent = false;

@@ -219,12 +219,40 @@ BaseCache::clearBlocked(BlockedCause cause) {
 }
 
 bool
-BaseCache::hasWriteBufferForPref() {
+BaseCache::readyForLevelupPref(PacketPtr pkt) {
+    std::vector<Stats::Vector*>* dismissedStats = nullptr;
+    /// 判断是否有足够的WriteBuffer
     int wbForPref = writeBuffer.numEntries - writeBuffer.allocated -
             mshrQueue._numInService;
     DEBUG_MEM("%s has %d available write buffer for level-up prefetch",
             getName().c_str(), wbForPref);
-    return wbForPref > 0;
+    dismissedStats = wbForPref <= 0 && prefetchFilter_ ? 
+            &(BasePrefetchFilter::dismissedLevelUpPrefNoWB_) :
+            dismissedStats;
+    
+    // 判断是否已存在记录
+    CacheBlk *blk = tags->findBlock(pkt->getAddr(), pkt->isSecure());
+    MSHR* mshr = pkt->mshr_.get();
+    MSHR *oldmshr = mshrQueue.findMatch(pkt->getAddr(), pkt->isSecure());
+    WriteQueueEntry *oldWBEntry = writeBuffer.findMatch(
+            pkt->getAddr(), pkt->isSecure());
+    /// 如果提升等级发现了已经存在MSHR/WB/Block
+    if (oldmshr || oldWBEntry || blk) {
+        /// 如果已存在的MSHR/WB/Block，则会直接无效化提升等级预取的响应
+        assert(mshr);
+        dismissedStats = prefetchFilter_ ? 
+                &(BasePrefetchFilter::dismissedLevelUpPrefLate_) :
+                dismissedStats;
+    }
+
+    if (dismissedStats) {
+        for (auto cpuId : cpuIds_) {
+            (*(*dismissedStats)[cacheLevel_])[cpuId]++;
+        }
+        return false;
+    } else {
+        return true;
+    }
 }
 
 void
@@ -644,44 +672,10 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         /// 如果我们发现Packet是一个提升级别的预取
         /// 那么会获取Pakcet里面存放着的额外MSHR
         mshr = pkt->mshr_.get();
-        MSHR *oldmshr = mshrQueue.findMatch(pkt->getAddr(), pkt->isSecure());
-        WriteQueueEntry *oldWBEntry = writeBuffer.findMatch(
-                pkt->getAddr(), pkt->isSecure());
-        /// 如果提升等级发现了已经存在MSHR
-        if (oldmshr) {
-            /// 如果已存在的MSHR，则会直接无效化提升等级预取的响应
-            assert(mshr);
-            // delete mshr;
-            if (prefetchFilter_) {
-                for (auto cpuId : cpuIds_) {
-                    (*BasePrefetchFilter::dismissedLevelUpPrefLate_[
-                            cacheLevel_])[cpuId]++;
-                }
-            }
-            delete pkt;
-            return;
-        } else if (oldWBEntry) {
-            /// 如果已存在的WriteBuffer，则会直接无效化提升等级预取的响应
-            assert(mshr);
-            // delete mshr;
-            if (prefetchFilter_) {
-                for (auto cpuId : cpuIds_) {
-                    (*BasePrefetchFilter::dismissedLevelUpPrefLate_[
-                            cacheLevel_])[cpuId]++;
-                }
-            }
-            delete pkt;
-            return;
-        } else if (blk) {
-            /// 如果已存在对应的Block，则会直接无效化提升等级预取的响应
-            assert(mshr);
-            // delete mshr;
-            if (prefetchFilter_) {
-                for (auto cpuId : cpuIds_) {
-                    (*BasePrefetchFilter::dismissedLevelUpPrefLate_[
-                            cacheLevel_])[cpuId]++;
-                }
-            }
+        /// 如果XBar处理正确这里不应该出现冲突的提级预取
+        panic_if(blk, "We do not expect levelup prefetch conflict with "
+                "existing cache block here.");
+        if (!readyForLevelupPref(pkt)) {
             delete pkt;
             return;
         }
@@ -1767,14 +1761,15 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
 void
 BaseCache::invalidateBlock(CacheBlk *blk)
 {
+    Addr blkAddr = regenerateBlkAddr(blk);
     DEBUG_MEM("%s invlidate cache block @0x%lx",
-            getName().c_str(), regenerateBlkAddr(blk));
+            getName().c_str(), blkAddr);
     // If handling a block present in the Tags, let it do its invalidation
     // process, which will update stats and invalidate the block itself
     if (blk != tempBlock) {
         /// 添加无效化预取的相关通知（如果是因为Fill导致的Invalidate不会通知）
         if (prefetchFilter_ && blk->wasPrefetched() && !blk->wasValid_) {
-            prefetchFilter_->invalidatePrefetch(this, regenerateBlkAddr(blk));
+            prefetchFilter_->invalidatePrefetch(this, blkAddr);
         }
         tags->invalidate(blk);
     } else {

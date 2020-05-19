@@ -61,11 +61,11 @@ additionalChange() {
     # IndirectMemoryPrefetcher
     IMPDegree=16
     # SPP
-    SPPConfThresh=0.5
-    SPPLookaheadConfThresh=0.75
+    SPPConfThresh=0.1
+    SPPLookaheadConfThresh=0.1
     # SPPV2
-    SPPV2ConfThresh=0.25
-    SPPV2LookaheadConfThresh=0.25
+    SPPV2ConfThresh=0.1
+    SPPV2LookaheadConfThresh=0.1
     # Tagged Prefetcher
     tagPrefDegree=16
     # Stride Prefetcher

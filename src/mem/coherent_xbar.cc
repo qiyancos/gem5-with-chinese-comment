@@ -220,6 +220,7 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
 
     const bool snoop_caches = !system->bypassCaches() &&
         pkt->cmd != MemCmd::WriteClean;
+    
     if (snoop_caches) {
         assert(pkt->snoopDelay == 0);
 
@@ -243,7 +244,8 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
 
         // the packet is a memory-mapped request and should be
         // broadcasted to our snoopers but the source
-        if (snoopFilter) {
+        /// 降级预取不会对SnoopFilter进行处理
+        if (snoopFilter && !needLevelDownPrefetchProcess) {
             // check with the snoop filter where to forward this packet
             auto sf_res = snoopFilter->lookupRequest(pkt, *src_port);
             // the time required by a packet to be delivered through
@@ -265,7 +267,7 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
             } else {
                 forwardTiming(pkt, slave_port_id, sf_res.first);
             }
-        } else {
+        } else if (!needLevelDownPrefetchProcess) {
             forwardTiming(pkt, slave_port_id);
         }
 
@@ -326,11 +328,10 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID slave_port_id)
         }
     }
 
-    if (snoopFilter && snoop_caches) {
+    /// 不会处理降级预取
+    if (snoopFilter && snoop_caches && !needLevelDownPrefetchProcess) {
         // Let the snoop filter know about the success of the send operation
-        /// 对于降级预取，一定会删除对应的记录
-        snoopFilter->finishRequest(!success, addr, pkt->isSecure(),
-                needLevelDownPrefetchProcess);
+        snoopFilter->finishRequest(!success, addr, pkt->isSecure());
     }
 
     // check if we were successful in sending the packet onwards
@@ -530,9 +531,9 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
         BasePrefetchFilter::getCpuSideConnectedCache(pkt, &upperCaches);
         panic_if(upperCaches.size() != 1,
                 "Too many or no cpu-side connected caches found");
-        if (!(*(upperCaches.begin()))->hasWriteBufferForPref()) {
+        if (!(*(upperCaches.begin()))->readyForLevelupPref(pkt)) {
             DEBUG_MEM("Xbar[%p] prefetch resp @0x%lx [%s -> %s] from %s "
-                    "dismissed as upper level has not enough write buffer",
+                    "dismissed as not ready",
                     this, pkt->getAddr(),
                     BaseCache::levelName_[pkt->srcCacheLevel_].c_str(),
                     BaseCache::levelName_[pkt->targetCacheLevel_].c_str(),
@@ -540,11 +541,6 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
             /// 对于因为上层Cache的WriteBuffer完全填满的时候
             /// 会直接删除提级Packet，不进行提级操作
             assert(pkt->caches_.size() == 1);
-            uint8_t cacheLevel = pkt->srcCacheLevel_;
-            for (auto cpuId : (*pkt->caches_.begin())->cpuIds_) {
-                (*BasePrefetchFilter::dismissedLevelUpPrefNoWB_[
-                        cacheLevel])[cpuId]++;
-            }
             delete pkt;
             Tick packetFinishTime = clockEdge(Cycles(1)) +
                     pkt->payloadDelay;
