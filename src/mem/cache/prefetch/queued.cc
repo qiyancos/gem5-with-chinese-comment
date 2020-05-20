@@ -72,12 +72,6 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
     Addr blk_addr = blockAddress(pfi.getAddr());
     bool is_secure = pfi.isSecure();
 
-    /*
-    /// 判断是不是一个指令相关的信息
-    bool isInst = pkt->recentCache_ ?
-            pkt->recentCache_->cacheLevel_ == 0 : false;
-    */
-
     // Squash queued prefetches if demand miss to same line
     if (queueSquash) {
         auto itr = pfq.begin();
@@ -142,12 +136,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
                 uint8_t targetCacheLevel =
                         cache->prefetchFilter_->filterPrefetch(
                         cache, addr_prio.first, prefInfo);
-                /*
-                /// 针对指令相关预取的特殊处理，禁止指令相关预取等级变更
-                /// 因为指令相关预取并不会执行训练
-                targetCacheLevel = isInst ?
-                        cache->cacheLevel_ : targetCacheLevel;
-                */
+
                 if (targetCacheLevel <= 
                         cache->prefetchFilter_->maxCacheLevel_) {
                     bool alreadySent = false;
@@ -285,6 +274,10 @@ void
 QueuedPrefetcher::insert(const PacketPtr &pkt, PrefetchInfo &new_pfi,
                          int32_t priority, uint8_t targetCacheLevel)
 {
+    /// 判断是不是一个指令相关的信息
+    bool isInst = pkt->recentCache_ ?
+            pkt->recentCache_->cacheLevel_ == 0 : false;
+
     if (queueFilter) {
         iterator it = inPrefetch(new_pfi);
         /* If the address is already in the queue, update priority and leave */
@@ -347,7 +340,9 @@ QueuedPrefetcher::insert(const PacketPtr &pkt, PrefetchInfo &new_pfi,
     PacketPtr pf_pkt = new Packet(pf_req, MemCmd::HardPFReq);
     pf_pkt->allocate();
     /// 添加关键的预取信息
-    pf_pkt->initPref(cache, targetCacheLevel, pkt->recentBranchPC_);
+    pf_pkt->initPref(cache,
+            isInst && targetCacheLevel == 1 ? 0 : targetCacheLevel,
+            pkt->recentBranchPC_, isInst);
 
     if (tagPrefetch && new_pfi.hasPC()) {
         // Tag prefetch packet with  accessing pc

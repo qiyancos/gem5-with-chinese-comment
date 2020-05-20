@@ -281,6 +281,9 @@ class Packet : public Printable
     Tick getProcessTime(const uint8_t level);
 
   public:
+    /// 判断当前预取是不是一个指令预取
+    bool isInstPrefetch_ = false;
+
     /// 该结构用于记录提升级别操作的MSHR数据
     std::shared_ptr<MSHR> mshr_ = nullptr;
 
@@ -315,7 +318,7 @@ class Packet : public Printable
 
     /// 初始化一个预取Packet
     void initPref(BaseCache* srcCache, const uint8_t targetCacheLevel,
-            const std::list<uint64_t>& recentBranchPC);
+            const std::list<uint64_t>& recentBranchPC, bool isInstPrefetch);
 
     /// 用于合并预取Packet的信息
     void combinePacket(PacketPtr pkt) {
@@ -339,6 +342,7 @@ class Packet : public Printable
     
     /// 用于拷贝另一个Packet的新增信息
     void copyNewInfo(const PacketPtr pkt) {
+        isInstPrefetch_ = pkt->isInstPrefetch_;
         mshr_ = pkt->mshr_;
         recentCache_ = pkt->recentCache_;
         caches_.insert(pkt->caches_.begin(), pkt->caches_.end());

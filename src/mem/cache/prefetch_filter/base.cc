@@ -105,7 +105,7 @@ int BasePrefetchFilter::getCpuSideConnectedCache(PacketPtr pkt,
     
     uint64_t cacheCoreIDMap = generateCoreIDMap(std::set<BaseCache*> {cache});
     BaseCache* connectedCache = nullptr;
-    uint8_t targetCacheLevel = cacheLevel == 2 ? !pkt->req->isInstFetch() :
+    uint8_t targetCacheLevel = cacheLevel == 2 ? !pkt->isInstPrefetch_ :
             cacheLevel - 1;
     for (auto upLevelCache : caches_[targetCacheLevel]) {
         uint64_t coreIDMap = generateCoreIDMap(

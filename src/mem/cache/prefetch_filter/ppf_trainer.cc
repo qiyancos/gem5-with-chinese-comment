@@ -231,6 +231,7 @@ int PPFTrainer::completeTrainingEvent(PerceptronPrefetchFilter* prefFilter) {
         const TrainingEvent& event = readyQueue.top();
         CHECK_ARGS(event.targetCache_ != nullptr,
                 "No valid target for training event");
+        // 不会对L1ICache生成的预取进行训练
         if (event.targetCache_->cacheLevel_) {
             DEBUG_PF(2, "Start completing training event for prefetch @0x%lx "
                     "[src-%s tgt-%s] type %s at %lu", event.addr_,

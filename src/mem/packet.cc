@@ -353,7 +353,8 @@ Packet::getAddr() const {
 
 /// 迁移到cc以避免头文件互相包含问题
 void Packet::initPref(BaseCache* srcCache, const uint8_t targetCacheLevel,
-        const std::list<uint64_t>& recentBranchPC) {
+        const std::list<uint64_t>& recentBranchPC, bool isInstPrefetch) {
+    isInstPrefetch_ = isInstPrefetch;
     srcCacheLevel_ = srcCache->cacheLevel_;
     targetCacheLevel_ = targetCacheLevel;
     packetType_ = prefetch_filter::Pref;
