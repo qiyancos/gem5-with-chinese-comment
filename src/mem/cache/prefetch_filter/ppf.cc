@@ -556,8 +556,9 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
         targetCacheLevel++;
     }
     
-    // 依据是否允许预取提升等级进行处理
-    if (targetCacheLevel < cacheLevel && !allowUpgrade_) {
+    // 依据是否允许预取提升等级进行处理，共享Cache不允许提级
+    if (targetCacheLevel < cacheLevel && (!allowUpgrade_ ||
+            cache->cpuIds_.size() > 1)) {
         targetCacheLevel = cacheLevel;
     }
     
