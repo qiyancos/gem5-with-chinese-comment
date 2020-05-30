@@ -101,7 +101,8 @@ class Cache : public BaseCache
 
     void handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
                              Tick forward_time,
-                             Tick request_time) override;
+                             Tick request_time,
+                             bool* pktDeleted = nullptr) override;
 
     void recvTimingReq(PacketPtr pkt) override;
 

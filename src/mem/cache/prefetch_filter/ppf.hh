@@ -279,6 +279,9 @@ private:
     // 初始化成功与否的标志
     bool initFailFlag_ = false;
 
+    // 是否为某一个层级开启过滤，支持L1I到L3所有配置
+    const std::vector<bool> useFilter_;
+
     // 是否在不同CPU之间共享表格
     const bool cpuSharedTable_;
     

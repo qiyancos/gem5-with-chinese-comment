@@ -100,18 +100,18 @@ additionalChange() {
     
     sed -i "40c\    enable_filter = Param.Bool($useFilter, \"Whether to enable Filter Engine\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
     
-    sed -i "76c\    prefetch_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the prefetch \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
-    sed -i "82c\    reject_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the reject \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
-    sed -i "138c\    counter_cache_tag_bits = Param.Int8($tagBits, \"Number of tag bits of the \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
-    sed -i "147c\    victim_cache_tag_bits = Param.Int8($tagBits, \"Number of tag bits of the \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "80c\    prefetch_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the prefetch \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "86c\    reject_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the reject \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "142c\    counter_cache_tag_bits = Param.Int8($tagBits, \"Number of tag bits of the \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "151c\    victim_cache_tag_bits = Param.Int8($tagBits, \"Number of tag bits of the \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
     
-    sed -i "73c\    prefetch_table_size = Param.UInt32($ppfTableSize, \"Size of the prefetch table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
-    sed -i "79c\    reject_table_size = Param.UInt32($ppfTableSize, \"Size of the reject table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
-    sed -i "70c\    allow_upgrade = Param.Bool($enableUpgrade, \"If a pref from low-level cache can be\"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
-    sed -i "158c\    event_queue_size = Param.Int32($eventQueueSize, \"Size of training event queue in \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "77c\    prefetch_table_size = Param.UInt32($ppfTableSize, \"Size of the prefetch table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "83c\    reject_table_size = Param.UInt32($ppfTableSize, \"Size of the reject table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "74c\    allow_upgrade = Param.Bool($enableUpgrade, \"If a pref from low-level cache can be\"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "162c\    event_queue_size = Param.Int32($eventQueueSize, \"Size of training event queue in \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
     
     sed -i "87c\    enable_harm_table = Param.Bool($useHarmTable," $gem5Dir/src/mem/cache/Cache.py
-    sed -i "563c\    uint8_t forceTarget = $forceTarget;" $gem5Dir/src/mem/cache/prefetch_filter/ppf.cc
+    sed -i "564c\    uint8_t forceTarget = $forceTarget;" $gem5Dir/src/mem/cache/prefetch_filter/ppf.cc
 }
 
 ################# settings for gem5 #################
@@ -181,7 +181,7 @@ setGem5(){
         L1Dassoc="8"
         L1DMSHR="4"
         L1DWriteBuffer="8"
-        L1Dprefetcher=""
+        L1Dprefetcher="" #"StridePrefetcher"
         # Prefetcher used for L1DCache
         # Following prefetchers are available
         # [TaggedPrefetcher, BOPPrefetcher, STeMSPrefetcher
@@ -200,7 +200,7 @@ setGem5(){
         L2assoc="8"
         L2MSHR="20"
         L2WriteBuffer="8"
-        L2prefetcher="TaggedPrefetcher"
+        L2prefetcher="StridePrefetcher"
 
     enableL3Cache="Yes"
         numL3Caches=""
@@ -208,7 +208,7 @@ setGem5(){
         L3assoc="16"
         L3MSHR="32"
         L3WriteBuffer="16"
-        L3prefetcher=""
+        L3prefetcher="StridePrefetcher"
 
     enableGroupCache="No" # [Yes/No]
         numCpuPerGroup=2

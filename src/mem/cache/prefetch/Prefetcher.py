@@ -214,9 +214,9 @@ class SignaturePathPrefetcher(QueuedPrefetcher):
     pattern_table_replacement_policy = Param.BaseReplacementPolicy(LRURP(),
         "Replacement policy of the pattern table")
 
-    prefetch_confidence_threshold = Param.Float(0.5,
+    prefetch_confidence_threshold = Param.Float(0.1,
         "Minimum confidence to issue prefetches")
-    lookahead_confidence_threshold = Param.Float(0.75,
+    lookahead_confidence_threshold = Param.Float(0.1,
         "Minimum confidence to continue exploring lookahead entries")
 
 class SignaturePathPrefetcherV2(SignaturePathPrefetcher):
@@ -229,8 +229,8 @@ class SignaturePathPrefetcherV2(SignaturePathPrefetcher):
     pattern_table_entries = "512"
     pattern_table_assoc = 1
     max_counter_value = 15
-    prefetch_confidence_threshold = 0.25
-    lookahead_confidence_threshold = 0.25
+    prefetch_confidence_threshold = 0.1
+    lookahead_confidence_threshold = 0.1
 
     global_history_register_entries = Param.MemorySize("8",
         "Number of entries of global history register")

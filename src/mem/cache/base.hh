@@ -515,9 +515,11 @@ class BaseCache : public MemObject
      * @param forward_time The tick at which we can process dependent requests
      * @param request_time The tick at which the block lookup is compete
      */
+    /// 添加一个参数判断当前Packet是否被删除
     virtual void handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
                                      Tick forward_time,
-                                     Tick request_time) = 0;
+                                     Tick request_time,
+                                     bool* pktDeleted = nullptr) = 0;
 
     /*
      * Handle a timing request that missed in the cache
@@ -530,8 +532,10 @@ class BaseCache : public MemObject
      * @param forward_time The tick at which we can process dependent requests
      * @param request_time The tick at which the block lookup is compete
      */
+    /// 添加一个参数判断当前Packet是否被删除
     void handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
-                             Tick forward_time, Tick request_time);
+                             Tick forward_time, Tick request_time,
+                             bool* pktDeleted = nullptr);
 
     /**
      * Performs the access specified by the request.

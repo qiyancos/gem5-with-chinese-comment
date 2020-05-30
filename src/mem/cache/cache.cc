@@ -360,7 +360,7 @@ Cache::handleTimingReqHit(PacketPtr pkt, CacheBlk *blk, Tick request_time,
 
 void
 Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
-                           Tick request_time)
+                           Tick request_time, bool* pktDeleted)
 {
     if (pkt->req->isUncacheable()) {
         // ignore any existing MSHR if we are dealing with an
@@ -462,7 +462,8 @@ Cache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk, Tick forward_time,
         pkt = pf;
     }
 
-    BaseCache::handleTimingReqMiss(pkt, mshr, blk, forward_time, request_time);
+    BaseCache::handleTimingReqMiss(pkt, mshr, blk, forward_time, request_time,
+            pktDeleted);
 }
 
 void
@@ -949,9 +950,9 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                 } else {
                     /// 如果当前的Packet是一个提级合并PendingPref
                     /// 则直接使用当前的时间作为两个点
-                    tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
+                    tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 1,
                             Packet::WhenSend, curTick());
-                    tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 0,
+                    tgt_pkt->setTimeStamp(cacheLevel_ ? cacheLevel_ : 1,
                             Packet::WhenFill, curTick());
                 }
             }
@@ -1582,6 +1583,7 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
             DPRINTF(Cache, "Upward snoop of prefetch for addr"
                     " %#x (%s) hit\n",
                     tgt_pkt->getAddr(), tgt_pkt->isSecure()? "s": "ns");
+            /// 这里可能发生Bug，请注意
             return false;
         }
 
@@ -1597,6 +1599,14 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
                 // mshr when all had previously been utilized
                 clearBlocked(Blocked_NoMSHRs);
             }
+            
+            if (!mshr->hasTargets()) {
+                DEBUG_MEM("%s deallocate MSHR[%p] for Prefetch "
+                        "packet[%p : %s] @0x%lx",
+                        getName().c_str(), mshr, tgt_pkt,
+                        tgt_pkt->cmdString().c_str(), tgt_pkt->getAddr());
+            }
+
             /// 如果上述操作导致预取Pakcet被删除，那么会伪装成一个
             /// Prefetch Miss Pending Prefetch
             if (oldPrefTarget && !mshr->prefTarget_ &&
@@ -1615,7 +1625,6 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
             return false;
         }
     }
-
     return BaseCache::sendMSHRQueuePacket(mshr);
 }
 

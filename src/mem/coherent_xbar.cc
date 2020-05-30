@@ -497,8 +497,11 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
                 pkt->recentCache_->getName().c_str());
     }
 
-    if (pkt->packetType_ == prefetch_filter::Pref &&
-            pkt->recentCache_->cacheLevel_ <= pkt->srcCacheLevel_) {
+    if (route_lookup == routeTo.end()) {
+        panic_if(pkt->packetType_ != prefetch_filter::Pref ||
+                pkt->recentCache_->cacheLevel_ > pkt->srcCacheLevel_ ||
+                pkt->srcCacheLevel_ == BasePrefetchFilter::maxCacheLevel_,
+                "Unexpected response with no matched responsing port.");
         /// 如果是一个提升级别的预取，那么本地不会有记录
         /// 因此需要使用专门的函数获取相应的port id
         std::vector<PortID> portIds;
@@ -508,7 +511,7 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
         slave_port_id = portIds.front();
     } else {
         // determine the destination
-        assert(route_lookup != routeTo.end());
+        //assert(route_lookup != routeTo.end());
         slave_port_id = route_lookup->second;
     }
 
@@ -524,7 +527,8 @@ CoherentXBar::recvTimingResp(PacketPtr pkt, PortID master_port_id)
     }
 
     if (pkt->packetType_ == prefetch_filter::Pref &&
-            pkt->recentCache_->cacheLevel_ <= pkt->srcCacheLevel_) {
+            pkt->recentCache_->cacheLevel_ <= pkt->srcCacheLevel_ &&
+            pkt->srcCacheLevel_ != BasePrefetchFilter::maxCacheLevel_) {
         /// 首先应该检查上一级的Cache是否有WriteBuffer处理上传预取
         /// 替换产生的写清求
         std::set<BaseCache*> upperCaches;

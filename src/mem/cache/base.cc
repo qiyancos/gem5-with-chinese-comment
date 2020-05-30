@@ -435,7 +435,8 @@ BaseCache::handleTimingReqHit(PacketPtr pkt, CacheBlk *blk, Tick request_time,
 
 void
 BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
-                               Tick forward_time, Tick request_time)
+                               Tick forward_time, Tick request_time,
+                               bool* pktDeleted)
 {
     if (writeAllocator &&
         pkt && pkt->isWrite() && !pkt->req->isUncacheable()) {
@@ -543,6 +544,9 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
             delete combinedPkt;
         }
     }
+    if (pktDeleted) {
+        *pktDeleted = deletedPacket.find(pkt) != deletedPacket.end();
+    }
 }
 
 void
@@ -594,9 +598,11 @@ BaseCache::recvTimingReq(PacketPtr pkt)
             blk->status &= ~BlkHWPrefetched;
         }
     } else {
-        handleTimingReqMiss(pkt, blk, forward_time, request_time);
-
-        ppMiss->notify(pkt);
+        bool pktDeleted = false;
+        handleTimingReqMiss(pkt, blk, forward_time, request_time, &pktDeleted);
+        if (!pktDeleted) {
+            ppMiss->notify(pkt);
+        }
     }
 
     if (prefetcher) {

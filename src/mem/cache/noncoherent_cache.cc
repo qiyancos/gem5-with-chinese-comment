@@ -121,7 +121,8 @@ NoncoherentCache::doWritebacksAtomic(PacketList& writebacks)
 
 void
 NoncoherentCache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
-                                      Tick forward_time, Tick request_time)
+                                      Tick forward_time, Tick request_time,
+                                      bool* pktDeleted)
 {
     // miss
     Addr blk_addr = pkt->getBlockAddr(blkSize);
@@ -132,7 +133,8 @@ NoncoherentCache::handleTimingReqMiss(PacketPtr pkt, CacheBlk *blk,
     // block should not be in the cache.
     assert(mshr || !blk || !blk->isValid());
 
-    BaseCache::handleTimingReqMiss(pkt, mshr, blk, forward_time, request_time);
+    BaseCache::handleTimingReqMiss(pkt, mshr, blk, forward_time, request_time,
+            pktDeleted);
 }
 
 void

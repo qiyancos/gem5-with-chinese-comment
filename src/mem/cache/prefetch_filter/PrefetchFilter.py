@@ -57,6 +57,10 @@ class PerceptronPrefetchFilter(BasePrefetchFilter):
     degree_update_period = Param.UInt64(5000000, "Gap between two prefetcher "
             "degree update checking")
 
+    # Use filter in specific cache (L1I, L1D, L2, L3...)
+    use_filter = VectorParam.Bool([False, True, True, False], "If use prefetch"
+            " filter in given cache-level")
+
     # Structure Setting
     cpu_shared_table = Param.Bool(False, "Whether to share table across "
             "differenct cores")

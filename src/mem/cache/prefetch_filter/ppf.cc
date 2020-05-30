@@ -121,6 +121,7 @@ PerceptronPrefetchFilter::PerceptronPrefetchFilter(
         const PerceptronPrefetchFilterParams *p) :
         BasePrefetchFilter(p),
         degreeUpdatePeriod_(p->degree_update_period),
+        useFilter_(p->use_filter),
         cpuSharedTable_(p->cpu_shared_table),
         cacheSharedTable_(p->cache_shared_table),
         allSharedTable_(p->all_shared_table),
@@ -497,7 +498,7 @@ int PerceptronPrefetchFilter::filterPrefetch(BaseCache* cache,
             BaseCache::levelName_[cache->cacheLevel_].c_str());
     CHECK_RET_EXIT(checkUpdateTimingAhead(),
             "Failed to update timingly ahead of basic option");
-    if (!enableFilter_) {
+    if (!enableFilter_ || !useFilter_[cache->cacheLevel_]) {
         return BasePrefetchFilter::filterPrefetch(cache, prefAddr, info);
     }
 
@@ -668,6 +669,10 @@ int PerceptronPrefetchFilter::initThis() {
             }
         }
     }
+
+    // 确保参数设置正确
+    CHECK_ARGS(useFilter_.size() >= caches_.size(), "Not enough filter setting"
+            " for use_filter argument");
 
     // 重新初始化训练幅度
     CHECK_WARN(missTrainStep_.size() <= cacheCount,

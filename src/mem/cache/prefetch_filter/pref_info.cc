@@ -35,7 +35,7 @@
 
 namespace prefetch_filter {
 
-Tick debugStartTick_ = 10000000000000LLU;
+Tick debugStartTick_ = 1000000000000LLU;
 Tick maxResponseGap_ = 1000000000LLU;
 Tick timerPrintGap_ = 100000000LLU;
 Tick tickNow_ = 0;
@@ -329,8 +329,8 @@ int PrefetchUsefulInfo::getCorrelatedCaches(BaseCache* cache,
                 }
             }
         }
+        correlatedCaches->erase(cache);
     }
-    correlatedCaches->erase(cache);
     return 0;
 }
 

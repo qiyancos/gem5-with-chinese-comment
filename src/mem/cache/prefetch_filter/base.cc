@@ -661,10 +661,14 @@ int BasePrefetchFilter::initThis() {
     for (auto& level : caches_) {
         uint8_t cacheLevel = level.front()->cacheLevel_;
         // 初始化统计变量
-        if (havePref_[cacheLevel] && cacheLevel != maxCacheLevel_) {
-            prefHitCount_.push_back(std::vector<Stats::Vector*>(
-                    cacheLevel < 2 ? maxCacheLevel_ - 1 :
-                    maxCacheLevel_ - cacheLevel));
+        if (havePref_[cacheLevel]) {
+            if (cacheLevel != maxCacheLevel_) {
+                prefHitCount_.push_back(std::vector<Stats::Vector*>(
+                        cacheLevel < 2 ? maxCacheLevel_ - 1 :
+                        maxCacheLevel_ - cacheLevel));
+            } else {
+                prefHitCount_.push_back(std::vector<Stats::Vector*>());
+            }
             prefProcCount_.push_back(std::vector<Stats::Vector*>(
                     maxCacheLevel_ + 1));
             prefProcessCycles_.push_back(std::vector<Stats::Vector*>(
