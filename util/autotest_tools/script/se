@@ -38,16 +38,85 @@ setScript(){
 
 ################# Other Change for Source File in Gem5 #################
 additionalChange() {
-    tagPrefDegree=2
+    # Prefetcher
+    prefetchQueueSize=32
+    # PPF
+    enableFilter=True
+    useFilterL1I=False
+    useFilterL1D=True
+    useFilterL2=True
+    useFilterL3=True
+    tagBits=6
+    ppfTableSize=1024
+    enableUpgrade=True
+    useHarmTable=True
+    eventQueueSize=2
+    forceTarget=0
+    
+    # SAMPMP
+    useSAMPMP=False
+    SAMPMPDegree=16
+    # ISBP
+    ISBPDegree=16
+    # DCPTP
+    DCPTPDegree=16
+    # AMPMP
+    AMPMPDegree=16
+    # IndirectMemoryPrefetcher
+    IMPDegree=16
+    # SPP
+    SPPConfThresh=0.1
+    SPPLookaheadConfThresh=0.1
+    # SPPV2
+    SPPV2ConfThresh=0.1
+    SPPV2LookaheadConfThresh=0.1
+    # Tagged Prefetcher
+    tagPrefDegree=16
+    # Stride Prefetcher
     stridePrefConfThresh=4 # 0-7
-    stridePrefDegree=4
-    useFilter=True
+    stridePrefDegree=16
 
-    # Change Tagged Prefetcher Degree
+    sed -i "328c\    degree = Param.Unsigned($ISBPDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
+    if [ x$useSAMPMP = xTrue ]
+    then
+        sed -i "295c\    deltas_per_entry = Param.Unsigned($[SAMPMPDegree + 4]," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+        sed -i "255c\    start_degree = Param.Unsigned($SAMPMPDegree," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    else
+        sed -i "295c\    deltas_per_entry = Param.Unsigned($[DCPTPDegree + 4]," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+        sed -i "255c\    start_degree = Param.Unsigned($AMPMPDegree," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    fi
+
+    sed -i "180c\    streaming_distance = Param.Unsigned($IMPDegree," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
+    sed -i "217c\    prefetch_confidence_threshold = Param.Float($SPPConfThresh," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "219c\    lookahead_confidence_threshold = Param.Float($SPPLookaheadConfThresh," $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
+    sed -i "232c\    prefetch_confidence_threshold = $SPPV2ConfThresh" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    sed -i "233c\    lookahead_confidence_threshold = $SPPV2LookaheadConfThresh" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
     sed -i "146c\    degree = Param.Int($tagPrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
     sed -i "127c\    thresh_conf = Param.Int($stridePrefConfThresh, \"Threshold confidence level\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
     sed -i "135c\    degree = Param.Int($stridePrefDegree, \"Number of prefetches to generate\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
-    sed -i "40c\    enable_filter = Param.Bool($useFilter, \"Whether to enable Filter Engine\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    
+    sed -i "111c\    queue_size = Param.Int($prefetchQueueSize, \"Maximum number of queued prefetches\")" $gem5Dir/src/mem/cache/prefetch/Prefetcher.py
+    
+    sed -i "40c\    enable_filter = Param.Bool($enableFilter, \"Whether to enable Filter Engine\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "61c\    use_filter = VectorParam.Bool([$useFilterL1I, $useFilterL1D, $useFilterL2, $useFilterL3], \"If use prefetch\"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    
+    sed -i "80c\    prefetch_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the prefetch \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "86c\    reject_table_tag_bits = Param.Int8($tagBits, \"Tag bits of the reject \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "142c\    counter_cache_tag_bits = Param.Int8($tagBits, \"Number of tag bits of the \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "151c\    victim_cache_tag_bits = Param.Int8($tagBits, \"Number of tag bits of the \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    
+    sed -i "77c\    prefetch_table_size = Param.UInt32($ppfTableSize, \"Size of the prefetch table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "83c\    reject_table_size = Param.UInt32($ppfTableSize, \"Size of the reject table\")" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "74c\    allow_upgrade = Param.Bool($enableUpgrade, \"If a pref from low-level cache can be\"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    sed -i "162c\    event_queue_size = Param.Int32($eventQueueSize, \"Size of training event queue in \"" $gem5Dir/src/mem/cache/prefetch_filter/PrefetchFilter.py
+    
+    sed -i "87c\    enable_harm_table = Param.Bool($useHarmTable," $gem5Dir/src/mem/cache/Cache.py
+    sed -i "565c\    uint8_t forceTarget = $forceTarget;" $gem5Dir/src/mem/cache/prefetch_filter/ppf.cc
 }
 
 ################# settings for gem5 #################
@@ -1099,12 +1168,10 @@ buildSpecOptions(){
         while [ "`eval echo -e '$'"{${target}_${testSet}_${suiteID}[0]}"`x" != x ]
         do
             specVarName="${target}_${testSet}_${suiteID}"
-            options[$suiteID]="-c ./`eval echo -e '$'"{$specVarName[0]}"`"
-            if [ "`eval echo -e '$'"{$specVarName[2]}"`x" != x ]
-            then
-                specArg=`eval echo -e '$'"{$specVarName[2]}"`
-                options[$suiteID]="${options[$suiteID]} -o '$specArg'"
-            fi
+            specExec="`eval echo -e '$'"{$specVarName[0]}"`"
+            specArg=`eval echo -e '$'"{$specVarName[2]}"`
+            specInput=`eval echo -e '$'"{$specVarName[3]}"`
+            options[$suiteID]="-c '$specExec' -o '$specArg' -i '$specInput'"
             diffFileList[$suiteID]=`eval echo -e '$'"{$specVarName[1]}"`
             if [ $runSpecSuites = No ]
             then break
